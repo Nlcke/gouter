@@ -1,0 +1,22 @@
+{
+  "name": "gouter",
+  "version": "1.0.0",
+  "description": "universal fully featured promise-based router",
+  "main": "index.js",
+  "dependencies": {
+    "path-to-regexp": "^6.1.0",
+    "query-string": "^6.13.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "web",
+    "app",
+    "server",
+    "router"
+  ],
+  "author": "N1cke",
+  "license": "MIT"
+}
