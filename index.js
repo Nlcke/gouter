@@ -717,7 +717,7 @@ const Gouter = (routes) => {
             gouter.nextHook();
           }
         } else {
-          gouter.history.goBack();
+          gouter.history[gouter.history['back'] ? 'back' : 'goBack']();
         }
       } else {
         if (stateListLength === 1) {
