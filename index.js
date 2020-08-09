@@ -826,9 +826,10 @@ const Gouter = (routes) => {
      * * history location is transformed into url
      * * url is transformed into new router state or not-found state
      * * router goes to router state if it is different from previous one
-     * @param {import('history').Location} location history location
+     * @param {import('history').Location & {location: import('history').Location}} locationOrState history location
      */
-    goToLocation: (location) => {
+    goToLocation: (locationOrState) => {
+      const location = locationOrState.location || locationOrState;
       const url = location.pathname + location.search;
       const routerState = gouter.urlToRouterState(url) || gouter.notFoundState;
       if (routerState.path !== gouter.routerState.path) {
@@ -873,7 +874,7 @@ const Gouter = (routes) => {
       gouter.history = history;
       gouter.listen(gouter.updateHistory);
       history.listen(gouter.goToLocation);
-      gouter.goToLocation(history.location);
+      gouter.goToLocation({ ...history.location, location: null });
     },
   };
 
