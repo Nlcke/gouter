@@ -879,4 +879,4 @@ const Gouter = (routes) => {
   return gouter;
 };
 
-module.export = Gouter;
+module.exports = Gouter;
