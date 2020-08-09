@@ -68,7 +68,7 @@ const { compile, pathToRegexp } = require('path-to-regexp');
 
 /**
  * A `Route` consists of a name, a URL matching pattern and optional
- * enter/exit hooks. The `RouterStore` is initialized with an array
+ * enter/exit hooks. New gouter is initialized with an array
  * of routes which it uses to transition between states.
  * @typedef Route
  * @property {Name} name e.g. 'user'
@@ -208,14 +208,14 @@ const newRouterState = (name, params = {}, query = {}, routes) => {
 };
 
 /**
- * Creates `RouterStore` instance.
+ * Creates `Gouter` instance.
  * It allows transitioning between states using the `goTo` method.
  * It allows to add and remove listeners via `listen` and `unlisten` methods.
  * It automatically listens to history changes.
  *
  * @param {Route[]} routes list of `Route` instances
  * @example
- * const routerStore = newRouterStore([
+ * const gouter = Gouter([
  *     {
  *          name: 'home',
  *          pattern: '/'
@@ -226,8 +226,8 @@ const newRouterState = (name, params = {}, query = {}, routes) => {
  *     },
  * ])
  */
-const newRouterStore = (routes) => {
-  const routerStore = {
+const Gouter = (routes) => {
+  const gouter = {
     routes,
 
     /** @type {import('history').History<{}>}  */
@@ -315,7 +315,7 @@ const newRouterStore = (routes) => {
       for (let i = 0; i < stack.length; i++) {
         const substackOrState = stack[i];
         if (Array.isArray(substackOrState)) {
-          const renderedSubList = routerStore.toMountedStack(substackOrState);
+          const renderedSubList = gouter.toMountedStack(substackOrState);
           for (let j = 0; j < renderedSubList.length; j++) {
             mountedStack[mountedStack.length] = renderedSubList[j];
           }
@@ -382,35 +382,35 @@ const newRouterStore = (routes) => {
      */
     setStack: (nextStack) => {
       if (!nextStack.length) {
-        return routerStore.onStackExit && routerStore.onStackExit();
+        return gouter.onStackExit && gouter.onStackExit();
       }
 
-      const prevMountedStack = routerStore.mountedStack;
-      const nextMountedStack = routerStore.toMountedStack(nextStack);
+      const prevMountedStack = gouter.mountedStack;
+      const nextMountedStack = gouter.toMountedStack(nextStack);
 
-      const fromStateList = routerStore.toStaleStack(
+      const fromStateList = gouter.toStaleStack(
         prevMountedStack,
         nextMountedStack,
       );
-      const toStateList = routerStore.toFreshStack(
+      const toStateList = gouter.toFreshStack(
         prevMountedStack,
         nextMountedStack,
       );
 
-      routerStore.isInitializing = false;
-      routerStore.isTransitioning = true;
+      gouter.isInitializing = false;
+      gouter.isTransitioning = true;
 
       const fromState = prevMountedStack[prevMountedStack.length - 1];
       const toState = nextMountedStack[nextMountedStack.length - 1];
 
       const fromRouteList = fromStateList.map((fromState) =>
-        routerStore.getRoute(fromState.name),
+        gouter.getRoute(fromState.name),
       );
       const toRouteList = toStateList.map((toState) =>
-        routerStore.getRoute(toState.name),
+        gouter.getRoute(toState.name),
       );
 
-      routerStore.nextHook = routerStore.getNextHookList(
+      gouter.nextHook = gouter.getNextHookList(
         fromState,
         toState,
         fromStateList,
@@ -422,7 +422,7 @@ const newRouterStore = (routes) => {
         0,
       );
 
-      routerStore.nextHook();
+      gouter.nextHook();
     },
 
     /**
@@ -432,12 +432,12 @@ const newRouterStore = (routes) => {
      */
     routerStateToUrl: (routerState) => {
       const { name, params, query } = routerState;
-      const route = routerStore.getRoute(name);
+      const route = gouter.getRoute(name);
       const hasPattern = route && route.pattern !== void 0;
       const pattern = hasPattern
         ? route.pattern
         : '/' + (route ? route.name : name);
-      return routerStore.generateUrl(pattern, params, query);
+      return gouter.generateUrl(pattern, params, query);
     },
 
     /**
@@ -450,16 +450,16 @@ const newRouterStore = (routes) => {
       const pathname = splitPos === -1 ? url : url.slice(0, splitPos);
       const search = splitPos === -1 ? '' : url.slice(splitPos);
 
-      const { routes } = routerStore;
+      const { routes } = gouter;
 
       for (let i = 0; i < routes.length; i++) {
         const route = routes[i];
         const hasPattern = route.pattern !== void 0;
         const pattern = hasPattern ? route.pattern : '/' + route.name;
-        const params = routerStore.matchUrl(pathname, pattern);
-        const query = routerStore.parse(search, routerStore.parseOptions);
+        const params = gouter.matchUrl(pathname, pattern);
+        const query = gouter.parse(search, gouter.parseOptions);
         if (params)
-          return routerStore.newRouterState(route.name, params, query, routes);
+          return gouter.newRouterState(route.name, params, query, routes);
       }
     },
 
@@ -469,7 +469,7 @@ const newRouterStore = (routes) => {
      * @returns {Route} `Route` instance
      */
     getRoute: (name) => {
-      const { routes } = routerStore;
+      const { routes } = gouter;
       for (let i = 0; i < routes.length; i++) {
         const route = routes[i];
         if (route.name === name) return route;
@@ -482,12 +482,12 @@ const newRouterStore = (routes) => {
      * @returns {void}
      */
     updateHistory: (routerState) => {
-      const { notFoundState } = routerStore;
+      const { notFoundState } = gouter;
       if (routerState.name !== notFoundState.name) {
-        const routerUrl = routerStore.routerStateToUrl(routerState);
-        const { location } = routerStore.history;
+        const routerUrl = gouter.routerStateToUrl(routerState);
+        const { location } = gouter.history;
         const browserUrl = `${location.pathname}${location.search}`;
-        if (browserUrl !== routerUrl) routerStore.history.push(routerUrl);
+        if (browserUrl !== routerUrl) gouter.history.push(routerUrl);
       }
     },
 
@@ -520,7 +520,7 @@ const newRouterStore = (routes) => {
        * @returns {void}
        */
       function nextHook(hookCatch) {
-        const hookName = routerStore.hookNames[hookID];
+        const hookName = gouter.hookNames[hookID];
         const isExitHook = hookID % 2 === 0;
 
         const routeList = isExitHook ? fromRouteList : toRouteList;
@@ -532,7 +532,7 @@ const newRouterStore = (routes) => {
 
         hookID += 1;
 
-        if (hookCatch === routerStore.hookCatch || hookID === 0) {
+        if (hookCatch === gouter.hookCatch || hookID === 0) {
           hookID = -1;
         } else if (hookList.length) {
           const stateList = (isExitHook ? fromStateList : toStateList)
@@ -546,23 +546,20 @@ const newRouterStore = (routes) => {
               isExitHook ? toState : stateList[index],
             ),
           );
-          Promise.all(promiseList).then(nextHook).catch(routerStore.hookCatch);
+          Promise.all(promiseList).then(nextHook).catch(gouter.hookCatch);
         } else if (hookName) {
           nextHook();
         } else {
           hookID = -1;
-          routerStore.isTransitioning = false;
-          routerStore.routerState = toState;
+          gouter.isTransitioning = false;
+          gouter.routerState = toState;
 
-          routerStore.mountedStack = nextMountedStack;
-          routerStore.unmountedStack = [
-            ...routerStore.unmountedStack,
-            ...fromStateList,
-          ];
-          routerStore.stack = nextStack;
+          gouter.mountedStack = nextMountedStack;
+          gouter.unmountedStack = [...gouter.unmountedStack, ...fromStateList];
+          gouter.stack = nextStack;
 
-          if (routerStore.onStackTabs) {
-            const stackPath = routerStore.getStackPath(nextStack);
+          if (gouter.onStackTabs) {
+            const stackPath = gouter.getStackPath(nextStack);
             const lastStack = stackPath[stackPath.length - 1];
             const penultStack = stackPath[stackPath.length - 2];
             const isTabVisible =
@@ -571,10 +568,10 @@ const newRouterStore = (routes) => {
             const stackTabs = isTabVisible
               ? penultStack.map((stack) => stack[0])
               : [];
-            routerStore.onStackTabs(stackTabs);
+            gouter.onStackTabs(stackTabs);
           }
 
-          for (const listener of routerStore.listeners) {
+          for (const listener of gouter.listeners) {
             listener(toState);
           }
         }
@@ -595,7 +592,7 @@ const newRouterStore = (routes) => {
        * @returns {void}
        */
       function nextHook(hookCatch) {
-        const hookName = routerStore.hookNames[hookID];
+        const hookName = gouter.hookNames[hookID];
         const isExitHook = hookID % 2 === 0;
 
         /** @type {TransitionHook} */
@@ -603,21 +600,21 @@ const newRouterStore = (routes) => {
 
         hookID += 1;
 
-        if (hookCatch === routerStore.hookCatch || hookID === 0) {
+        if (hookCatch === gouter.hookCatch || hookID === 0) {
           if (!isExitHook && hookID !== 0) {
-            routerStore.routerState = routerStore.notFoundState;
+            gouter.routerState = gouter.notFoundState;
           }
           hookID = -1;
         } else if (hook) {
           const promise = hook(fromState, toState);
-          promise.then(nextHook).catch(routerStore.hookCatch);
+          promise.then(nextHook).catch(gouter.hookCatch);
         } else if (hookName) {
           nextHook();
         } else {
           hookID = -1;
-          routerStore.isTransitioning = false;
-          routerStore.routerState = toState;
-          for (const listener of routerStore.listeners) {
+          gouter.isTransitioning = false;
+          gouter.routerState = toState;
+          for (const listener of gouter.listeners) {
             listener(toState);
           }
         }
@@ -645,7 +642,7 @@ const newRouterStore = (routes) => {
         return `Router: state is not {name: string, params?: object, query?: object} but ${type}`;
       }
 
-      if (!routerStore.getRoute(name)) {
+      if (!gouter.getRoute(name)) {
         return `Router: state name '${name}' not found in routes`;
       }
     },
@@ -682,34 +679,34 @@ const newRouterStore = (routes) => {
 
       for (let i = 0; i < stateListLength; i++) {
         const stateObject = stateObjectList[i];
-        const error = routerStore.checkState(stateObject);
+        const error = gouter.checkState(stateObject);
         if (error) {
           throw Error(error);
         }
-        stateList[i] = routerStore.newRouterState(
+        stateList[i] = gouter.newRouterState(
           stateObject.name,
           stateObject.params,
           stateObject.query,
-          routerStore.routes,
+          gouter.routes,
         );
       }
 
-      routerStore.isTransitioning = false;
-      routerStore.nextHook(routerStore.hookCatch);
+      gouter.isTransitioning = false;
+      gouter.nextHook(gouter.hookCatch);
 
-      if (routerStore.history) {
+      if (gouter.history) {
         if (stateListLength > 0) {
-          const fromState = routerStore.routerState;
+          const fromState = gouter.routerState;
           const toState = stateList[stateListLength - 1];
 
-          if (fromState.path !== toState.path || routerStore.isInitializing) {
-            const fromRoute = routerStore.getRoute(fromState.name);
-            const toRoute = routerStore.getRoute(toState.name);
+          if (fromState.path !== toState.path || gouter.isInitializing) {
+            const fromRoute = gouter.getRoute(fromState.name);
+            const toRoute = gouter.getRoute(toState.name);
 
-            routerStore.isInitializing = false;
-            routerStore.isTransitioning = true;
+            gouter.isInitializing = false;
+            gouter.isTransitioning = true;
 
-            routerStore.nextHook = routerStore.getNextHook(
+            gouter.nextHook = gouter.getNextHook(
               fromState,
               toState,
               fromRoute,
@@ -717,15 +714,15 @@ const newRouterStore = (routes) => {
               0,
             );
 
-            routerStore.nextHook();
+            gouter.nextHook();
           }
         } else {
-          routerStore.history.goBack();
+          gouter.history.goBack();
         }
       } else {
         if (stateListLength === 1) {
           const [state] = stateList;
-          const stackPath = routerStore.getStackPath(routerStore.stack);
+          const stackPath = gouter.getStackPath(gouter.stack);
           // go to tab if any
           for (let i = stackPath.length - 2; i >= 0; i--) {
             const substack = stackPath[i];
@@ -746,7 +743,7 @@ const newRouterStore = (routes) => {
                     for (let j = i - 1; j >= 0; j--) {
                       stack = [...stackPath[j].slice(0, -1), stack];
                     }
-                    return routerStore.setStack(stack);
+                    return gouter.setStack(stack);
                   }
                 }
               }
@@ -763,7 +760,7 @@ const newRouterStore = (routes) => {
                 for (let j = i - 1; j >= 0; j--) {
                   stack = [...stackPath[j].slice(0, -1), stack];
                 }
-                return routerStore.setStack(stack);
+                return gouter.setStack(stack);
               }
             }
           }
@@ -773,19 +770,19 @@ const newRouterStore = (routes) => {
           for (let i = stackPath.length - 2; i >= 0; i--) {
             stack = [...stackPath[i].slice(0, -1), stack];
           }
-          return routerStore.setStack(stack);
+          return gouter.setStack(stack);
         } else if (stateListLength > 1) {
           // goInto tabs
-          const stackPath = routerStore.getStackPath(routerStore.stack);
+          const stackPath = gouter.getStackPath(gouter.stack);
           const lastStack = stackPath[stackPath.length - 1];
           let stack = [...lastStack, stateList.map((state) => [state])];
           for (let i = stackPath.length - 2; i >= 0; i--) {
             stack = [...stackPath[i].slice(0, -1), stack];
           }
-          return routerStore.setStack(stack);
+          return gouter.setStack(stack);
         } else {
           // goBack
-          const stackPath = routerStore.getStackPath(routerStore.stack);
+          const stackPath = gouter.getStackPath(gouter.stack);
           for (let i = stackPath.length - 1; i >= 0; i--) {
             const substack = stackPath[i];
             if (substack.length > 1) {
@@ -794,7 +791,7 @@ const newRouterStore = (routes) => {
               for (let j = i - 1; j >= 0; j--) {
                 stack = [...stackPath[j].slice(0, -1), stack];
               }
-              return routerStore.setStack(stack);
+              return gouter.setStack(stack);
             } else if (substack.length === 1) {
               if (i > 0) {
                 const tabStack = stackPath[i - 1];
@@ -806,15 +803,15 @@ const newRouterStore = (routes) => {
                   for (let j = i - 3; j >= 0; j--) {
                     stack = [...stackPath[j].slice(0, -1), stack];
                   }
-                  return routerStore.setStack(stack);
+                  return gouter.setStack(stack);
                 }
               } else {
                 const stack = [];
-                return routerStore.setStack(stack);
+                return gouter.setStack(stack);
               }
             } else if (i === 0) {
               const stack = [];
-              return routerStore.setStack(stack);
+              return gouter.setStack(stack);
             }
             if (substack.length) {
               return;
@@ -833,10 +830,9 @@ const newRouterStore = (routes) => {
      */
     goToLocation: (location) => {
       const url = location.pathname + location.search;
-      const routerState =
-        routerStore.urlToRouterState(url) || routerStore.notFoundState;
-      if (routerState.path !== routerStore.routerState.path) {
-        routerStore.goTo(routerState);
+      const routerState = gouter.urlToRouterState(url) || gouter.notFoundState;
+      if (routerState.path !== gouter.routerState.path) {
+        gouter.goTo(routerState);
       }
     },
 
@@ -851,7 +847,7 @@ const newRouterStore = (routes) => {
      * @param {Listener} listener
      */
     listen: (listener) => {
-      const { listeners } = routerStore;
+      const { listeners } = gouter;
       if (listeners.indexOf(listener) === -1) {
         listeners.push(listener);
       }
@@ -862,7 +858,7 @@ const newRouterStore = (routes) => {
      * @param {Listener} listener
      */
     unlisten: (listener) => {
-      const { listeners } = routerStore;
+      const { listeners } = gouter;
       const listenerIndex = listeners.indexOf(listener);
       if (listenerIndex !== -1) {
         listeners.splice(listenerIndex, 1);
@@ -874,13 +870,13 @@ const newRouterStore = (routes) => {
      * @param {import('history').History<{}>} history
      */
     setHistory: (history) => {
-      routerStore.history = history;
-      routerStore.listen(routerStore.updateHistory);
-      history.listen(routerStore.goToLocation);
+      gouter.history = history;
+      gouter.listen(gouter.updateHistory);
+      history.listen(gouter.goToLocation);
     },
   };
 
-  return routerStore;
+  return gouter;
 };
 
-module.export = newRouterStore;
+module.export = Gouter;
