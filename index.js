@@ -873,6 +873,7 @@ const Gouter = (routes) => {
       gouter.history = history;
       gouter.listen(gouter.updateHistory);
       history.listen(gouter.goToLocation);
+      gouter.goToLocation(history.location);
     },
   };
 
