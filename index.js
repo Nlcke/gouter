@@ -1,5 +1,6 @@
 const { parse, stringify } = require('query-string');
 const { compile, pathToRegexp } = require('path-to-regexp');
+const valueEqual = require('value-equal');
 
 /** @typedef {string} URL */
 
@@ -165,18 +166,17 @@ const getPatternInfo = (pattern) => {
  * @returns {Params} `Params` instance
  */
 const matchUrl = (url, pattern) => {
-  const patternInfo = getPatternInfo(pattern);
-  const regExp = patternInfo.regExp;
-  const keys = patternInfo.keys;
+  const { regExp, keys } = getPatternInfo(pattern);
   const match = regExp.exec(url);
-  if (!match) return undefined;
-  const values = match.slice(1);
-  return Object.freeze(
-    keys.reduce((params, key, index) => {
-      params[key.name] = values[index];
-      return params;
-    }, {}),
-  );
+  if (match) {
+    const values = match.slice(1);
+    return Object.freeze(
+      keys.reduce((params, key, index) => {
+        params[key.name] = values[index];
+        return params;
+      }, {}),
+    );
+  }
 };
 
 /**
@@ -699,7 +699,11 @@ const Gouter = (routes) => {
           const fromState = gouter.routerState;
           const toState = stateList[stateListLength - 1];
 
-          if (fromState.path !== toState.path || gouter.isInitializing) {
+          if (
+            fromState.path !== toState.path ||
+            !valueEqual(fromState.query, toState.query) ||
+            gouter.isInitializing
+          ) {
             const fromRoute = gouter.getRoute(fromState.name);
             const toRoute = gouter.getRoute(toState.name);
 
@@ -772,7 +776,7 @@ const Gouter = (routes) => {
           }
           return gouter.setStack(stack);
         } else if (stateListLength > 1) {
-          // goInto tabs
+          // go into tabs
           const stackPath = gouter.getStackPath(gouter.stack);
           const lastStack = stackPath[stackPath.length - 1];
           let stack = [...lastStack, stateList.map((state) => [state])];
@@ -831,9 +835,13 @@ const Gouter = (routes) => {
       /** @type {import('history').Location} */
       const location = stateOrLocation.location || stateOrLocation;
       const url = location.pathname + location.search;
-      const routerState = gouter.urlToRouterState(url) || gouter.notFoundState;
-      if (routerState.path !== gouter.routerState.path) {
-        gouter.goTo(routerState);
+      const fromState = gouter.routerState;
+      const toState = gouter.urlToRouterState(url) || gouter.notFoundState;
+      if (
+        fromState.path !== toState.path ||
+        !valueEqual(fromState.query, toState.query)
+      ) {
+        gouter.goTo(toState);
       }
     },
 
