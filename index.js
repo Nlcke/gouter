@@ -151,10 +151,6 @@ const generatePattern = (name, params) => {
  * @param {T} routeMap map of routes
  */
 const Gouter = (routeMap) => {
-  /** @type {(keyof T)[]} */
-  // @ts-ignore
-  const routeNames = Object.getOwnPropertyNames(routeMap);
-
   /**
    * @typedef {{[K in keyof T]: {
    * name: K
@@ -623,18 +619,6 @@ const Gouter = (routeMap) => {
     },
 
     /**
-     * Set history and enable listeners for history and router events
-     * @param {import('history').History<{}>} history
-     */
-    withHistory: (history) => {
-      gouter.history = history;
-      gouter.listen(gouter.updateHistory);
-      history.listen(gouter.goToLocation);
-      gouter.goToLocation(history.location, 'REPLACE');
-      return gouter;
-    },
-
-    /**
      * Set NotFound state to fallback when route name does not exist
      * @param {PartialState} partialState
      */
@@ -649,6 +633,18 @@ const Gouter = (routeMap) => {
      */
     withHooks: (hookMap) => {
       gouter.hookMap = hookMap;
+      return gouter;
+    },
+
+    /**
+     * Set history and enable listeners for history and router events
+     * @param {import('history').History<{}>} history
+     */
+    withHistory: (history) => {
+      gouter.history = history;
+      gouter.listen(gouter.updateHistory);
+      history.listen(gouter.goToLocation);
+      gouter.goToLocation(history.location, 'REPLACE');
       return gouter;
     },
   };
