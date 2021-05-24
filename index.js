@@ -45,7 +45,7 @@ const { compile, pathToRegexp } = require('path-to-regexp');
  * @property {Pattern} [pattern] e.g. '/user/:id'
  * @property {Params} [params]
  * @property {Query} [query]
- * @property {Bar[]} [bars]
+ * @property {string[]} [path]
  */
 
 /**
@@ -184,7 +184,7 @@ const Gouter = (routeMap) => {
    */
 
   /**
-   * Creates new `RouterState`
+   * Creates new `Gouter.State` from partial state
    * @type {<N extends keyof T>(partialState: {
    * name: N
    * params?: T[N]['params']
@@ -199,13 +199,7 @@ const Gouter = (routeMap) => {
    * key: string
    * }}
    */
-  const newRouterState = ({
-    name,
-    params = {},
-    query = {},
-    url = '',
-    key = '',
-  }) => {
+  const newState = ({ name, params = {}, query = {}, url = '', key = '' }) => {
     const route = routeMap[name];
     const hasPattern = route && route.pattern !== undefined;
     const pattern = hasPattern
@@ -247,7 +241,7 @@ const Gouter = (routeMap) => {
 
     generateUrl,
 
-    newRouterState,
+    newState,
 
     parse,
 
@@ -365,8 +359,7 @@ const Gouter = (routeMap) => {
         /** @type {Partial<T[keyof T]["query"]>} */
         // @ts-ignore
         const query = gouter.parse(search, gouter.parseOptions);
-        if (params)
-          return gouter.newRouterState({ name: routeName, params, query });
+        if (params) return gouter.newState({ name: routeName, params, query });
       }
     },
 
@@ -562,7 +555,7 @@ const Gouter = (routeMap) => {
      * @param {PartialState} partialState
      */
     goTo: (partialState) => {
-      const state = gouter.newRouterState(partialState);
+      const state = gouter.newState(partialState);
       gouter.setStack([state]);
     },
 
@@ -640,11 +633,12 @@ const Gouter = (routeMap) => {
      * Set history and enable listeners for history and router events
      * @param {import('history').History<{}>} history
      */
-    setHistory: (history) => {
+    withHistory: (history) => {
       gouter.history = history;
       gouter.listen(gouter.updateHistory);
       history.listen(gouter.goToLocation);
       gouter.goToLocation(history.location, 'REPLACE');
+      return gouter;
     },
 
     /**
@@ -652,7 +646,7 @@ const Gouter = (routeMap) => {
      * @param {PartialState} partialState
      */
     withNotFoundState: (partialState) => {
-      gouter.notFoundState = gouter.newRouterState(partialState);
+      gouter.notFoundState = gouter.newState(partialState);
       return gouter;
     },
 
