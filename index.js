@@ -156,10 +156,10 @@ const generatePattern = (name, params) => {
  */
 const Gouter = (routeMap) => {
   /**
-   * @typedef {{[K in keyof T]: {
-   * name: K
-   * params: T[K]['params']
-   * query: Partial<T[K]['query']>
+   * @typedef {{[N in keyof T]: {
+   * name: N
+   * params: T[N]['params']
+   * query: Partial<T[N]['query']>
    * url: string
    * key: string
    * }}} StateMap
@@ -212,6 +212,9 @@ const Gouter = (routeMap) => {
 
   const gouter = {
     routeMap,
+
+    /** @type {StateMap} */
+    stateMap: null,
 
     /** @type {Partial<{[K in keyof T]: Partial<Record<HookName, TransitionHook<Stack>>>}>} */
     hookMap: {},
