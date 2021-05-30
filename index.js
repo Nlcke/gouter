@@ -139,7 +139,11 @@ const matchUrl = (url, pattern) => {
 const generatePattern = (name, params) => {
   const paramNames = Object.getOwnPropertyNames(params);
   const urlParams = paramNames.map((paramName) => ':' + paramName).join('/');
-  return '/' + name + (urlParams ? '/' + urlParams : '');
+  const kebabName = name
+    .match(/[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g)
+    .map((x) => x.toLowerCase())
+    .join('-');
+  return '/' + kebabName + (urlParams ? '/' + urlParams : '');
 };
 
 /**
@@ -471,8 +475,7 @@ const Gouter = (routeMap) => {
 
       const fromStack = gouter.stack;
 
-      if (!gouter.areStacksEqual(fromStack, toStack) || gouter.isInitializing) {
-        gouter.isInitializing = false;
+      if (!gouter.areStacksEqual(fromStack, toStack)) {
         gouter.isTransitioning = true;
 
         // const fromRoutes = fromStack
@@ -546,7 +549,14 @@ const Gouter = (routeMap) => {
      */
     goTo: (partialState) => {
       const state = gouter.newState(partialState);
-      gouter.setStack([state]);
+      const isWeb = !!gouter.history;
+      if (isWeb) {
+        gouter.setStack([state]);
+      } else {
+        const prevStack = gouter.stack;
+        const nextStack = [...prevStack, state];
+        gouter.setStack(nextStack);
+      }
     },
 
     goBack: () => {
