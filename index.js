@@ -219,6 +219,9 @@ const Gouter = (routeMap) => {
     /** @type {Partial<{[K in keyof T]: Partial<Record<HookName, TransitionHook<Stack>>>}>} */
     hookMap: {},
 
+    /** @type {Partial<{[K in keyof T]: keyof T}>} */
+    parentMap: {},
+
     /** @type {import('history').History<{}>}  */
     history: null,
 
@@ -646,6 +649,15 @@ const Gouter = (routeMap) => {
      */
     withHooks: (hookMap) => {
       gouter.hookMap = hookMap;
+      return gouter;
+    },
+
+    /**
+     * Set parents for routes
+     * @param {Partial<{[K in keyof T]: keyof T}>} parentMap
+     */
+    withParents: (parentMap) => {
+      gouter.parentMap = parentMap;
       return gouter;
     },
 
