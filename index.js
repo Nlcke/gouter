@@ -13,7 +13,7 @@ const { compile, pathToRegexp } = require('path-to-regexp');
 
 /** @typedef {string} URL e.g. 'post/123' */
 
-/** @typedef {string} Segment e.g. 'TabBar' */
+/** @typedef {string} Segment e.g. 'UserStack/userId' */
 
 /**
  * `HookName` is one of 4 names for hooks which control transition
@@ -37,16 +37,15 @@ const { compile, pathToRegexp } = require('path-to-regexp');
  * @returns {void}
  */
 
-/** @typedef {string} Pattern */
+/** @typedef {string} Pattern e.g. 'user/:id' */
 
 /**
- * A `Route` consists of a name, a URL matching pattern and optional
- * enter/exit hooks. New gouter is initialized with an array
- * of routes which it uses to transition between states.
+ * `Route` consists of a name, a URL matching pattern
  * @typedef Route
- * @property {Pattern} [pattern] e.g. '/user/:id'
+ * @property {Pattern} [pattern]
  * @property {Params} [params]
  * @property {Query} [query]
+ * @property {boolean} [initial]
  * @property {Segment[]} [segments]
  */
 
@@ -219,9 +218,6 @@ const Gouter = (routeMap) => {
     /** @type {Partial<{[K in keyof T]: Partial<Record<HookName, TransitionHook<Stack>>>}>} */
     hookMap: {},
 
-    /** @type {Partial<{[K in keyof T]: keyof T}>} */
-    parentMap: {},
-
     /** @type {import('history').History<{}>}  */
     history: null,
 
@@ -249,79 +245,6 @@ const Gouter = (routeMap) => {
     parseOptions: {},
 
     stringify,
-
-    // /** @type {string[]} */
-    // hookNames: ['beforeExit', 'beforeEnter', 'onExit', 'onEnter'],
-
-    // /** @type {(hookCatch?: any) => void} */
-    // nextHook: () => {},
-
-    // /**
-    //  * Get last state path
-    //  * @param {RouterStack} stack
-    //  * @returns {RouterStack[]} stack list
-    //  */
-    // getStackPath: (stack) => {
-    //   /** @type {RouterStack[]} */
-    //   const stackPath = [];
-    //   let substack = stack;
-    //   while (Array.isArray(substack)) {
-    //     stackPath[stackPath.length] = substack;
-    //     // @ts-ignore
-    //     substack = substack[substack.length - 1];
-    //   }
-    //   return stackPath;
-    // },
-
-    // /**
-    //  * Updates `RouterStack`
-    //  * @param {RouterStack} nextStack
-    //  * @returns {void}
-    //  */
-    // setStack: (nextStack) => {
-    //   if (!nextStack.length) {
-    //     return gouter.onStackExit && gouter.onStackExit();
-    //   }
-
-    //   const prevMountedStack = gouter.mountedStack;
-    //   const nextMountedStack = gouter.toMountedStack(nextStack);
-
-    //   const fromStateList = gouter.toStaleStack(
-    //     prevMountedStack,
-    //     nextMountedStack,
-    //   );
-    //   const toStateList = gouter.toFreshStack(
-    //     prevMountedStack,
-    //     nextMountedStack,
-    //   );
-
-    //   gouter.isInitializing = false;
-    //   gouter.isTransitioning = true;
-
-    //   const fromState = prevMountedStack[prevMountedStack.length - 1];
-    //   const toState = nextMountedStack[nextMountedStack.length - 1];
-
-    //   const fromRouteList = fromStateList.map((fromState) =>
-    //     gouter.getRoute(fromState.name),
-    //   );
-    //   const toRouteList = toStateList.map((toState) =>
-    //     gouter.getRoute(toState.name),
-    //   );
-
-    //   gouter.nextHook = gouter.getNextHookList(
-    //     fromState,
-    //     toState,
-    //     fromStateList,
-    //     toStateList,
-    //     fromRouteList,
-    //     toRouteList,
-    //     nextStack,
-    //     nextMountedStack,
-    //     0,
-    //   );
-
-    //   gouter.nextHook();
-    // },
 
     /**
      * Converts partial router state to url using route map
@@ -359,7 +282,9 @@ const Gouter = (routeMap) => {
         /** @type {Partial<T[keyof T]["query"]>} */
         // @ts-ignore
         const query = gouter.parse(search, gouter.parseOptions);
-        if (params) return gouter.newState({ name: routeName, params, query });
+        if (params) {
+          return gouter.newState({ name: routeName, params, query });
+        }
       }
     },
 
@@ -371,49 +296,6 @@ const Gouter = (routeMap) => {
     getRoute: (name) => {
       return gouter.routeMap[name];
     },
-
-    // /**
-    //  * Makes new iterator function to iterate over hooks of two `RouterState`s.
-    //  * @param { RouterStack } fromStack
-    //  * @param { RouterStack } toStack
-    //  * @param { Route[] } fromRoutes
-    //  * @param { Route[] } toRoutes
-    //  * @param { number } hookID
-    //  */
-    // getNextHook: (fromStack, toStack, fromRoutes, toRoutes, hookID) =>
-    //   /**
-    //    * Iterates over hooks and stops on hookCatch or on last hook
-    //    * @param {any} [hookCatch]
-    //    * @returns {void}
-    //    */
-    //   function nextHook(hookCatch) {
-    //     const hookName = gouter.hookNames[hookID];
-    //     const isExitHook = hookID % 2 === 0;
-    //     const routes = isExitHook ? fromRoutes : toRoutes;
-
-    //     /** @type {TransitionHook[]} */
-    //     const hooks = routes
-    //       .map((route) => route[hookName])
-    //       .filter((hook) => hook !== undefined);
-
-    //     hookID += 1;
-
-    //     if (hookCatch === gouter.hookCatch || hookID === 0) {
-    //       hookID = -1;
-    //     } else if (hooks.length) {
-    //       const promises = hooks.map((hook) => hook(fromStack, toStack));
-    //       Promise.all(promises).then(nextHook).catch(gouter.hookCatch);
-    //     } else if (hookName) {
-    //       nextHook();
-    //     } else {
-    //       hookID = -1;
-    //       gouter.isTransitioning = false;
-    //       gouter.stack = toStack;
-    //       for (const listener of gouter.listeners) {
-    //         listener(toStack);
-    //       }
-    //     }
-    //   },
 
     /**
      * Checks next state for type errors
@@ -484,17 +366,6 @@ const Gouter = (routeMap) => {
       if (!gouter.areStacksEqual(fromStack, toStack)) {
         gouter.isTransitioning = true;
 
-        // const fromRoutes = fromStack
-        //   .filter((fromState) =>
-        //     toStack.every((toState) => toState.key !== fromState.key),
-        //   )
-        //   .map(({ name }) => gouter.getRoute(name));
-        // const toRoutes = toStack
-        //   .filter((toState) =>
-        //     fromStack.every((fromState) => fromState.key !== toState.key),
-        //   )
-        //   .map(({ name }) => gouter.getRoute(name));
-
         const fromRoutesHooks = fromStack
           .filter((fromState) =>
             toStack.every((toState) => toState.key !== fromState.key),
@@ -550,25 +421,164 @@ const Gouter = (routeMap) => {
     },
 
     /**
-     * Go to new router state
+     * Get stack indices
+     * @param {Stack} stack
+     * @param {State} state
+     * @returns {[from: number, to: number][]}
+     */
+    getStackIndices: (stack, state) => {
+      const { getRoute } = gouter;
+      /** @type {[from: number, to: number][]} */
+      const stackIndices = [];
+      const targetRoute = getRoute(state.name);
+      const targetSegments = targetRoute.segments || [];
+      const targetParams = state.params;
+      for (let index = 0; index < stack.length; index++) {
+        const { name, params } = stack[index];
+        const segments = getRoute(name).segments || [];
+        for (
+          let segmentIndex = 0;
+          segmentIndex < Math.min(segments.length, targetSegments.length);
+          segmentIndex++
+        ) {
+          const segment = segments[segmentIndex];
+          if (segment !== undefined) {
+            const targetSegment = targetSegments[segmentIndex];
+            const paramNameList = (segment.match(/\/\:[^\/]+/g) || []).map(
+              (match) => match.slice('/:'.length),
+            );
+            if (paramNameList.length > 0) {
+              const areParamsEqual = paramNameList.every(
+                (paramName) => targetParams[paramName] === params[paramName],
+              );
+              if (areParamsEqual) {
+                if (stackIndices[segmentIndex]) {
+                  stackIndices[segmentIndex][1] = index;
+                } else {
+                  stackIndices[segmentIndex] = [index, index];
+                }
+              }
+            } else {
+              if (segment === targetSegment) {
+                if (stackIndices[segmentIndex]) {
+                  stackIndices[segmentIndex][1] = index;
+                } else {
+                  stackIndices[segmentIndex] = [index, index];
+                }
+              }
+            }
+          }
+        }
+      }
+      for (let i = 0; i < targetSegments.length; i++) {
+        stackIndices[i] = stackIndices[i] || [-1, -1];
+      }
+      return stackIndices;
+    },
+
+    /**
+     * Get initial stack
+     * @param {State} state
+     * @param {number} segmentIndex
+     * @returns {Stack}
+     */
+    getInitialStack: (state, segmentIndex) => {
+      const { routeMap, newState, getRoute } = gouter;
+      /** @type {Stack} */
+      const initialStack = [];
+      const { params } = state;
+      const segments = getRoute(state.name).segments || [];
+      for (const name in routeMap) {
+        const route = routeMap[name];
+        if (route.initial) {
+          const initialSegments = route.segments || [];
+          if (initialSegments.length - 1 === segmentIndex) {
+            let areSegmentsEqual = true;
+            for (let i = 0; i < initialSegments.length; i++) {
+              if (initialSegments[i] !== segments[i]) {
+                areSegmentsEqual = false;
+                break;
+              }
+            }
+            if (areSegmentsEqual) {
+              initialStack[initialStack.length] = newState({
+                name,
+                params,
+              });
+            }
+          }
+        }
+      }
+      return initialStack;
+    },
+
+    /**
+     * Go to new router state (parent stack can not be reduced)
      * @param {PartialState} partialState
+     * @returns {void}
      */
     goTo: (partialState) => {
       const state = gouter.newState(partialState);
-      const isWeb = !!gouter.history;
-      if (isWeb) {
+      if (gouter.history) {
         gouter.setStack([state]);
       } else {
         const prevStack = gouter.stack;
-        const nextStack = [...prevStack, state];
-        gouter.setStack(nextStack);
+        const { name, key } = state;
+        const segments = gouter.getRoute(name).segments || [];
+        const index = prevStack.findIndex((state) => state.key === key);
+
+        if (segments.length > 0 && index === -1) {
+          const stackIndices = gouter.getStackIndices(prevStack, state);
+          let offset = 0;
+          let nextStack = prevStack;
+          for (
+            let segmentIndex = 0;
+            segmentIndex < segments.length;
+            segmentIndex++
+          ) {
+            const [from, to] = stackIndices[segmentIndex];
+
+            const hasStack = from !== -1;
+
+            if (hasStack) {
+              const leftPart = prevStack.slice(offset, offset + from);
+              const innerPart = prevStack.slice(offset + from, offset + to);
+              const rightPart = prevStack.slice(offset + to);
+              nextStack = [...leftPart, ...rightPart, ...innerPart];
+              const moveBy = prevStack.length - 1 - to;
+              offset += moveBy;
+            } else {
+              const initialStack = gouter.getInitialStack(state, segmentIndex);
+              if (initialStack.length > 0) {
+                nextStack = [...nextStack, ...initialStack];
+                const moveBy = initialStack.length;
+                offset += moveBy;
+              }
+            }
+          }
+          gouter.setStack(nextStack);
+        } else {
+          const initialStack = gouter.getInitialStack(state, -1);
+          const nextStack = [
+            ...initialStack,
+            ...(index === -1 ? prevStack : prevStack.slice(0, index)),
+            state,
+          ];
+          gouter.setStack(nextStack);
+        }
       }
     },
 
-    goBack: () => {
-      const isWeb = !!gouter.history;
+    /**
+     * Switch to new router state (parent stack will not be reduced)
+     * @param {PartialState} partialState
+     */
+    switchTo: (partialState) => {
+      throw 'unimplemented';
+    },
 
-      if (isWeb) {
+    goBack: () => {
+      if (gouter.history) {
         gouter.history.goBack();
       } else {
         throw 'unimplemented';
@@ -609,12 +619,14 @@ const Gouter = (routeMap) => {
      * @param {Stack} stack
      */
     updateHistory: ([state]) => {
-      const { notFoundState } = gouter;
+      const { notFoundState, stateToUrl, history } = gouter;
       if (state.name !== notFoundState.name) {
-        const routerUrl = gouter.stateToUrl(state);
-        const { location } = gouter.history;
+        const routerUrl = stateToUrl(state);
+        const { location } = history;
         const browserUrl = `${location.pathname}${location.search}`;
-        if (browserUrl !== routerUrl) gouter.history.push(routerUrl);
+        if (browserUrl !== routerUrl) {
+          history.push(routerUrl);
+        }
       }
     },
 
@@ -649,15 +661,6 @@ const Gouter = (routeMap) => {
      */
     withHooks: (hookMap) => {
       gouter.hookMap = hookMap;
-      return gouter;
-    },
-
-    /**
-     * Set parents for routes
-     * @param {Partial<{[K in keyof T]: keyof T}>} parentMap
-     */
-    withParents: (parentMap) => {
-      gouter.parentMap = parentMap;
       return gouter;
     },
 
