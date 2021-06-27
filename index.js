@@ -518,17 +518,25 @@ const Gouter = (routeMap) => {
      * @returns {void}
      */
     goTo: (partialState) => {
-      const state = gouter.newState(partialState);
-      if (gouter.history) {
-        gouter.setStack([state]);
+      const {
+        history,
+        stack: prevStack,
+        newState,
+        setStack,
+        getRoute,
+        getStackIndices,
+        getInitialStack,
+      } = gouter;
+      const state = newState(partialState);
+      if (history) {
+        setStack([state]);
       } else {
-        const prevStack = gouter.stack;
         const { name, key } = state;
-        const segments = gouter.getRoute(name).segments || [];
+        const segments = getRoute(name).segments || [];
         const index = prevStack.findIndex((state) => state.key === key);
 
         if (segments.length > 0 && index === -1) {
-          const stackIndices = gouter.getStackIndices(prevStack, state);
+          const stackIndices = getStackIndices(prevStack, state);
           let offset = 0;
           let nextStack = prevStack;
           for (
@@ -548,7 +556,7 @@ const Gouter = (routeMap) => {
               const moveBy = prevStack.length - 1 - to;
               offset += moveBy;
             } else {
-              const initialStack = gouter.getInitialStack(state, segmentIndex);
+              const initialStack = getInitialStack(state, segmentIndex);
               if (initialStack.length > 0) {
                 nextStack = [...nextStack, ...initialStack];
                 const moveBy = initialStack.length;
@@ -556,15 +564,15 @@ const Gouter = (routeMap) => {
               }
             }
           }
-          gouter.setStack(nextStack);
+          setStack(nextStack);
         } else {
-          const initialStack = gouter.getInitialStack(state, -1);
+          const initialStack = getInitialStack(state, -1);
           const nextStack = [
             ...initialStack,
             ...(index === -1 ? prevStack : prevStack.slice(0, index)),
             state,
           ];
-          gouter.setStack(nextStack);
+          setStack(nextStack);
         }
       }
     },
@@ -572,16 +580,24 @@ const Gouter = (routeMap) => {
     /**
      * Switch to new router state (parent stack will not be reduced)
      * @param {PartialState} partialState
+     * @returns {void}
      */
     switchTo: (partialState) => {
       throw 'unimplemented';
     },
 
+    /**
+     * Go back to previous state
+     * @param {PartialState} partialState
+     * @returns {void}
+     */
     goBack: () => {
-      if (gouter.history) {
-        gouter.history.goBack();
+      const { history, stack: prevStack, setStack } = gouter;
+      if (history) {
+        history.goBack();
       } else {
-        throw 'unimplemented';
+        const nextStack = prevStack.slice(0, -1);
+        setStack(nextStack);
       }
     },
 
