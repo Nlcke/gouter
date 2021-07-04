@@ -486,7 +486,7 @@ const Gouter = (routeMap) => {
       const { routeMap, newState, getRoute } = gouter;
       /** @type {Stack} */
       const initialStack = [];
-      const { params } = state;
+      const { params, key } = state;
       const segments = getRoute(state.name).segments || [];
       for (const name in routeMap) {
         const route = routeMap[name];
@@ -509,23 +509,95 @@ const Gouter = (routeMap) => {
           }
         }
       }
-      return initialStack;
+      return initialStack.filter((state) => state.key !== key);
     },
 
     /**
-     * Go to new router state (parent stack can not be reduced)
+     * Get stack with updated state
+     * @param {Stack} stack
+     * @param {State} state
+     * @returns {Stack}
+     */
+    getStackWithUpdatedState: (stack, state) => {
+      const newStack = stack.slice();
+      let stateUpdated = false;
+      const { key } = state;
+      for (let i = 0; i < newStack.length; i++) {
+        if (newStack[i].key === key) {
+          newStack[i] = state;
+          stateUpdated = true;
+          break;
+        }
+      }
+      if (!stateUpdated) {
+        newStack[newStack.length] = state;
+      }
+      return newStack;
+    },
+
+    /**
+     * Get stack with focused top
+     * @param {Stack} stack
+     * @param {State} state
+     * @returns {Stack}
+     */
+    getStackWithFocusedTop: (stack, state) => {
+      const { getRoute, getStackIndices, getInitialStack } = gouter;
+
+      const segments = getRoute(state.name).segments || [];
+      const stackIndices = getStackIndices(stack, state);
+      let offset = 0;
+      let nextStack = stack;
+      const initialStack = stack.length ? [] : getInitialStack(state, -1);
+      if (initialStack.length > 0) {
+        nextStack = [...nextStack, ...initialStack];
+        offset += initialStack.length;
+      }
+      for (
+        let segmentIndex = 0;
+        segmentIndex < segments.length;
+        segmentIndex++
+      ) {
+        const [from, to] = stackIndices[segmentIndex];
+        if (from !== -1) {
+          const leftPart = nextStack.slice(0, offset + from);
+          const innerPart = nextStack.slice(offset + from, offset + to + 1);
+          const rightPart = nextStack.slice(offset + to + 1);
+          nextStack = [...leftPart, ...rightPart, ...innerPart];
+          offset += rightPart.length;
+        } else {
+          const initialStack = getInitialStack(state, segmentIndex);
+          if (initialStack.length > 0) {
+            nextStack = [...nextStack, ...initialStack];
+            offset += initialStack.length;
+          }
+        }
+      }
+      return nextStack;
+    },
+
+    /**
+     * Go to new router state
+     * * if state not found in current stack:
+     * * * recreate parent stacks with initials if any
+     * * * remove every state after parent stacks
+     * * * add new state to the top
+     * * if state found in current stack:
+     * * * remove found state and every possible state after it
+     * * * add new state to the top
      * @param {PartialState} partialState
      * @returns {void}
      */
     goTo: (partialState) => {
       const {
         history,
-        stack: prevStack,
+        stack,
         newState,
         setStack,
         getRoute,
         getStackIndices,
         getInitialStack,
+        getStackWithUpdatedState,
       } = gouter;
       const state = newState(partialState);
       if (history) {
@@ -533,57 +605,125 @@ const Gouter = (routeMap) => {
       } else {
         const { name, key } = state;
         const segments = getRoute(name).segments || [];
-        const index = prevStack.findIndex((state) => state.key === key);
+        const index = stack.findIndex((state) => state.key === key);
 
         if (segments.length > 0 && index === -1) {
-          const stackIndices = getStackIndices(prevStack, state);
+          const stackIndices = getStackIndices(stack, state);
           let offset = 0;
-          let nextStack = prevStack;
+          let nextStack = stack;
+
+          const initialStack = stack.length ? [] : getInitialStack(state, -1);
+          if (initialStack.length > 0) {
+            const initialIndex = initialStack.findIndex(
+              (state) => state.key === key,
+            );
+            const filteredInitialStack =
+              initialIndex === -1
+                ? initialStack
+                : initialStack.slice(0, initialIndex);
+            nextStack = filteredInitialStack.length
+              ? [...filteredInitialStack, ...stack]
+              : stack;
+            offset = filteredInitialStack.length;
+          }
+
           for (
             let segmentIndex = 0;
             segmentIndex < segments.length;
             segmentIndex++
           ) {
             const [from, to] = stackIndices[segmentIndex];
-
-            const hasStack = from !== -1;
-
-            if (hasStack) {
-              const leftPart = prevStack.slice(offset, offset + from);
-              const innerPart = prevStack.slice(offset + from, offset + to);
-              const rightPart = prevStack.slice(offset + to);
-              nextStack = [...leftPart, ...rightPart, ...innerPart];
-              const moveBy = prevStack.length - 1 - to;
-              offset += moveBy;
+            if (from !== -1) {
+              nextStack = nextStack.slice(0, offset + to + 1);
             } else {
               const initialStack = getInitialStack(state, segmentIndex);
-              if (initialStack.length > 0) {
-                nextStack = [...nextStack, ...initialStack];
-                const moveBy = initialStack.length;
-                offset += moveBy;
+              const initialIndex = initialStack.findIndex(
+                (state) => state.key === key,
+              );
+              const filteredInitialStack =
+                initialIndex === -1
+                  ? initialStack
+                  : initialStack.slice(0, initialIndex);
+              if (filteredInitialStack.length > 0) {
+                nextStack = [...nextStack, ...filteredInitialStack];
+                offset += filteredInitialStack.length;
               }
             }
           }
+          nextStack = getStackWithUpdatedState(nextStack, state);
+          setStack(nextStack);
+        } else if (stack.length) {
+          const nextStack = [
+            ...(index === -1 ? stack : stack.slice(0, index)),
+            state,
+          ];
           setStack(nextStack);
         } else {
           const initialStack = getInitialStack(state, -1);
-          const nextStack = [
-            ...initialStack,
-            ...(index === -1 ? prevStack : prevStack.slice(0, index)),
-            state,
-          ];
+          const initialIndex = initialStack.findIndex(
+            (state) => state.key === key,
+          );
+          const filteredInitialStack =
+            initialIndex === -1
+              ? initialStack
+              : initialStack.slice(0, initialIndex);
+          const nextStack = [...filteredInitialStack, state];
           setStack(nextStack);
         }
       }
     },
 
     /**
-     * Switch to new router state (parent stack will not be reduced)
+     * Switch to state stack
+     * * recreate parent stacks with initials if any
+     * * move parent stacks to the top if any
+     * * add new state to the top if previous state not found
      * @param {PartialState} partialState
      * @returns {void}
      */
     switchTo: (partialState) => {
-      throw 'unimplemented';
+      const {
+        history,
+        stack,
+        newState,
+        setStack,
+        getStackWithFocusedTop,
+        getStackWithUpdatedState,
+      } = gouter;
+      const state = newState(partialState);
+      if (history) {
+        setStack([state]);
+      } else {
+        let nextStack = getStackWithFocusedTop(stack, state);
+        nextStack = getStackWithUpdatedState(nextStack, state);
+        setStack(nextStack);
+      }
+    },
+
+    /**
+     * Switch to state stack and go to state
+     * * recreate parent stacks with initials if any
+     * * move parent stacks to the top if any
+     * * add new state to the top if previous state not found
+     * @param {PartialState} partialState
+     * @returns {void}
+     */
+    switchAndGoTo: (partialState) => {
+      const { history, stack, newState, setStack, getStackWithFocusedTop } =
+        gouter;
+      const state = newState(partialState);
+      if (history) {
+        setStack([state]);
+      } else {
+        let nextStack = getStackWithFocusedTop(stack, state);
+        const { key } = state;
+        const index = nextStack.findIndex((state) => state.key === key);
+        nextStack = [
+          ...(index === -1 ? nextStack : nextStack.slice(0, index)),
+          state,
+        ];
+        setStack(nextStack);
+      }
     },
 
     /**
