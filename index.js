@@ -614,19 +614,11 @@ const Gouter = (routeMap) => {
 
           const initialStack = stack.length ? [] : getInitialStack(state, -1);
           if (initialStack.length > 0) {
-            const initialIndex = initialStack.findIndex(
-              (state) => state.key === key,
-            );
-            const filteredInitialStack =
-              initialIndex === -1
-                ? initialStack
-                : initialStack.slice(0, initialIndex);
-            nextStack = filteredInitialStack.length
-              ? [...filteredInitialStack, ...stack]
+            nextStack = initialStack.length
+              ? [...initialStack, ...stack]
               : stack;
-            offset = filteredInitialStack.length;
+            offset = initialStack.length;
           }
-
           for (
             let segmentIndex = 0;
             segmentIndex < segments.length;
@@ -637,16 +629,9 @@ const Gouter = (routeMap) => {
               nextStack = nextStack.slice(0, offset + to + 1);
             } else {
               const initialStack = getInitialStack(state, segmentIndex);
-              const initialIndex = initialStack.findIndex(
-                (state) => state.key === key,
-              );
-              const filteredInitialStack =
-                initialIndex === -1
-                  ? initialStack
-                  : initialStack.slice(0, initialIndex);
-              if (filteredInitialStack.length > 0) {
-                nextStack = [...nextStack, ...filteredInitialStack];
-                offset += filteredInitialStack.length;
+              if (initialStack.length > 0) {
+                nextStack = [...nextStack, ...initialStack];
+                offset += initialStack.length;
               }
             }
           }
@@ -660,14 +645,7 @@ const Gouter = (routeMap) => {
           setStack(nextStack);
         } else {
           const initialStack = getInitialStack(state, -1);
-          const initialIndex = initialStack.findIndex(
-            (state) => state.key === key,
-          );
-          const filteredInitialStack =
-            initialIndex === -1
-              ? initialStack
-              : initialStack.slice(0, initialIndex);
-          const nextStack = [...filteredInitialStack, state];
+          const nextStack = [...initialStack, state];
           setStack(nextStack);
         }
       }
