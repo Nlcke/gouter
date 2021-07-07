@@ -116,16 +116,11 @@ const emptyStack = [];
 // const emptyState = null;
 
 const App = () => {
-  console.log('rerender!!!');
-
   const S = useStyles();
   const { theme } = configStore;
   const colorScheme = useColorScheme();
   const light = theme ? theme !== 'dark' : colorScheme !== 'dark';
   const p = light ? lightPalette : darkPalette;
-
-  // const [stack, setStack] = useState(gouter.stack);
-  // const [staleStack, setStaleStack] = useState(emptyStack);
 
   const [stacks, setStacks] = useState([gouter.stack, emptyStack]);
 
@@ -175,28 +170,11 @@ const App = () => {
 
   useEffect(listen, [listen]);
 
-  /** @type {import('@react-navigation/native').Theme} */
-  const navigationTheme = useMemo(
-    () => ({
-      dark: !light,
-      colors: {
-        primary: p.fill,
-        background: p.background,
-        card: p.backgroundSecondary,
-        text: p.stroke,
-        border: p.separator,
-        notification: p.accent,
-      },
-    }),
-    [light, p],
-  );
-
   const onSnackBarHide = useCallback(() => errorStore.resetState(), []);
 
   const lastStackIndex = stack.length - 1;
 
   const onUnmount = useCallback(({ key }) => {
-    console.log('onUnmount');
     setStacks(([prevStack, prevStaleStack]) => [
       prevStack,
       prevStaleStack.filter((state) => state.key !== key),
