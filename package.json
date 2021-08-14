@@ -7,7 +7,10 @@
     "path-to-regexp": "^6.1.0",
     "query-string": "^6.13.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@react-native-community/eslint-config": "^3.0.0",
+    "eslint": "^7.30.0"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
