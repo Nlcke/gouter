@@ -195,9 +195,7 @@ const Gouter = (routeMap) => {
   const newState = ({ name, params = {}, query = {}, url = '', key = '' }) => {
     const route = routeMap[name];
     const hasPattern = route && route.pattern !== undefined;
-    const pattern = hasPattern
-      ? route.pattern
-      : generatePattern(String(name), params);
+    const pattern = hasPattern ? route.pattern : generatePattern(String(name), params);
     const generatedUrl = url || generateUrl(pattern, params, query);
     const generatedKey = key || generatedUrl.split('?')[0];
     return Object.freeze({
@@ -367,15 +365,11 @@ const Gouter = (routeMap) => {
         gouter.isTransitioning = true;
 
         const fromRoutesHooks = fromStack
-          .filter((fromState) =>
-            toStack.every((toState) => toState.key !== fromState.key),
-          )
+          .filter((fromState) => toStack.every((toState) => toState.key !== fromState.key))
           .map(({ name }) => gouter.hookMap[name])
           .filter(Boolean);
         const toRoutesHooks = toStack
-          .filter((toState) =>
-            fromStack.every((fromState) => fromState.key !== toState.key),
-          )
+          .filter((toState) => fromStack.every((fromState) => fromState.key !== toState.key))
           .map(({ name }) => gouter.hookMap[name])
           .filter(Boolean);
 
@@ -406,12 +400,8 @@ const Gouter = (routeMap) => {
           }
         };
 
-        const beforeExitHooks = fromRoutesHooks.map(
-          ({ beforeExit }) => beforeExit,
-        );
-        const beforeEnterHooks = toRoutesHooks.map(
-          ({ beforeEnter }) => beforeEnter,
-        );
+        const beforeExitHooks = fromRoutesHooks.map(({ beforeExit }) => beforeExit);
+        const beforeEnterHooks = toRoutesHooks.map(({ beforeEnter }) => beforeEnter);
         const promises = [...beforeExitHooks, ...beforeEnterHooks]
           .filter(Boolean)
           .map((hook) => hook(fromStack, toStack));
@@ -444,8 +434,8 @@ const Gouter = (routeMap) => {
           const segment = segments[segmentIndex];
           if (segment !== undefined) {
             const targetSegment = targetSegments[segmentIndex];
-            const paramNameList = (segment.match(/\/\:[^\/]+/g) || []).map(
-              (match) => match.slice('/:'.length),
+            const paramNameList = (segment.match(/\/\:[^\/]+/g) || []).map((match) =>
+              match.slice('/:'.length),
             );
             if (paramNameList.length > 0) {
               const areParamsEqual = paramNameList.every(
@@ -483,6 +473,7 @@ const Gouter = (routeMap) => {
      * @returns {Stack}
      */
     getInitialStack: (state, segmentIndex) => {
+      // TODO: recursively restore initial substacks!
       const { routeMap, newState, getRoute } = gouter;
       /** @type {Stack} */
       const initialStack = [];
@@ -553,11 +544,7 @@ const Gouter = (routeMap) => {
         nextStack = [...nextStack, ...initialStack];
         offset += initialStack.length;
       }
-      for (
-        let segmentIndex = 0;
-        segmentIndex < segments.length;
-        segmentIndex++
-      ) {
+      for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
         const [from, to] = stackIndices[segmentIndex];
         if (from !== -1) {
           const leftPart = nextStack.slice(0, offset + from);
@@ -614,16 +601,10 @@ const Gouter = (routeMap) => {
 
           const initialStack = stack.length ? [] : getInitialStack(state, -1);
           if (initialStack.length > 0) {
-            nextStack = initialStack.length
-              ? [...initialStack, ...stack]
-              : stack;
+            nextStack = initialStack.length ? [...initialStack, ...stack] : stack;
             offset = initialStack.length;
           }
-          for (
-            let segmentIndex = 0;
-            segmentIndex < segments.length;
-            segmentIndex++
-          ) {
+          for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
             const [from, to] = stackIndices[segmentIndex];
             if (from !== -1) {
               nextStack = nextStack.slice(0, offset + to + 1);
@@ -638,10 +619,7 @@ const Gouter = (routeMap) => {
           nextStack = getStackWithUpdatedState(nextStack, state);
           setStack(nextStack);
         } else if (stack.length) {
-          const nextStack = [
-            ...(index === -1 ? stack : stack.slice(0, index)),
-            state,
-          ];
+          const nextStack = [...(index === -1 ? stack : stack.slice(0, index)), state];
           setStack(nextStack);
         } else {
           const initialStack = getInitialStack(state, -1);
@@ -687,8 +665,7 @@ const Gouter = (routeMap) => {
      * @returns {void}
      */
     switchAndGoTo: (partialState) => {
-      const { history, stack, newState, setStack, getStackWithFocusedTop } =
-        gouter;
+      const { history, stack, newState, setStack, getStackWithFocusedTop } = gouter;
       const state = newState(partialState);
       if (history) {
         setStack([state]);
@@ -696,10 +673,7 @@ const Gouter = (routeMap) => {
         let nextStack = getStackWithFocusedTop(stack, state);
         const { key } = state;
         const index = nextStack.findIndex((state) => state.key === key);
-        nextStack = [
-          ...(index === -1 ? nextStack : nextStack.slice(0, index)),
-          state,
-        ];
+        nextStack = [...(index === -1 ? nextStack : nextStack.slice(0, index)), state];
         setStack(nextStack);
       }
     },
