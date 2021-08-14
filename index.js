@@ -62,10 +62,13 @@ const generatorCache = {};
  */
 const getGenerator = (pattern) => {
   const generator = generatorCache[pattern];
-  if (generator) return generator;
-  const newGenerator = compile(pattern);
-  generatorCache[pattern] = newGenerator;
-  return newGenerator;
+  if (generator) {
+    return generator;
+  } else {
+    const newGenerator = compile(pattern);
+    generatorCache[pattern] = newGenerator;
+    return newGenerator;
+  }
 };
 
 /**
@@ -78,7 +81,8 @@ const getGenerator = (pattern) => {
 const generateUrl = (pattern = '/', params = {}, query = {}) => {
   const generator = getGenerator(pattern);
   const urlPatternStr = generator(params);
-  if (Object.keys(query).length > 0) {
+  const hasQuery = Object.keys(query).length > 0;
+  if (hasQuery) {
     return urlPatternStr + '?' + stringify(query);
   } else {
     return urlPatternStr;
@@ -100,13 +104,16 @@ const patternInfoCache = {};
  */
 const getPatternInfo = (pattern) => {
   const patternInfo = patternInfoCache[pattern];
-  if (patternInfo) return patternInfo;
-  /** @type {import('path-to-regexp').Key[]} */
-  const keys = [];
-  const regExp = pathToRegexp(pattern, keys, {});
-  const newPatternInfo = { regExp, keys };
-  patternInfoCache[pattern] = newPatternInfo;
-  return newPatternInfo;
+  if (patternInfo) {
+    return patternInfo;
+  } else {
+    /** @type {import('path-to-regexp').Key[]} */
+    const keys = [];
+    const regExp = pathToRegexp(pattern, keys, {});
+    const newPatternInfo = { regExp, keys };
+    patternInfoCache[pattern] = newPatternInfo;
+    return newPatternInfo;
+  }
 };
 
 /**
