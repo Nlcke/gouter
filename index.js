@@ -46,7 +46,6 @@ const { compile, pathToRegexp } = require('path-to-regexp');
  * @property {Params} [params]
  * @property {Query} [query]
  * @property {boolean} [initial]
- * @property {Segment[]} [segments]
  */
 
 /**
@@ -216,6 +215,9 @@ const Gouter = (routeMap) => {
 
   const gouter = {
     routeMap,
+
+    /** @type {Partial<{[K in keyof T]: keyof T}>} */
+    parentMap: {},
 
     /** @type {StateMap} */
     stateMap: null,
@@ -418,32 +420,47 @@ const Gouter = (routeMap) => {
     },
 
     /**
+     * Get segment names
+     * @param {keyof T} name
+     */
+    getSegmentNames: (name) => {
+      const { parentMap } = gouter;
+      /** @type {(keyof T)[]} */
+      const segmentNames = [];
+      let currentName = name;
+      for (const _ in parentMap) {
+        currentName = parentMap[currentName];
+        if (currentName && !segmentNames.includes(currentName)) {
+          segmentNames[segmentNames.length] = currentName;
+        } else {
+          break;
+        }
+      }
+      return segmentNames.reverse();
+    },
+
+    /**
      * Get stack indices
      * @param {Stack} stack
      * @param {State} state
      * @returns {[from: number, to: number][]}
      */
     getStackIndices: (stack, state) => {
-      const { getRoute } = gouter;
+      const { getSegmentNames, getRoute } = gouter;
       /** @type {[from: number, to: number][]} */
       const stackIndices = [];
-      const targetRoute = getRoute(state.name);
-      const targetSegments = targetRoute.segments || [];
+      const targetSegments = getSegmentNames(state.name);
       const targetParams = state.params;
       for (let index = 0; index < stack.length; index++) {
         const { name, params } = stack[index];
-        const segments = getRoute(name).segments || [];
-        for (
-          let segmentIndex = 0;
-          segmentIndex < Math.min(segments.length, targetSegments.length);
-          segmentIndex++
-        ) {
+        const segments = getSegmentNames(name);
+        const maxSegmentIndex = Math.min(segments.length, targetSegments.length);
+        for (let segmentIndex = 0; segmentIndex < maxSegmentIndex; segmentIndex++) {
           const segment = segments[segmentIndex];
           if (segment !== undefined) {
             const targetSegment = targetSegments[segmentIndex];
-            const paramNameList = (segment.match(/\/\:[^\/]+/g) || []).map((match) =>
-              match.slice('/:'.length),
-            );
+            const segmentRoute = getRoute(targetSegment);
+            const paramNameList = Object.keys(segmentRoute.params || {});
             if (paramNameList.length > 0) {
               const areParamsEqual = paramNameList.every(
                 (paramName) => targetParams[paramName] === params[paramName],
@@ -481,15 +498,15 @@ const Gouter = (routeMap) => {
      */
     getInitialStack: (state, segmentIndex) => {
       // TODO: recursively restore initial substacks!
-      const { routeMap, newState, getRoute } = gouter;
+      const { routeMap, newState, getSegmentNames } = gouter;
       /** @type {Stack} */
       const initialStack = [];
       const { params, key } = state;
-      const segments = getRoute(state.name).segments || [];
+      const segments = getSegmentNames(state.name);
       for (const name in routeMap) {
         const route = routeMap[name];
         if (route.initial) {
-          const initialSegments = route.segments || [];
+          const initialSegments = getSegmentNames(name);
           if (initialSegments.length - 1 === segmentIndex) {
             let areSegmentsEqual = true;
             for (let i = 0; i < initialSegments.length; i++) {
@@ -540,9 +557,9 @@ const Gouter = (routeMap) => {
      * @returns {Stack}
      */
     getStackWithFocusedTop: (stack, state) => {
-      const { getRoute, getStackIndices, getInitialStack } = gouter;
+      const { getSegmentNames, getStackIndices, getInitialStack } = gouter;
 
-      const segments = getRoute(state.name).segments || [];
+      const segments = getSegmentNames(state.name);
       const stackIndices = getStackIndices(stack, state);
       let offset = 0;
       let nextStack = stack;
@@ -588,7 +605,7 @@ const Gouter = (routeMap) => {
         stack,
         newState,
         setStack,
-        getRoute,
+        getSegmentNames,
         getStackIndices,
         getInitialStack,
         getStackWithUpdatedState,
@@ -598,7 +615,7 @@ const Gouter = (routeMap) => {
         setStack([state]);
       } else {
         const { name, key } = state;
-        const segments = getRoute(name).segments || [];
+        const segments = getSegmentNames(name);
         const index = stack.findIndex((state) => state.key === key);
 
         if (segments.length > 0 && index === -1) {
@@ -788,6 +805,15 @@ const Gouter = (routeMap) => {
       gouter.listen(gouter.updateHistory);
       history.listen(gouter.goToLocation);
       gouter.goToLocation(history.location, 'REPLACE');
+      return gouter;
+    },
+
+    /**
+     * Set parent map for routes
+     * @param {Partial<{[K in keyof T]: keyof T}>} parentMap
+     */
+    withParentMap: (parentMap) => {
+      gouter.parentMap = parentMap;
       return gouter;
     },
   };
