@@ -179,7 +179,7 @@ const Gouter = (routeMap) => {
 
   /**
    * @typedef {Partial<SimpleState> & TransitionHooks<State> & {
-   * name: State['name']
+   * name: SimpleState['name']
    * stack?: ExtPartialState[]
    * initial?: boolean
    * }} ExtPartialState
@@ -188,8 +188,8 @@ const Gouter = (routeMap) => {
   const gouter = {
     routeMap,
 
-    /** @type {ExtPartialState} */
-    struct: null,
+    /** @type {Partial<Record<keyof T, ExtPartialState[]>>} */
+    pathMap: {},
 
     // /** @type {Partial<{[K in keyof T]: (keyof T)[]}>} */
     // childrenMap: {},
@@ -390,7 +390,9 @@ const Gouter = (routeMap) => {
 
       const areStatesEqual =
         fromStack.length !== toStack.length ||
-        fromStack.some((fromState) => fromState.key !== toState.key);
+        fromStack.some((fromState) => fromState.url !== toState.url);
+
+      console.log('check areStatesEqual condition!');
 
       if (!areStatesEqual) {
         gouter.isTransitioning = true;
@@ -504,35 +506,60 @@ const Gouter = (routeMap) => {
           }
         : null,
 
-    /**
-     * Find state
-     * @param {State} state
-     * @returns {State[]}
-     */
-    getPathStates: (state) => {
-      const { state: prevState } = gouter;
-      if (prevState.key === state.key) {
-        return [prevState];
-      } else {
-        /** @type {State[]} */
-        const pathStates = [];
-        let currentState = prevState;
-        while (true) {
-          if (currentState.stack) {
-            return pathStates;
-          }
-        }
-      }
-    },
+    // /**
+    //  *
+    //  * @param {keyof T} name
+    //  * @returns {(keyof T)[]}
+    //  */
+    // getStatePathByName: (name) => {
+    //   const { struct, routeMap } = gouter;
+    //   /** @type {(keyof T)[]} */
+    //   const statePath = [struct.name];
+    //   let currentStruct = struct;
+    //   const maxLength = Object.keys(routeMap).length;
+    //   for (let i = 0; i < maxLength; i++) {
+    //     if (currentStruct.name === name) {
+    //       return statePath;
+    //     } else {
+    //     }
+    //   }
+    //   return statePath;
+    // },
+
+    // /**
+    //  * Find state
+    //  * @param {State} state
+    //  * @returns {State[]}
+    //  */
+    // getPathStates: (state) => {
+    //   const { state: prevState, struct, getStatePathByName } = gouter;
+    //   if (prevState.key === state.key) {
+    //     return [prevState];
+    //   } else {
+    //     /** @type {State[]} */
+    //     const pathStates = [];
+    //     let currentState = prevState;
+    //     while (true) {
+    //       if (currentState.stack) {
+    //         return pathStates;
+    //       }
+    //     }
+    //   }
+    // },
 
     /**
      * Go to state
      * @param {PartialState} partialState
      */
     goTo: (partialState) => {
-      const { state: prevState, newState, getPathStates } = gouter;
+      const { state: prevState, newState, pathMap } = gouter;
       const state = newState(partialState);
-      const pathStates = getPathStates(state);
+      const path = pathMap[state.name];
+      if (path) {
+        for (const segment of path) {
+          // TODO: find real path
+        }
+      }
 
       // find if state is exist
 
@@ -555,8 +582,8 @@ const Gouter = (routeMap) => {
         history,
         state: prevState,
         getFocusedStates,
-        hookMap,
-        onGoBack,
+        pathMap,
+        onBack: defaultOnBack,
         setState,
       } = gouter;
       if (history) {
@@ -567,10 +594,9 @@ const Gouter = (routeMap) => {
         for (let index = maxIndex; index >= 0; index--) {
           const focusedState = focusedStates[maxIndex];
           const { name } = focusedState;
-          const hooks = hookMap[name];
-          const currentOnGoBack =
-            hooks && hooks.onBack ? hooks.onBack : onGoBack;
-          const nextFocusedState = currentOnGoBack(focusedState, focusedStates);
+          const path = pathMap[name];
+          const onBack = path ? path[path.length - 1].onBack : defaultOnBack;
+          const nextFocusedState = onBack(focusedState, focusedStates);
           if (nextFocusedState) {
             if (nextFocusedState !== focusedState) {
               let nextState = { ...prevState };
@@ -667,15 +693,6 @@ const Gouter = (routeMap) => {
       return gouter;
     },
 
-    // /**
-    //  * Set hooks for routes
-    //  * @param {Partial<{[K in keyof T]: TransitionHooks<State>}>} hookMap
-    //  */
-    // withHooks: (hookMap) => {
-    //   gouter.hookMap = hookMap;
-    //   return gouter;
-    // },
-
     /**
      * Set history and enable listeners for history and router events
      * @param {import('history').History<{}>} history
@@ -689,21 +706,36 @@ const Gouter = (routeMap) => {
       return gouter;
     },
 
-    // /**
-    //  * Set children map for routes
-    //  * @param {Partial<{[K in keyof T]: (keyof T)[]}>} childrenMap
-    //  */
-    // withChildrenMap: (childrenMap) => {
-    //   gouter.childrenMap = childrenMap;
-    //   return gouter;
-    // },
-
     /**
      * Set struct
      * @param {ExtPartialState} struct
      */
     withStruct: (struct) => {
-      gouter.struct = struct;
+      /** @type {Partial<Record<keyof T, ExtPartialState[]>>} */
+      const pathMap = {};
+
+      /** @type {(struct: ExtPartialState, path: ExtPartialState[]) => void} */
+      const fillPaths = (struct, path) => {
+        /** @type {ExtPartialState[]} */
+        const nextPath = [...path, struct];
+        if (pathMap[struct.name]) {
+          throw Error(
+            `Struct has duplicate definitions for '${struct.name}' name. Use only one definition per name.`,
+          );
+        } else {
+          pathMap[struct.name] = nextPath;
+        }
+        if (struct.stack) {
+          for (const subStruct of struct.stack) {
+            fillPaths(subStruct, nextPath);
+          }
+        }
+      };
+
+      fillPaths(struct, []);
+
+      gouter.pathMap = pathMap;
+
       return gouter;
     },
   };
