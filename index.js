@@ -160,8 +160,6 @@ const Gouter = (routeMap) => {
    * name: N
    * params: T[N]['params']
    * query: Partial<T[N]['query']>
-   * url: string
-   * key: string
    * }}} StateMap
    */
 
@@ -170,7 +168,7 @@ const Gouter = (routeMap) => {
    */
 
   /**
-   * @typedef {(SimpleState & {stack: State[]})} State
+   * @typedef {(SimpleState & {url: string, key: string, stack: State[]})} State
    */
 
   /**
@@ -191,15 +189,6 @@ const Gouter = (routeMap) => {
     /** @type {Partial<Record<keyof T, ExtPartialState[]>>} */
     pathMap: {},
 
-    // /** @type {Partial<{[K in keyof T]: (keyof T)[]}>} */
-    // childrenMap: {},
-
-    // /** @type {StateMap} */
-    // stateMap: null,
-
-    // /** @type {Partial<{[K in keyof T]: TransitionHooks<State>}>} */
-    // hookMap: {},
-
     /** @type {import('history').History<{}>}  */
     history: null,
 
@@ -212,7 +201,7 @@ const Gouter = (routeMap) => {
     /** @type {(reason: any) => PromiseLike<never>} */
     hookCatch: () => null,
 
-    /** @type {boolean} is router stack attempts to change? */
+    /** @type {boolean} is router state attempts to change? */
     isTransitioning: false,
 
     matchUrl,
