@@ -1,13 +1,19 @@
 {
-    "compilerOptions": {
-        "target": "ESNext",
-        "module": "ESNext",
-        "experimentalDecorators": true,
-        "checkJs": true,
-        "allowSyntheticDefaultImports": true,
-        "moduleResolution": "node",
-        "resolveJsonModule": true,
-        "jsx": "react-native",
-        "baseUrl": "./src"
-    }
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "experimentalDecorators": true,
+    "checkJs": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "jsx": "react-native",
+    "baseUrl": "./",
+    "strictNullChecks": true,
+    "alwaysStrict": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "pretty": true
+  }
 }

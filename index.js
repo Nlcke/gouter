@@ -17,7 +17,7 @@ const { compile, pathToRegexp } = require('path-to-regexp');
  * `TransitionHooks` is set of functions called while transition between router states
  * @template T
  * @typedef {{
- * onBack?: (state: T, focusedStates: T[]) => T
+ * onBack?: (state: T, focusedStates: T[]) => T | null
  * onInit?: (state: T, focusedStates: T[]) => T
  * onSwitch?: (state: T, focusedStates: T[]) => T
  * beforeExit?: (fromState: T, toState: T) => Promise<void | function>
@@ -116,19 +116,21 @@ const getPatternInfo = (pattern) => {
  * Matches an URL to a pattern.
  * @param {URL} url
  * @param {Pattern} pattern
- * @returns {Params} `Params` instance
+ * @returns {Params | null} `Params` instance
  */
 const matchUrl = (url, pattern) => {
   const { regExp, keys } = getPatternInfo(pattern);
   const match = regExp.exec(url);
   if (match) {
     const values = match.slice(1);
-    return Object.freeze(
-      keys.reduce((params, key, index) => {
-        params[key.name] = values[index];
-        return params;
-      }, {}),
-    );
+    /** @type {Record<string, string>} */
+    const initialValue = {};
+    return keys.reduce((params, key, index) => {
+      params[key.name] = values[index];
+      return params;
+    }, initialValue);
+  } else {
+    return null;
   }
 };
 
@@ -183,23 +185,41 @@ const Gouter = (routeMap) => {
    * }} ExtPartialState
    */
 
+  /** @type {keyof T} */
+  // @ts-ignore
+  const initialName = '';
+
   const gouter = {
     routeMap,
 
     /** @type {Partial<Record<keyof T, ExtPartialState[]>>} */
     pathMap: {},
 
-    /** @type {import('history').History<{}>}  */
+    /** @type {import('history').History<{}> | null}  */
     history: null,
 
     /** @type {State} */
-    state: null,
+    state: {
+      name: initialName,
+      params: {},
+      query: {},
+      url: '',
+      key: '',
+      stack: [],
+    },
 
     /** @type {State} */
-    notFoundState: null,
+    notFoundState: {
+      name: initialName,
+      params: {},
+      query: {},
+      url: '',
+      key: '',
+      stack: [],
+    },
 
-    /** @type {(reason: any) => PromiseLike<never>} */
-    hookCatch: () => null,
+    /** @type {(reason: any) => void} */
+    hookCatch: () => {},
 
     /** @type {boolean} is router state attempts to change? */
     isTransitioning: false,
@@ -255,15 +275,17 @@ const Gouter = (routeMap) => {
 
     /**
      * Converts partial router state to url using route map
-     * @param {PartialState} state
+     * @param {PartialState} partialState
      * @returns {URL}
      */
-    stateToUrl: (state) => {
-      const { getRoute, generateUrl } = gouter;
-      const { name, params, query } = state;
-      const route = getRoute(name);
-      const hasPattern = route && route.pattern !== undefined;
-      const pattern = hasPattern ? route.pattern : '/' + name;
+    stateToUrl: (partialState) => {
+      const { routeMap, generatePattern, generateUrl } = gouter;
+      const { name, params, query } = partialState;
+      const route = routeMap[name];
+      const pattern =
+        route && route.pattern !== undefined
+          ? route.pattern
+          : generatePattern(String(name), params || {});
       return generateUrl(pattern, params, query);
     },
 
@@ -273,46 +295,40 @@ const Gouter = (routeMap) => {
      * @returns {State}
      */
     urlToState: (url) => {
-      const { matchUrl, parse, parseOptions, newState } = gouter;
-      const splitPos = url.indexOf('?');
-      const pathname = splitPos === -1 ? url : url.slice(0, splitPos);
-      const search = splitPos === -1 ? '' : url.slice(splitPos);
-
-      const { routeMap } = gouter;
-      /** @type {(keyof T)[]} */
-      // @ts-ignore
-      const routeNames = Object.getOwnPropertyNames(routeMap);
-
-      for (const routeName of routeNames) {
-        const route = routeMap[routeName];
-        const hasPattern = route.pattern !== undefined;
-        const pattern = hasPattern ? route.pattern : '/' + routeName;
+      const {
+        matchUrl,
+        routeMap,
+        generatePattern,
+        parse,
+        parseOptions,
+        newState,
+        notFoundState,
+      } = gouter;
+      const [pathname, search = ''] = url.split('?');
+      for (const name in routeMap) {
+        const route = routeMap[name];
+        const pattern =
+          route.pattern !== undefined
+            ? route.pattern
+            : generatePattern(name, route.params || {});
         const params = matchUrl(pathname, pattern);
-        /** @type {Partial<T[keyof T]["query"]>} */
-        // @ts-ignore
-        const query = parse(search, parseOptions);
         if (params) {
-          return newState({ name: routeName, params, query });
+          /** @type {Partial<T[keyof T]["query"]>} */
+          // @ts-ignore
+          const query = parse(search, parseOptions);
+          return newState({ name, params, query });
         }
       }
-    },
-
-    /**
-     * Get route from routes if name matches
-     * @param {keyof routeMap} name
-     * @returns {Route} `Route` instance
-     */
-    getRoute: (name) => {
-      const { routeMap } = gouter;
-      return routeMap[name];
+      return notFoundState;
     },
 
     /**
      * Checks next state for type errors
      * @param {State} state
-     * @returns {string} error
+     * @returns {string | void} error
      */
     checkState: (state) => {
+      const { routeMap } = gouter;
       if (typeof state !== 'object') {
         const type = typeof state;
         return `Gouter: state is not an object but ${type}`;
@@ -329,7 +345,7 @@ const Gouter = (routeMap) => {
         return `Gouter: state is not {name: string, params?: object, query?: object} but ${type}`;
       }
 
-      if (!gouter.getRoute(name)) {
+      if (!routeMap[name]) {
         return `Gouter: name '${name}' not found in routes`;
       }
     },
@@ -370,7 +386,7 @@ const Gouter = (routeMap) => {
      * @returns {void}
      */
     setState: (toState) => {
-      const { cancelHooks, state: fromState, stateToStack } = gouter;
+      const { cancelHooks, state: fromState, stateToStack, pathMap } = gouter;
       gouter.isTransitioning = false;
       cancelHooks();
 
@@ -386,18 +402,26 @@ const Gouter = (routeMap) => {
       if (!areStatesEqual) {
         gouter.isTransitioning = true;
 
+        /** @type {(state: State) => ExtPartialState | null} */
+        const getHooksForState = (state) => {
+          const extPartialState = pathMap[state.name];
+          if (extPartialState) {
+            return extPartialState[extPartialState.length - 1];
+          } else {
+            return null;
+          }
+        };
+
         const fromRoutesHooks = fromStack
           .filter((fromState) =>
             toStack.every((toState) => toState.key !== fromState.key),
           )
-          .map(({ name }) => gouter.hookMap[name])
-          .filter(Boolean);
+          .map(getHooksForState);
         const toRoutesHooks = toStack
           .filter((toState) =>
             fromStack.every((fromState) => fromState.key !== toState.key),
           )
-          .map(({ name }) => gouter.hookMap[name])
-          .filter(Boolean);
+          .map(getHooksForState);
 
         let canceled = false;
         gouter.cancelHooks = () => {
@@ -417,24 +441,24 @@ const Gouter = (routeMap) => {
             for (const listener of gouter.listeners) {
               listener(toState);
             }
-            for (const { onExit } of fromRoutesHooks) {
-              onExit && onExit(fromState, toState);
+            for (const fromRoutesHook of fromRoutesHooks) {
+              fromRoutesHook?.onExit?.(fromState, toState);
             }
-            for (const { onEnter } of toRoutesHooks) {
-              onEnter && onEnter(fromState, toState);
+            for (const toRoutesHook of toRoutesHooks) {
+              toRoutesHook?.onEnter?.(fromState, toState);
             }
           }
         };
 
         const beforeExitHooks = fromRoutesHooks.map(
-          ({ beforeExit }) => beforeExit,
+          (fromRoutesHook) => fromRoutesHook?.beforeExit,
         );
         const beforeEnterHooks = toRoutesHooks.map(
-          ({ beforeEnter }) => beforeEnter,
+          (toRoutesHook) => toRoutesHook?.beforeEnter,
         );
         const promises = [...beforeExitHooks, ...beforeEnterHooks]
           .filter(Boolean)
-          .map((hook) => hook(fromState, toState));
+          .map((hook) => hook?.(fromState, toState));
 
         Promise.all(promises).then(onFinish, gouter.hookCatch);
       }
@@ -461,7 +485,7 @@ const Gouter = (routeMap) => {
 
     /**
      * Default `onBack` handler
-     * @type {TransitionHooks<State>['onBack']}
+     * @type {Required<TransitionHooks<State>>['onBack']}
      */
     onBack: (state, focusedStates) =>
       state.stack.length > 1
@@ -473,7 +497,7 @@ const Gouter = (routeMap) => {
 
     /**
      * Default `onInit` handler
-     * @type {TransitionHooks<State>['onInit']}
+     * @type {Required<TransitionHooks<State>>['onInit']}
      */
     onInit: (state, focusedStates) =>
       state.stack.length > 1
@@ -485,7 +509,7 @@ const Gouter = (routeMap) => {
 
     /**
      * Default `onSwitch` handler
-     * @type {TransitionHooks<State>['onSwitch']}
+     * @type {Required<TransitionHooks<State>>['onSwitch']}
      */
     onSwitch: (state, focusedStates) =>
       state.stack.length > 1
@@ -541,13 +565,20 @@ const Gouter = (routeMap) => {
      * @param {PartialState} partialState
      */
     goTo: (partialState) => {
-      const { state: prevState, newState, pathMap } = gouter;
+      const { state: prevState, newState, pathMap, setState } = gouter;
       const state = newState(partialState);
       const path = pathMap[state.name];
       if (path) {
-        for (const segment of path) {
+        let currentState = prevState;
+        for (let index = 0; index < path.length; index++) {
           // TODO: find real path
+          /** @type {keyof T} */
+          const name = path[index].name;
+          if (name === currentState.name) {
+          }
         }
+      } else {
+        setState(state);
       }
 
       // find if state is exist
@@ -584,7 +615,9 @@ const Gouter = (routeMap) => {
           const focusedState = focusedStates[maxIndex];
           const { name } = focusedState;
           const path = pathMap[name];
-          const onBack = path ? path[path.length - 1].onBack : defaultOnBack;
+          const onBack = path
+            ? path[path.length - 1].onBack || defaultOnBack
+            : defaultOnBack;
           const nextFocusedState = onBack(focusedState, focusedStates);
           if (nextFocusedState) {
             if (nextFocusedState !== focusedState) {
@@ -633,10 +666,11 @@ const Gouter = (routeMap) => {
     /**
      * Updates browser/memory history and url from state
      * @param {State} state
+     * @returns {void}
      */
     updateHistory: (state) => {
       const { notFoundState, stateToUrl, history } = gouter;
-      if (state.name !== notFoundState.name) {
+      if (history && state.name !== notFoundState.name) {
         const routerUrl = stateToUrl(state);
         const { location } = history;
         const browserUrl = `${location.pathname}${location.search}`;
@@ -657,7 +691,7 @@ const Gouter = (routeMap) => {
       const { state: fromState, urlToState, notFoundState, setState } = gouter;
       const url = location.pathname + location.search;
       const toState = urlToState(url) || notFoundState;
-      if (fromState.url !== toState.url) {
+      if (toState && fromState?.url !== toState.url) {
         setState(toState);
       }
     },
@@ -722,9 +756,7 @@ const Gouter = (routeMap) => {
       };
 
       fillPaths(struct, []);
-
       gouter.pathMap = pathMap;
-
       return gouter;
     },
   };
