@@ -49,13 +49,12 @@ const { compile, pathToRegexp } = require('path-to-regexp');
 
 /**
  * Creates `Gouter` instance.
- * It allows transitioning between states using the `goTo` method.
+ * It allows transitioning between states using `goTo` and `goBack` methods.
  * It allows to add and remove listeners via `listen` and `unlisten` methods.
- * It automatically listens to history changes.
  * @template {Record<keyof T, Route>} T
- * @param {T} routeMap map of routes
+ * @param {T} routes map of routes
  */
-const Gouter = (routeMap) => {
+const Gouter = (routes) => {
   /**
    * @typedef {{[N in keyof T]: {
    * name: N
@@ -89,7 +88,7 @@ const Gouter = (routeMap) => {
   const initialName = '';
 
   const gouter = {
-    routeMap,
+    routeMap: routes,
 
     /** @type {Partial<Record<keyof T, ExtPartialState[]>>} */
     pathMap: {},
@@ -245,7 +244,7 @@ const Gouter = (routeMap) => {
      * }}
      */
     newState: ({ name, params = {}, query = {}, stack = [] }) => {
-      const { newState, generatePattern, generateUrl } = gouter;
+      const { newState, generatePattern, generateUrl, routeMap } = gouter;
       const route = routeMap[name];
       const hasPattern = route && route.pattern !== undefined;
       const pattern = hasPattern
@@ -263,8 +262,6 @@ const Gouter = (routeMap) => {
         stack: fullStack,
       };
     },
-
-    parse,
 
     /** @type {import('query-string').ParseOptions} */
     parseOptions: {},
@@ -295,7 +292,6 @@ const Gouter = (routeMap) => {
         matchUrl,
         routeMap,
         generatePattern,
-        parse,
         parseOptions,
         newState,
         notFoundState,
