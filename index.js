@@ -677,7 +677,7 @@ const Gouter = (routes) => {
       const { state: fromState, urlToState, notFoundState, setState } = gouter;
       const url = location.pathname + location.search;
       const toState = urlToState(url) || notFoundState;
-      if (toState && fromState?.url !== toState.url) {
+      if (toState && (!fromState || fromState.url !== toState.url)) {
         setState(toState);
       }
     },
