@@ -45,108 +45,7 @@ const { compile, pathToRegexp } = require('path-to-regexp');
  * @property {Query} [query]
  */
 
-/**
- * Generator cache.
- * @type {Object.<string, import('path-to-regexp').PathFunction<object>>}
- */
-const generatorCache = {};
-
-/**
- * Creates a generator from a pattern.
- * @param {Pattern} pattern
- * @returns {import('path-to-regexp').PathFunction<object>} generator
- */
-const getGenerator = (pattern) => {
-  const generator = generatorCache[pattern];
-  if (generator) {
-    return generator;
-  } else {
-    const newGenerator = compile(pattern);
-    generatorCache[pattern] = newGenerator;
-    return newGenerator;
-  }
-};
-
-/**
- * Generates a URL from a pattern, parameters and query parameters.
- * @param {Pattern} pattern
- * @param {Params} params
- * @param {Query} query
- * @returns {URL} `URL`
- */
-const generateUrl = (pattern = '/', params = {}, query = {}) => {
-  const generator = getGenerator(pattern);
-  const urlPatternStr = generator(params);
-  const hasQuery = Object.keys(query).length > 0;
-  if (hasQuery) {
-    return urlPatternStr + '?' + stringify(query);
-  } else {
-    return urlPatternStr;
-  }
-};
-
 /** @typedef {{regExp: RegExp, keys: import('path-to-regexp').Key[]}} PatternInfo */
-
-/**
- * pattern info cache
- * @type {Object.<string, PatternInfo>}
- */
-const patternInfoCache = {};
-
-/**
- * get pattern info
- * @param {Pattern} pattern
- * @returns {PatternInfo} pattern info
- */
-const getPatternInfo = (pattern) => {
-  const patternInfo = patternInfoCache[pattern];
-  if (patternInfo) {
-    return patternInfo;
-  } else {
-    /** @type {import('path-to-regexp').Key[]} */
-    const keys = [];
-    const regExp = pathToRegexp(pattern, keys, {});
-    const newPatternInfo = { regExp, keys };
-    patternInfoCache[pattern] = newPatternInfo;
-    return newPatternInfo;
-  }
-};
-
-/**
- * Matches an URL to a pattern.
- * @param {URL} url
- * @param {Pattern} pattern
- * @returns {Params | null} `Params` instance
- */
-const matchUrl = (url, pattern) => {
-  const { regExp, keys } = getPatternInfo(pattern);
-  const match = regExp.exec(url);
-  if (match) {
-    const values = match.slice(1);
-    /** @type {Record<string, string>} */
-    const initialValue = {};
-    return keys.reduce((params, key, index) => {
-      params[key.name] = values[index];
-      return params;
-    }, initialValue);
-  } else {
-    return null;
-  }
-};
-
-/**
- * Generate default url pattern from route name and route params
- * @param {Name} name
- * @param {Params} params
- * @returns {Pattern}
- */
-const generatePattern = (name, params) => {
-  const urlParams = Object.keys(params).join('/:');
-  const regex =
-    /[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g;
-  const kebabName = (name.match(regex) || []).join('-').toLowerCase();
-  return '/' + kebabName + (urlParams ? '/:' + urlParams : '');
-};
 
 /**
  * Creates `Gouter` instance.
@@ -224,11 +123,110 @@ const Gouter = (routeMap) => {
     /** @type {boolean} is router state attempts to change? */
     isTransitioning: false,
 
-    matchUrl,
+    /**
+     * pattern info cache
+     * @type {Object.<string, PatternInfo>}
+     */
+    patternInfoCache: {},
 
-    generateUrl,
+    /**
+     * get pattern info
+     * @param {Pattern} pattern
+     * @returns {PatternInfo} pattern info
+     */
+    getPatternInfo: (pattern) => {
+      const { patternInfoCache } = gouter;
+      const patternInfo = patternInfoCache[pattern];
+      if (patternInfo) {
+        return patternInfo;
+      } else {
+        /** @type {import('path-to-regexp').Key[]} */
+        const keys = [];
+        const regExp = pathToRegexp(pattern, keys, {});
+        const newPatternInfo = { regExp, keys };
+        patternInfoCache[pattern] = newPatternInfo;
+        return newPatternInfo;
+      }
+    },
 
-    generatePattern,
+    /**
+     * Matches an URL to a pattern.
+     * @param {URL} url
+     * @param {Pattern} pattern
+     * @returns {Params | null} `Params` instance
+     */
+    matchUrl: (url, pattern) => {
+      const { getPatternInfo } = gouter;
+      const { regExp, keys } = getPatternInfo(pattern);
+      const match = regExp.exec(url);
+      if (match) {
+        const values = match.slice(1);
+        /** @type {Record<string, string>} */
+        const initialValue = {};
+        return keys.reduce((params, key, index) => {
+          params[key.name] = values[index];
+          return params;
+        }, initialValue);
+      } else {
+        return null;
+      }
+    },
+
+    /**
+     * Generator cache.
+     * @type {Object.<string, import('path-to-regexp').PathFunction<object>>}
+     */
+    generatorCache: {},
+
+    /**
+     * Creates a generator from a pattern.
+     * @param {Pattern} pattern
+     * @returns {import('path-to-regexp').PathFunction<object>} generator
+     */
+    getGenerator: (pattern) => {
+      const { generatorCache } = gouter;
+      const generator = generatorCache[pattern];
+      if (generator) {
+        return generator;
+      } else {
+        const newGenerator = compile(pattern);
+        generatorCache[pattern] = newGenerator;
+        return newGenerator;
+      }
+    },
+
+    /**
+     * Generates a URL from a pattern, parameters and query parameters.
+     * @param {Pattern} pattern
+     * @param {Params} params
+     * @param {Query} query
+     * @returns {URL} `URL`
+     */
+    generateUrl: (pattern = '/', params = {}, query = {}) => {
+      const { getGenerator } = gouter;
+      const generator = getGenerator(pattern);
+      const urlPatternStr = generator(params);
+      const hasQuery = Object.keys(query).length > 0;
+      if (hasQuery) {
+        return urlPatternStr + '?' + stringify(query);
+      } else {
+        return urlPatternStr;
+      }
+    },
+
+    /**
+     * Generate default url pattern from route name and route params
+     * @param {Name} name
+     * @param {Params} params
+     * @returns {Pattern}
+     */
+    generatePattern: (name, params) => {
+      const urlParams = Object.keys(params).join('/:');
+      const regex =
+        /[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g;
+      const kebabName = (name.match(regex) || []).join('-').toLowerCase();
+      return '/' + kebabName + (urlParams ? '/:' + urlParams : '');
+    },
 
     /**
      * Creates new `Gouter.State` from partial state
@@ -270,8 +268,6 @@ const Gouter = (routeMap) => {
 
     /** @type {import('query-string').ParseOptions} */
     parseOptions: {},
-
-    stringify,
 
     /**
      * Converts partial router state to url using route map
@@ -395,7 +391,7 @@ const Gouter = (routeMap) => {
 
       const areStatesEqual =
         fromStack.length !== toStack.length ||
-        fromStack.some((fromState) => fromState.url !== toState.url);
+        fromStack.some(({ url }) => url !== toState.url);
 
       console.log('check areStatesEqual condition!');
 
@@ -413,13 +409,15 @@ const Gouter = (routeMap) => {
         };
 
         const fromRoutesHooks = fromStack
-          .filter((fromState) =>
-            toStack.every((toState) => toState.key !== fromState.key),
+          .filter(({ key: fromStateKey }) =>
+            toStack.every(({ key: toStateKey }) => toStateKey !== fromStateKey),
           )
           .map(getHooksForState);
         const toRoutesHooks = toStack
-          .filter((toState) =>
-            fromStack.every((fromState) => fromState.key !== toState.key),
+          .filter(({ key: toStateKey }) =>
+            fromStack.every(
+              ({ key: fromStateKey }) => fromStateKey !== toStateKey,
+            ),
           )
           .map(getHooksForState);
 
@@ -499,25 +497,13 @@ const Gouter = (routeMap) => {
      * Default `onInit` handler
      * @type {Required<TransitionHooks<State>>['onInit']}
      */
-    onInit: (state, focusedStates) =>
-      state.stack.length > 1
-        ? {
-            ...state,
-            stack: state.stack.slice(0, -1),
-          }
-        : null,
+    onInit: (state, focusedStates) => state,
 
     /**
      * Default `onSwitch` handler
      * @type {Required<TransitionHooks<State>>['onSwitch']}
      */
-    onSwitch: (state, focusedStates) =>
-      state.stack.length > 1
-        ? {
-            ...state,
-            stack: state.stack.slice(0, -1),
-          }
-        : null,
+    onSwitch: (state, focusedStates) => state,
 
     // /**
     //  *
@@ -565,20 +551,24 @@ const Gouter = (routeMap) => {
      * @param {PartialState} partialState
      */
     goTo: (partialState) => {
-      const { state: prevState, newState, pathMap, setState } = gouter;
+      const { history, state: prevState, newState, pathMap, setState } = gouter;
       const state = newState(partialState);
-      const path = pathMap[state.name];
-      if (path) {
-        let currentState = prevState;
-        for (let index = 0; index < path.length; index++) {
-          // TODO: find real path
-          /** @type {keyof T} */
-          const name = path[index].name;
-          if (name === currentState.name) {
-          }
-        }
+      if (history) {
+        history.push(state.url);
       } else {
-        setState(state);
+        const path = pathMap[state.name];
+        if (path) {
+          let currentState = prevState;
+          for (let index = 0; index < path.length; index++) {
+            // TODO: find real path
+            /** @type {keyof T} */
+            const name = path[index].name;
+            if (name === currentState.name) {
+            }
+          }
+        } else {
+          setState(state);
+        }
       }
 
       // find if state is exist
@@ -737,20 +727,20 @@ const Gouter = (routeMap) => {
       /** @type {Partial<Record<keyof T, ExtPartialState[]>>} */
       const pathMap = {};
 
-      /** @type {(struct: ExtPartialState, path: ExtPartialState[]) => void} */
-      const fillPaths = (struct, path) => {
+      /** @type {(subStruct: ExtPartialState, path: ExtPartialState[]) => void} */
+      const fillPaths = (subStruct, path) => {
         /** @type {ExtPartialState[]} */
-        const nextPath = [...path, struct];
-        if (pathMap[struct.name]) {
+        const nextPath = [...path, subStruct];
+        if (pathMap[subStruct.name]) {
           throw Error(
-            `Struct has duplicate definitions for '${struct.name}' name. Use only one definition per name.`,
+            `Struct has duplicate definitions for '${subStruct.name}' name. Use only one definition per name.`,
           );
         } else {
-          pathMap[struct.name] = nextPath;
+          pathMap[subStruct.name] = nextPath;
         }
-        if (struct.stack) {
-          for (const subStruct of struct.stack) {
-            fillPaths(subStruct, nextPath);
+        if (subStruct.stack) {
+          for (const subSubStruct of subStruct.stack) {
+            fillPaths(subSubStruct, nextPath);
           }
         }
       };
