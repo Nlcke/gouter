@@ -436,23 +436,30 @@ const Gouter = (routes) => {
               listener(toState);
             }
             for (const fromRoutesHook of fromRoutesHooks) {
-              fromRoutesHook?.onExit?.(fromState, toState);
+              if (fromRoutesHook && fromRoutesHook.onExit) {
+                fromRoutesHook.onExit(fromState, toState);
+              }
             }
             for (const toRoutesHook of toRoutesHooks) {
-              toRoutesHook?.onEnter?.(fromState, toState);
+              if (toRoutesHook && toRoutesHook.onEnter) {
+                toRoutesHook.onEnter(fromState, toState);
+              }
             }
           }
         };
 
-        const beforeExitHooks = fromRoutesHooks.map(
-          (fromRoutesHook) => fromRoutesHook?.beforeExit,
+        const beforeExitHooks = fromRoutesHooks.map((fromRoutesHook) =>
+          fromRoutesHook ? fromRoutesHook.beforeExit : undefined,
         );
-        const beforeEnterHooks = toRoutesHooks.map(
-          (toRoutesHook) => toRoutesHook?.beforeEnter,
+        const beforeEnterHooks = toRoutesHooks.map((toRoutesHook) =>
+          toRoutesHook ? toRoutesHook.beforeEnter : undefined,
         );
         const promises = [...beforeExitHooks, ...beforeEnterHooks]
           .filter(Boolean)
-          .map((hook) => hook?.(fromState, toState));
+          .map(
+            /** @param {(fromState: State, toState: State) => Promise<void | Function>} hook */
+            (hook) => hook(fromState, toState),
+          );
 
         Promise.all(promises).then(onFinish, gouter.hookCatch);
       }
@@ -469,7 +476,7 @@ const Gouter = (routes) => {
       while (true) {
         const { stack } = lastState;
         lastState = stack[stack.length - 1];
-        if (lastState && !focusedStates.includes(lastState)) {
+        if (lastState && focusedStates.indexOf(lastState) === -1) {
           focusedStates[focusedStates.length] = lastState;
         } else {
           return focusedStates;
