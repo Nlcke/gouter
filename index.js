@@ -64,20 +64,28 @@ const Gouter = (routes) => {
    */
 
   /**
-   * @typedef {StateMap[keyof StateMap]} SimpleState
+   * @typedef {{[N in keyof T]: T[N]['params'] extends Params ? {
+   * name: N
+   * params: NonNullable<T[N]['params']>
+   * query?: Partial<T[N]['query']>
+   * } : {
+   * name: N
+   * params?: {[K in any] : never}
+   * query?: Partial<T[N]['query']>
+   * }}} PartialStateMap
    */
 
   /**
-   * @typedef {(SimpleState & {url: string, key: string, stack: State[]})} State
+   * @typedef {(StateMap[keyof StateMap] & {url: string, key: string, stack: State[]})} State
    */
 
   /**
-   * @typedef {Partial<SimpleState> & {name: State['name'], stack?: PartialState[]}} PartialState
+   * @typedef {PartialStateMap[keyof T] & {stack?: PartialState[]}} PartialState
    */
 
   /**
-   * @typedef {Partial<SimpleState> & TransitionHooks<State> & {
-   * name: SimpleState['name']
+   * @typedef {TransitionHooks<State> & {
+   * name: PartialState['name']
    * stack?: ExtPartialState[]
    * initial?: boolean
    * }} ExtPartialState
