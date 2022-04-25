@@ -70,7 +70,7 @@ const Gouter = (routes) => {
    * `PartialStateMap`
    * @typedef {{[N in keyof T]: T[N]['params'] extends Params ? {
    * name: N
-   * params: NonNullable<T[N]['params']>
+   * params: T[N]['params']
    * query?: StateMap[N]['query'] | ((query: StateMap[N]['query']) => StateMap[N]['query'])
    * stack?: State[] | ((stack: State[]) => State[])
    * } : {
@@ -225,12 +225,15 @@ const Gouter = (routes) => {
      * @returns {URL} `URL`
      */
     generateUrl: (name, params, query) => {
-      const { routeMap, generatePattern, getGenerator } = gouter;
+      const { routeMap, generatePattern, emptyParams, getGenerator } = gouter;
       const route = routeMap[name];
       const pattern =
-        route && route.pattern !== undefined
+        route && route.pattern
           ? route.pattern
-          : generatePattern(String(name), params);
+          : generatePattern(
+              String(name),
+              (route && route.params) || emptyParams,
+            );
       const generator = getGenerator(pattern);
       const path = generator(params);
       let queryStr = '';
@@ -314,13 +317,19 @@ const Gouter = (routes) => {
     },
 
     /**
-     * Converts url to router state using route map
+     * Generates router state from url using route map
      * @param {URL} url
      * @returns {State}
      */
-    urlToState: (url) => {
-      const { matchUrl, routeMap, generatePattern, newState, notFoundState } =
-        gouter;
+    generateState: (url) => {
+      const {
+        matchUrl,
+        routeMap,
+        generatePattern,
+        emptyParams,
+        newState,
+        notFoundState,
+      } = gouter;
       const [urlWithoutHash] = url.split('#');
       const [pathname, search = ''] = urlWithoutHash.split('?');
       for (const name in routeMap) {
@@ -328,28 +337,30 @@ const Gouter = (routes) => {
         const pattern =
           route.pattern !== undefined
             ? route.pattern
-            : generatePattern(name, route.params || {});
-        /** @type {StateMap[name]['params']} */
+            : generatePattern(name, route.params || emptyParams);
+        /** @type {StateMap[name]['params'] | null} */
         // @ts-ignore
-        const params = matchUrl(pathname, pattern) || gouter.emptyParams;
+        const params = matchUrl(pathname, pattern);
         if (params) {
           /** @type {StateMap[name]['query']} */
           const query = {};
-          for (const keyValueStr of search.split('&')) {
-            const splitIndex = keyValueStr.indexOf('=');
-            const key = decodeURIComponent(keyValueStr.slice(0, splitIndex));
-            const rawValue = decodeURIComponent(
-              keyValueStr.slice(splitIndex + 1),
-            );
-            const decode =
-              (route &&
-                route.query &&
-                route.query[key] &&
-                route.query[key].decode) ||
-              String;
-            const value = decode(rawValue);
-            // @ts-ignore
-            query[key] = value;
+          if (search) {
+            for (const keyValueStr of search.split('&')) {
+              const splitIndex = keyValueStr.indexOf('=');
+              const key = decodeURIComponent(keyValueStr.slice(0, splitIndex));
+              const rawValue = decodeURIComponent(
+                keyValueStr.slice(splitIndex + 1),
+              );
+              const decode =
+                (route &&
+                  route.query &&
+                  route.query[key] &&
+                  route.query[key].decode) ||
+                String;
+              const value = decode(rawValue);
+              // @ts-ignore
+              query[key] = value;
+            }
           }
           const state = newState({ name, params, query });
           return state;
@@ -668,9 +679,14 @@ const Gouter = (routes) => {
      * @type {import('history').Listener}
      */
     goToLocation: ({ location, action }) => {
-      const { state: fromState, urlToState, notFoundState, setState } = gouter;
+      const {
+        state: fromState,
+        generateState,
+        notFoundState,
+        setState,
+      } = gouter;
       const url = location.pathname + location.search;
-      const toState = urlToState(url) || notFoundState;
+      const toState = generateState(url) || notFoundState;
       if (toState && (!fromState || fromState.url !== toState.url)) {
         setState(toState);
       }
@@ -742,6 +758,7 @@ const Gouter = (routes) => {
      */
     withHooks: (hooks) => {
       gouter.hookMap = hooks;
+      return gouter;
     },
   };
 
