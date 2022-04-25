@@ -57,8 +57,13 @@ const Gouter = (routes) => {
    * @typedef {{[N in keyof T]: {
    * name: N
    * params: T[N]['params'] extends Params ? T[N]['params'] : EmptyObject
-   * query: T[N]['query'] extends SerializableQuery ? Partial<{[K in keyof T[N]['query']]: ReturnType<T[N]['query'][K]['encode']>}> : EmptyObject
+   * query: T[N]['query'] extends SerializableQuery ? Partial<{[K in keyof T[N]['query']]: ReturnType<T[N]['query'][K]['decode']>}> : EmptyObject
    * }}} StateMap
+   */
+
+  /**
+   * `State`
+   * @typedef {StateMap[keyof StateMap] & {url: string, key: string, stack: State[]}} State
    */
 
   /**
@@ -67,21 +72,13 @@ const Gouter = (routes) => {
    * name: N
    * params: NonNullable<T[N]['params']>
    * query?: StateMap[N]['query'] | ((query: StateMap[N]['query']) => StateMap[N]['query'])
+   * stack?: State[] | ((stack: State[]) => State[])
    * } : {
    * name: N
    * params?: EmptyObject
    * query?: StateMap[N]['query'] | ((query: StateMap[N]['query']) => StateMap[N]['query'])
-   * }}} PartialStateMap
-   */
-
-  /**
-   * `State`
-   * @typedef {(StateMap[keyof StateMap] & {url: string, key: string, stack: State[]})} State
-   */
-
-  /**
-   * `PartialState`
-   * @typedef {PartialStateMap[keyof T] & {stack?: State[] | ((stack: State[]) => State[])}} PartialState
+   * stack?: State[] | ((stack: State[]) => State[])
+   * }}[keyof T]} PartialState
    */
 
   /**
@@ -137,6 +134,7 @@ const Gouter = (routes) => {
 
     emptyStack: [],
 
+    /** @type {EmptyObject} */
     emptyParams: {},
 
     emptyQuery: {},
@@ -240,7 +238,11 @@ const Gouter = (routes) => {
         const value = query[key];
         const keyEncoded = encodeURIComponent(key);
         const encode =
-          (route && route.query && route.query[key].encode) || String;
+          (route &&
+            route.query &&
+            route.query[key] &&
+            route.query[key].encode) ||
+          String;
         const valueEncoded = encodeURIComponent(encode(value));
         queryStr += `&${keyEncoded}=${valueEncoded}`;
       }
@@ -327,9 +329,11 @@ const Gouter = (routes) => {
           route.pattern !== undefined
             ? route.pattern
             : generatePattern(name, route.params || {});
+        /** @type {StateMap[name]['params']} */
+        // @ts-ignore
         const params = matchUrl(pathname, pattern) || gouter.emptyParams;
         if (params) {
-          /** @type {Query} */
+          /** @type {StateMap[name]['query']} */
           const query = {};
           for (const keyValueStr of search.split('&')) {
             const splitIndex = keyValueStr.indexOf('=');
@@ -338,8 +342,13 @@ const Gouter = (routes) => {
               keyValueStr.slice(splitIndex + 1),
             );
             const decode =
-              (route && route.query && route.query[key].decode) || String;
+              (route &&
+                route.query &&
+                route.query[key] &&
+                route.query[key].decode) ||
+              String;
             const value = decode(rawValue);
+            // @ts-ignore
             query[key] = value;
           }
           const state = newState({ name, params, query });
@@ -669,21 +678,19 @@ const Gouter = (routes) => {
 
     /**
      * Set initial state to start from
-     * @param {PartialState} partialState
+     * @param {State} state
      */
-    withInitialState: (partialState) => {
-      const { newState } = gouter;
-      gouter.state = newState(partialState);
+    withInitialState: (state) => {
+      gouter.state = state;
       return gouter;
     },
 
     /**
      * Set NotFound state to fallback when route name does not exist
-     * @param {PartialState} partialState
+     * @param {State} state
      */
-    withNotFoundState: (partialState) => {
-      const { newState } = gouter;
-      gouter.notFoundState = newState(partialState);
+    withNotFoundState: (state) => {
+      gouter.notFoundState = state;
       return gouter;
     },
 
