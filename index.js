@@ -14,22 +14,6 @@ const { compile, pathToRegexp } = require('path-to-regexp');
 /** @typedef {string} URL e.g. 'post/123' */
 
 /**
- * `TransitionHooks` is set of functions called while transition between router states
- * @template T
- * @typedef {Partial<{
- * onStackInit: (state: T) => T[]
- * shouldGoTo: (parents: T[], state: T) => boolean
- * shouldGoBack: (parents: T[]) => boolean
- * onGoTo: (parents: T[], state: T) => T
- * onGoBack: (parents: T[]) => T
- * beforeExit: (thisState: T, fromState: T, toState: T) => Promise<void | function>
- * beforeEnter: (thisState: T, fromState: T, toState: T) => Promise<void | function>
- * onExit: (thisState: T, fromState: T, toState: T) => void
- * onEnter: (thisState: T, fromState: T, toState: T) => void
- * }>} TransitionHooks
- */
-
-/**
  * `Listener` function receives state and is called after router transition
  * @template T
  * @callback Listener
@@ -60,6 +44,7 @@ const { compile, pathToRegexp } = require('path-to-regexp');
  */
 const Gouter = (routes) => {
   /**
+   * `StateMap`
    * @typedef {{[N in keyof T]: {
    * name: N
    * params: T[N]['params'] extends Params ? T[N]['params'] : EmptyObject
@@ -68,6 +53,7 @@ const Gouter = (routes) => {
    */
 
   /**
+   * `PartialStateMap`
    * @typedef {{[N in keyof T]: T[N]['params'] extends Params ? {
    * name: N
    * params: NonNullable<T[N]['params']>
@@ -80,11 +66,28 @@ const Gouter = (routes) => {
    */
 
   /**
+   * `State`
    * @typedef {(StateMap[keyof StateMap] & {url: string, key: string, stack: State[]})} State
    */
 
   /**
+   * `PartialState`
    * @typedef {PartialStateMap[keyof T] & {stack?: State[] | ((stack: State[]) => State[])}} PartialState
+   */
+
+  /**
+   * `TransitionHooks` is set of functions called while transition between router states
+   * @typedef {{
+   * onStackInit: (state: State) => State[]
+   * shouldGoTo: (parents: State[], state: State) => boolean
+   * shouldGoBack: (parents: State[]) => boolean
+   * onGoTo: (parents: State[], state: State) => State
+   * onGoBack: (parents: State[]) => State
+   * beforeExit: (thisState: State, fromState: State, toState: State) => Promise<void | function>
+   * beforeEnter: (thisState: State, fromState: State, toState: State) => Promise<void | function>
+   * onExit: (thisState: State, fromState: State, toState: State) => void
+   * onEnter: (thisState: State, fromState: State, toState: State) => void
+   * }} TransitionHooks
    */
 
   /** @type {keyof T} */
@@ -94,7 +97,7 @@ const Gouter = (routes) => {
   const gouter = {
     routeMap: routes,
 
-    /** @type {Partial<Record<keyof T, TransitionHooks<State>>>} */
+    /** @type {Partial<Record<keyof T, Partial<TransitionHooks>>>} */
     hookMap: {},
 
     /** @type {import('history').History | null}  */
@@ -517,90 +520,8 @@ const Gouter = (routes) => {
       }
     },
 
-    /** @type {TransitionHooks<State>} */
+    /** @type {Partial<TransitionHooks>} */
     defaultHooks: {},
-
-    // /**
-    //  *
-    //  * @param {keyof T} name
-    //  * @returns {(keyof T)[]}
-    //  */
-    // getStatePathByName: (name) => {
-    //   const { struct, routeMap } = gouter;
-    //   /** @type {(keyof T)[]} */
-    //   const statePath = [struct.name];
-    //   let currentStruct = struct;
-    //   const maxLength = Object.keys(routeMap).length;
-    //   for (let i = 0; i < maxLength; i++) {
-    //     if (currentStruct.name === name) {
-    //       return statePath;
-    //     } else {
-    //     }
-    //   }
-    //   return statePath;
-    // },
-
-    // /**
-    //  * Find state
-    //  * @param {State} state
-    //  * @returns {State[]}
-    //  */
-    // getPathStates: (state) => {
-    //   const { state: prevState, struct, getStatePathByName } = gouter;
-    //   if (prevState.key === state.key) {
-    //     return [prevState];
-    //   } else {
-    //     /** @type {State[]} */
-    //     const pathStates = [];
-    //     let currentState = prevState;
-    //     while (true) {
-    //       if (currentState.stack) {
-    //         return pathStates;
-    //       }
-    //     }
-    //   }
-    // },
-
-    /**
-     * Run a chain of state modifiers from the callback
-     * @param {() => void} callback
-     */
-    run: (callback) => {
-      gouter.tempState = gouter.state;
-      gouter.cancelHooks();
-      try {
-        callback();
-        const { tempState } = gouter;
-        gouter.tempState = null;
-        gouter.setState(tempState);
-      } catch (e) {
-        gouter.tempState = null;
-        throw e;
-      }
-    },
-
-    /**
-     * Find the state by it's name and it's params (if any)
-     * Replace first found state in global state if any by next state
-     * If found then update state query and/or state stack and then update state parents
-     * @param {PartialState} partialState
-     */
-    goWith: (partialState) => {
-      const { state: currentState, tempState, setState } = gouter;
-      const prevState = tempState || currentState;
-      // iterate over gouter.state and/or gouter.tempState
-      // and call replacer on each state until
-      for (const subState of prevState.stack) {
-        // const nextSubState = replacer(subState);
-        if (nextSubState !== subState) {
-          // modify and save tempState or state
-          // updating only state part and recreating it's parents
-          const nextState = prevState; // rebuild parents and add next sub state
-          setState(nextState);
-          break;
-        }
-      }
-    },
 
     /**
      * Go to state
@@ -627,24 +548,18 @@ const Gouter = (routes) => {
             history.back();
           }
         } else {
-          console.warn('state', state);
           const focusedStates = getFocusedStates(nextState);
           for (let index = 0; index < focusedStates.length; index++) {
             const focusedState = focusedStates[index];
-
-            // console.warn(JSON.stringify(focusedState, null, 4));
-
             const { onGoTo, shouldGoTo, onGoBack, shouldGoBack } =
               hookMap[focusedState.name] || defaultHooks;
             const hasHook = state ? shouldGoTo : shouldGoBack;
             if (hasHook) {
-              console.warn(partialStateOrNull, index);
               const parents = focusedStates.slice(index);
               const should = state
                 ? shouldGoTo && shouldGoTo(parents, state)
                 : shouldGoBack && shouldGoBack(parents);
               if (should) {
-                // console.warn(JSON.stringify(focusedStates, null, 4));
                 const subState = state
                   ? onGoTo && onGoTo(parents, state)
                   : onGoBack && onGoBack(parents);
@@ -664,25 +579,7 @@ const Gouter = (routes) => {
           }
         }
       }
-      console.log(JSON.stringify(nextState, null, 4));
       setState(nextState);
-
-      // return {
-      //   goTo,
-      //   goBack,
-      //   switchTo,
-      // };
-
-      // find if state is exist
-
-      // get stack chain from topStack till partialState
-      // from first missing stack till partialState stack call onGoTo
-      // each result should be passed to bottom onGoTo call
-      // in the end call set
-      // const state = newState(partialState);
-
-      // const prevFocusedStates = getFocusedStates(prevState);
-      // const nextFocusedStates = getNextFocusedStates(partialState);
     },
 
     /**
@@ -817,7 +714,7 @@ const Gouter = (routes) => {
 
     /**
      * Set hooks
-     * @param {Partial<Record<keyof T, Partial<TransitionHooks<State>>>>} hooks
+     * @param {Partial<Record<keyof T, Partial<TransitionHooks>>>} hooks
      */
     withHooks: (hooks) => {
       gouter.hookMap = hooks;
