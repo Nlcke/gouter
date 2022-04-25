@@ -1,4 +1,3 @@
-const { parse, stringify } = require('query-string');
 const { compile, pathToRegexp } = require('path-to-regexp');
 
 /** @typedef {string} Bar e.g. 'bottom-bar' */
@@ -12,6 +11,16 @@ const { compile, pathToRegexp } = require('path-to-regexp');
 /** @typedef {Record<string, any>} Query e.g. {color: 'red', category: 1}  */
 
 /** @typedef {string} URL e.g. 'post/123' */
+
+/**
+ * @template T
+ * @typedef {{
+ * decode: (str: string) => T
+ * encode: (val: T) => string
+ * }} Serializable
+ */
+
+/** @typedef {Record<string, Serializable<any>>} SerializableQuery */
 
 /**
  * `Listener` function receives state and is called after router transition
@@ -30,7 +39,7 @@ const { compile, pathToRegexp } = require('path-to-regexp');
  * @typedef Route
  * @property {Pattern} [pattern]
  * @property {Params} [params]
- * @property {Query} [query]
+ * @property {SerializableQuery} [query]
  */
 
 /** @typedef {{regExp: RegExp, keys: import('path-to-regexp').Key[]}} PatternInfo */
@@ -48,7 +57,7 @@ const Gouter = (routes) => {
    * @typedef {{[N in keyof T]: {
    * name: N
    * params: T[N]['params'] extends Params ? T[N]['params'] : EmptyObject
-   * query: T[N]['query'] extends Query ? Partial<T[N]['query']> : EmptyObject
+   * query: T[N]['query'] extends SerializableQuery ? Partial<{[K in keyof T[N]['query']]: ReturnType<T[N]['query'][K]['encode']>}> : EmptyObject
    * }}} StateMap
    */
 
@@ -211,22 +220,35 @@ const Gouter = (routes) => {
     },
 
     /**
-     * Generates a URL from a pattern, parameters and query parameters.
-     * @param {Pattern} pattern
+     * Generates a URL from a name, parameters and query parameters.
+     * @param {keyof T} name
      * @param {Params} params
      * @param {Query} query
      * @returns {URL} `URL`
      */
-    generateUrl: (pattern = '/', params = {}, query = {}) => {
-      const { getGenerator } = gouter;
+    generateUrl: (name, params, query) => {
+      const { routeMap, generatePattern, getGenerator } = gouter;
+      const route = routeMap[name];
+      const pattern =
+        route && route.pattern !== undefined
+          ? route.pattern
+          : generatePattern(String(name), params);
       const generator = getGenerator(pattern);
-      const urlPatternStr = generator(params);
-      const hasQuery = Object.keys(query).length > 0;
-      if (hasQuery) {
-        return urlPatternStr + '?' + stringify(query);
-      } else {
-        return urlPatternStr;
+      const path = generator(params);
+      let queryStr = '';
+      for (const key in query) {
+        const value = query[key];
+        const keyEncoded = encodeURIComponent(key);
+        const encode =
+          (route && route.query && route.query[key].encode) || String;
+        const valueEncoded = encodeURIComponent(encode(value));
+        queryStr += `&${keyEncoded}=${valueEncoded}`;
       }
+      if (queryStr) {
+        queryStr = '?' + queryStr.slice(1);
+      }
+      const url = path + queryStr;
+      return url;
     },
 
     /**
@@ -247,21 +269,19 @@ const Gouter = (routes) => {
      * Creates new `Gouter.State` from partial state
      * @type {<N extends keyof T>(partialState: T[N]['params'] extends Params ? {
      * name: N
-     * params: T[N]['params']
-     * query?: Partial<T[N]['query']>
+     * params: StateMap[N]['params']
+     * query?: StateMap[N]['query']
      * stack?: State[]
      * } : {
      * name: N
-     * params?: EmptyObject
-     * query?: Partial<T[N]['query']>
+     * params?: StateMap[N]['params']
+     * query?: StateMap[N]['query']
      * stack?: State[]
      * }) => State & {name: N}}
      */
     newState: ({ name, params, query, stack }) => {
       const {
-        generatePattern,
         generateUrl,
-        routeMap,
         emptyParams,
         emptyQuery,
         emptyStack,
@@ -272,12 +292,7 @@ const Gouter = (routes) => {
       const fullParams = params || emptyParams;
       const fullQuery = query || emptyQuery;
       const fullStack = stack || emptyStack;
-      const route = routeMap[name];
-      const hasPattern = route && route.pattern !== undefined;
-      const pattern = hasPattern
-        ? route.pattern
-        : generatePattern(String(name), fullParams);
-      const url = generateUrl(pattern, fullParams, fullQuery);
+      const url = generateUrl(name, fullParams, fullQuery);
       const [key] = url.split('?');
       const state = {
         name,
@@ -296,35 +311,37 @@ const Gouter = (routes) => {
       return state;
     },
 
-    /** @type {import('query-string').ParseOptions} */
-    parseOptions: {},
-
     /**
      * Converts url to router state using route map
      * @param {URL} url
      * @returns {State}
      */
     urlToState: (url) => {
-      const {
-        matchUrl,
-        routeMap,
-        generatePattern,
-        parseOptions,
-        newState,
-        notFoundState,
-      } = gouter;
-      const [pathname, search = ''] = url.split('?');
-      throw 'Handle # anchor tag!';
+      const { matchUrl, routeMap, generatePattern, newState, notFoundState } =
+        gouter;
+      const [urlWithoutHash] = url.split('#');
+      const [pathname, search = ''] = urlWithoutHash.split('?');
       for (const name in routeMap) {
         const route = routeMap[name];
         const pattern =
           route.pattern !== undefined
             ? route.pattern
             : generatePattern(name, route.params || {});
-        const params = matchUrl(pathname, pattern);
+        const params = matchUrl(pathname, pattern) || gouter.emptyParams;
         if (params) {
-          const query = parse(search, parseOptions);
-          // @ts-ignore
+          /** @type {Query} */
+          const query = {};
+          for (const keyValueStr of search.split('&')) {
+            const splitIndex = keyValueStr.indexOf('=');
+            const key = decodeURIComponent(keyValueStr.slice(0, splitIndex));
+            const rawValue = decodeURIComponent(
+              keyValueStr.slice(splitIndex + 1),
+            );
+            const decode =
+              (route && route.query && route.query[key].decode) || String;
+            const value = decode(rawValue);
+            query[key] = value;
+          }
           const state = newState({ name, params, query });
           return state;
         }
