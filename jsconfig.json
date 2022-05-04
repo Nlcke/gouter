@@ -5,9 +5,8 @@
     "checkJs": true,
     "moduleResolution": "node",
     "strictNullChecks": true,
-    "alwaysStrict": true,
+    "strict": true,
     "exactOptionalPropertyTypes": true,
-    "noImplicitAny": true,
     "noImplicitReturns": true,
     "pretty": true
   }
