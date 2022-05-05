@@ -4,7 +4,6 @@
     "module": "ES2015",
     "checkJs": true,
     "moduleResolution": "node",
-    "strictNullChecks": true,
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitReturns": true,
