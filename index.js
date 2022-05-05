@@ -19,13 +19,9 @@ const { tokensToFunction, tokensToRegexp } = require('path-to-regexp');
 
 /** @typedef {Record<string, PathSegment | string | Serializable<any>>} Route */
 
-/**
- * `Listener` function receives state and is called after router transition
- * @template T
- * @callback Listener
- * @param {T} state
- * @returns {void}
- */
+/** @typedef {ReturnType<typeof newGouter>} Gouter */
+
+/** @typedef {Required<Gouter['defaultHooks']>} Hooks */
 
 /**
  * Creates `Gouter` instance.
@@ -34,7 +30,7 @@ const { tokensToFunction, tokensToRegexp } = require('path-to-regexp');
  * @template {Record<string, Route>} T
  * @param {T} routes map of routes
  */
-const Gouter = (routes) => {
+const newGouter = (routes) => {
   /**
    * `Name`
    * @typedef {keyof T & string} Name
@@ -47,7 +43,8 @@ const Gouter = (routes) => {
    * params: {[K in keyof T[N] as
    * T[N][K] extends PathSegment ?
    * T[N][K][3] extends '' ? K : T[N][K][3] extends '+' ?
-   * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never : never]: T[N][K] extends PathSegment ? T[N][K][3] extends '+' ? string[] : string : string}
+   * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never : never]:
+   * T[N][K] extends PathSegment ? T[N][K][3] extends '+' ? string[] : string : string}
    * & {[K in keyof T[N] as
    * T[N][K] extends PathSegment ?
    * T[N][K][3] extends '?' ? K : T[N][K][3] extends '*' ?
@@ -80,19 +77,30 @@ const Gouter = (routes) => {
    * }} TransitionHooks
    */
 
+  /**
+   * `Listener` function receives state and is called after router transition
+   * @callback Listener
+   * @param {State} state
+   * @returns {void}
+   */
+
+  /**
+   * @typedef {Partial<{[K in Name]: Partial<TransitionHooks<K>>}>} HookMap
+   */
+
   const gouter = {
     routeMap: routes,
 
-    /** @type {Partial<{[K in keyof T]: Partial<TransitionHooks<K>>}>} */
+    /** @type {HookMap} */
     hookMap: {},
 
     /** @type {import('history').History | null}  */
     history: null,
 
     /** @type {State} */
-    // @ts-ignore
     state: {
       name: '',
+      /** @type {any} */
       params: {},
       url: '',
       key: '',
@@ -100,17 +108,14 @@ const Gouter = (routes) => {
     },
 
     /** @type {State} */
-    // @ts-ignore
     notFoundState: {
       name: '',
+      /** @type {any} */
       params: {},
       url: '',
       key: '',
       stack: [],
     },
-
-    /** @type {State | null} */
-    tempState: null,
 
     emptyStack: [],
 
@@ -201,23 +206,34 @@ const Gouter = (routes) => {
      * @template {Name} N
      * @param {string} path
      * @param {Name} name
-     * @returns {StateMap[N]['params'] | null} params
+     * @returns {StateMap[N]['params'] | null} params or null
      */
     decodePath: (path, name) => {
       const { getRegexpFunction, routeMap } = gouter;
       const regexpFunction = getRegexpFunction(name);
       const match = regexpFunction(path);
       if (match) {
-        /** @type {StateMap[N]['params']} */
-        // @ts-ignore
-        const params = {};
+        const params = /** @type {StateMap[N]['params']} */ ({});
         const route = routeMap[name];
-        let index = 1;
+        let index = 0;
         for (const key in route) {
+          const paramsKey = /** @type {keyof StateMap[N]['params']} */ (
+            /** @type {unknown} */ (key)
+          );
           const segment = route[key];
           if (Array.isArray(segment)) {
-            // @ts-ignore
-            params[key] = match[index++];
+            const result = match[++index];
+            const modifier = segment[3];
+            if (modifier === '+' || modifier === '*') {
+              const prefix = segment[0] || '';
+              const suffix = segment[2] || '';
+              const divider = prefix + suffix;
+              params[paramsKey] = /** @type {params[paramsKey]} */ (
+                divider ? result.split(divider) : [result]
+              );
+            } else {
+              params[paramsKey] = /** @type {params[paramsKey]} */ (result);
+            }
           }
         }
         return params;
@@ -310,9 +326,7 @@ const Gouter = (routes) => {
      */
     newState: (name, params, stack) => {
       const { emptyStack, generateUrl, hookMap, defaultHooks } = gouter;
-      /** @type {StateMap[Name]['params']} */
-      // @ts-ignore
-      const fullParams = params;
+      const fullParams = /** @type {StateMap[Name]['params']} */ (params);
       const fullStack = stack || emptyStack;
       const url = generateUrl(name, fullParams);
       const [key] = url.split('?');
@@ -327,7 +341,9 @@ const Gouter = (routes) => {
       if (!stack) {
         const { onStackInit } = hookMap[name] || defaultHooks;
         if (onStackInit) {
-          state.stack = onStackInit(state);
+          state.stack = onStackInit(
+            /** @type {State & {name: N} & StateMap[N]} */ (state),
+          );
         }
       }
       return state;
@@ -341,9 +357,7 @@ const Gouter = (routes) => {
      */
     decodeQuery: (queryStr, name) => {
       const { routeMap } = gouter;
-      /** @type {State['params']} */
-      // @ts-ignore
-      const params = {};
+      const params = /** @type {State['params']} */ ({});
       const route = routeMap[name];
       for (const keyValueStr of queryStr.split('&')) {
         const splitIndex = keyValueStr.indexOf('=');
@@ -356,20 +370,21 @@ const Gouter = (routes) => {
           routeValue.decode;
         if (decode) {
           const value = decode(rawValue);
-          // @ts-ignore
-          params[key] = value;
+          params[/** @type {keyof State['params']} */ (key)] = value;
         }
       }
       return params;
     },
 
     /**
-     * Generates router state from url
+     * Generates router state from url.
+     * If route not matched then notFoundState returned.
      * @param {string} url
-     * @returns {State | null} state or null
+     * @returns {State} state
      */
     newStateFromUrl: (url) => {
-      const { decodePath, routeMap, newState, decodeQuery } = gouter;
+      const { decodePath, routeMap, newState, decodeQuery, notFoundState } =
+        gouter;
       const [urlWithoutHash] = url.split('#');
       const [pathname, search = ''] = urlWithoutHash.split('?');
       for (const name in routeMap) {
@@ -385,7 +400,7 @@ const Gouter = (routes) => {
           return state;
         }
       }
-      return null;
+      return notFoundState;
     },
 
     /**
@@ -425,23 +440,14 @@ const Gouter = (routes) => {
      * @returns {State}
      */
     setState: (toState) => {
-      const {
-        cancelHooks,
-        tempState,
-        state: fromState,
-        defaultHooks,
-        hookMap,
-      } = gouter;
-      if (tempState) {
-        gouter.tempState = toState;
-        return toState;
-      }
+      const { cancelHooks, state: fromState, defaultHooks, hookMap } = gouter;
       gouter.isTransitioning = false;
       cancelHooks();
 
       // const fromStack = stateToStack(fromState);
       // const toStack = stateToStack(toState);
 
+      /** @type {Promise<any>[]} */
       const promises = [];
 
       /** @type {(fromState: State, toState: State) => void} */
@@ -495,9 +501,12 @@ const Gouter = (routes) => {
         }
       };
 
-      const areStatesEqual =
-        fromStack.length === toStack.length &&
-        fromStack.every(({ url }, index) => url === toStack[index].url);
+      compareStates(fromState, toState);
+
+      const areStatesEqual = false;
+      // const areStatesEqual =
+      //   fromStack.length === toStack.length &&
+      //   fromStack.every(({ url }, index) => url === toStack[index].url);
 
       // console.log(JSON.stringify(fromStack, null, 4));
       // console.log(JSON.stringify(toStack, null, 4));
@@ -506,19 +515,19 @@ const Gouter = (routes) => {
       if (!areStatesEqual) {
         gouter.isTransitioning = true;
 
-        const fromRoutesHooks = fromStack
-          .filter(({ key: fromStateKey }) =>
-            toStack.every(({ key: toStateKey }) => toStateKey !== fromStateKey),
-          )
-          .map(({ name }) => hookMap[name]);
+        // const fromRoutesHooks = fromStack
+        //   .filter(({ key: fromStateKey }) =>
+        //     toStack.every(({ key: toStateKey }) => toStateKey !== fromStateKey),
+        //   )
+        //   .map(({ name }) => hookMap[name]);
 
-        const toRoutesHooks = toStack
-          .filter(({ key: toStateKey }) =>
-            fromStack.every(
-              ({ key: fromStateKey }) => fromStateKey !== toStateKey,
-            ),
-          )
-          .map(({ name }) => hookMap[name]);
+        // const toRoutesHooks = toStack
+        //   .filter(({ key: toStateKey }) =>
+        //     fromStack.every(
+        //       ({ key: fromStateKey }) => fromStateKey !== toStateKey,
+        //     ),
+        //   )
+        //   .map(({ name }) => hookMap[name]);
 
         let canceled = false;
         gouter.cancelHooks = () => {
@@ -539,37 +548,38 @@ const Gouter = (routes) => {
             for (const listener of gouter.listeners) {
               listener(toState);
             }
-            for (const fromRoutesHook of fromRoutesHooks) {
-              if (fromRoutesHook && fromRoutesHook.onExit) {
-                fromRoutesHook.onExit(fromState, toState);
-              }
-            }
-            for (const toRoutesHook of toRoutesHooks) {
-              if (toRoutesHook && toRoutesHook.onEnter) {
-                toRoutesHook.onEnter(fromState, toState);
-              }
-            }
+            // for (const fromRoutesHook of fromRoutesHooks) {
+            //   if (fromRoutesHook && fromRoutesHook.onExit) {
+            //     fromRoutesHook.onExit(fromState, toState);
+            //   }
+            // }
+            // for (const toRoutesHook of toRoutesHooks) {
+            //   if (toRoutesHook && toRoutesHook.onEnter) {
+            //     toRoutesHook.onEnter(fromState, toState);
+            //   }
+            // }
           }
         };
 
-        const promises = [];
+        // /** @type {Promise<any>[]} */
+        // const promises = [];
 
-        for (const fromRoutesHook of fromRoutesHooks) {
-          if (fromRoutesHook && fromRoutesHook.beforeExit) {
-            promises[promises.length] = fromRoutesHook.beforeExit(
-              fromState,
-              toState,
-            );
-          }
-        }
-        for (const toRoutesHook of toRoutesHooks) {
-          if (toRoutesHook && toRoutesHook.beforeEnter) {
-            promises[promises.length] = toRoutesHook.beforeEnter(
-              fromState,
-              toState,
-            );
-          }
-        }
+        // for (const fromRoutesHook of fromRoutesHooks) {
+        //   if (fromRoutesHook && fromRoutesHook.beforeExit) {
+        //     promises[promises.length] = fromRoutesHook.beforeExit(
+        //       fromState,
+        //       toState,
+        //     );
+        //   }
+        // }
+        // for (const toRoutesHook of toRoutesHooks) {
+        //   if (toRoutesHook && toRoutesHook.beforeEnter) {
+        //     promises[promises.length] = toRoutesHook.beforeEnter(
+        //       fromState,
+        //       toState,
+        //     );
+        //   }
+        // }
 
         Promise.all(promises).then(onFinish, (reason) => {
           gouter.isTransitioning = false;
@@ -601,7 +611,7 @@ const Gouter = (routes) => {
       }
     },
 
-    /** @type {Partial<TransitionHooks>} */
+    /** @type {Partial<TransitionHooks<Name>>} */
     defaultHooks: {},
 
     /**
@@ -685,13 +695,13 @@ const Gouter = (routes) => {
 
     /**
      * List of listeners
-     * @type {Listener<State>[]}
+     * @type {Listener[]}
      */
     listeners: [],
 
     /**
      * Add new listener of router state changes to listeners
-     * @param {Listener<State>} listener
+     * @param {Listener} listener
      */
     listen: (listener) => {
       const { listeners } = gouter;
@@ -700,7 +710,7 @@ const Gouter = (routes) => {
 
     /**
      * Remove old listener of router state changes from listeners
-     * @param {Listener<State>} listener
+     * @param {Listener} listener
      */
     unlisten: (listener) => {
       const { listeners } = gouter;
@@ -734,14 +744,9 @@ const Gouter = (routes) => {
      * @type {import('history').Listener}
      */
     goToLocation: ({ location, action }) => {
-      const {
-        state: fromState,
-        newStateFromUrl,
-        notFoundState,
-        setState,
-      } = gouter;
+      const { state: fromState, newStateFromUrl, setState } = gouter;
       const url = location.pathname + location.search;
-      const toState = newStateFromUrl(url) || notFoundState;
+      const toState = newStateFromUrl(url);
       if (toState && (!fromState || fromState.url !== toState.url)) {
         setState(toState);
       }
@@ -774,9 +779,7 @@ const Gouter = (routes) => {
       gouter.history = history;
       listen(updateHistory);
       history.listen(goToLocation);
-      /** @type {import('history').Action} */
-      // @ts-ignore
-      const action = 'PUSH';
+      const action = /** @type {import('history').Action} */ ('PUSH');
       goToLocation({ location: history.location, action });
       return gouter;
     },
@@ -809,7 +812,7 @@ const Gouter = (routes) => {
 
     /**
      * Set hooks
-     * @param {Partial<{[K in keyof T]: Partial<TransitionHooks<K>>}>} hooks
+     * @param {HookMap} hooks
      */
     withHooks: (hooks) => {
       gouter.hookMap = hooks;
@@ -820,4 +823,4 @@ const Gouter = (routes) => {
   return gouter;
 };
 
-module.exports = Gouter;
+module.exports = newGouter;
