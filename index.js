@@ -21,7 +21,18 @@ const { tokensToFunction, tokensToRegexp } = require('path-to-regexp');
 
 /** @typedef {ReturnType<typeof newGouter>} Gouter */
 
-/** @typedef {Required<Gouter['defaultHooks']>} Hooks */
+/**
+ * `GenericHooks` is set of functions called while transition between router states
+ * @typedef {{
+ * onStackInit: <S extends Gouter['state']>(state: S) => S[]
+ * shouldGoTo: <S extends Gouter['state']>(parents: S[], state: S) => boolean
+ * shouldGoBack: <S extends Gouter['state']>(parents: S[]) => boolean
+ * onGoTo: <S extends Gouter['state']>(parents: S[], state: S) => S
+ * onGoBack: <S extends Gouter['state']>(parents: S[]) => S
+ * beforeExit: <S extends Gouter['state']>(state: S, parents: S[]) => Promise<void | function>
+ * beforeEnter: <S extends Gouter['state']>(state: S, parents: S[]) => Promise<void | function>
+ * }} GenericHooks
+ */
 
 /**
  * Creates `Gouter` instance.
@@ -66,14 +77,12 @@ const newGouter = (routes) => {
    * @template {Name} N
    * @typedef {{
    * onStackInit: (state: StateMap[N] & State) => State[]
-   * shouldGoTo: (parents: State[], state: StateMap[N] & State) => boolean
-   * shouldGoBack: (parents: State[]) => boolean
-   * onGoTo: (parents: State[], state: StateMap[N] & State) => State
-   * onGoBack: (parents: State[]) => State
-   * beforeExit: (state: StateMap[N] & State, fromParents: State[], toParents: State[]) => Promise<void | function>
-   * beforeEnter: (state: StateMap[N] & State, fromParents: State[], toParents: State[]) => Promise<void | function>
-   * onExit: (state: StateMap[N] & State, fromParents: State[], toParents: State[]) => void
-   * onEnter: (state: StateMap[N] & State, fromParents: State[], toParents: State[]) => void
+   * shouldGoTo: (parents: [StateMap[N] & State, ...State[]], state: State) => boolean
+   * shouldGoBack: (parents: [StateMap[N] & State, ...State[]]) => boolean
+   * onGoTo: (parents: [StateMap[N] & State, ...State[]], state: State) => State
+   * onGoBack: (parents: [StateMap[N] & State, ...State[]]) => State
+   * beforeExit: (state: StateMap[N] & State, parents: State[]) => Promise<void | function>
+   * beforeEnter: (state: StateMap[N] & State, parents: State[]) => Promise<void | function>
    * }} TransitionHooks
    */
 
@@ -117,13 +126,15 @@ const newGouter = (routes) => {
       stack: [],
     },
 
+    transitionId: 0,
+
     emptyStack: [],
 
     /** @type {(reason: any) => void} */
     hookCatch: () => {},
 
     /** @type {boolean} is router state attempts to change? */
-    isTransitioning: false,
+    hasTransition: false,
 
     /**
      * PathFunction options.
@@ -424,176 +435,124 @@ const newGouter = (routes) => {
       return stateList;
     },
 
-    /**
-     * Cancels current hooks
-     */
-    cancelHooks: () => {},
-
-    /**
-     * Attempts to change current stack
-     * * If gouter.cancelHooks() called then transition aborted
-     * * Each route with beforeExit/beforeEnter hooks can return a callback
-     * * If a callback returned then and no cancelHooks called then they are executed
-     * * Executed only after all beforeEnter and beforeExit promises are resolved.
-     *
-     * @param {State} toState
-     * @returns {State}
-     */
-    setState: (toState) => {
-      const { cancelHooks, state: fromState, defaultHooks, hookMap } = gouter;
-      gouter.isTransitioning = false;
-      cancelHooks();
-
-      // const fromStack = stateToStack(fromState);
-      // const toStack = stateToStack(toState);
-
-      /** @type {Promise<any>[]} */
+    /** @type {(fromState: State, toState: State, parents: State[]) => Promise<void | function>[]} */
+    getBeforePromises: (fromState, toState, parents) => {
+      console.warn(
+        'from',
+        JSON.stringify(fromState),
+        'to',
+        JSON.stringify(toState),
+      );
+      const { hookMap, defaultHooks, getBeforePromises } = gouter;
+      /** @type {Promise<void | function>[]} */
       const promises = [];
+      if (fromState !== toState) {
+        const fromStack = fromState.stack;
+        const toStack = toState.stack;
+        if (fromStack !== toStack) {
+          for (const isBeforeExit of [true, false]) {
+            const stackA = isBeforeExit ? fromStack : toStack;
+            const stackB = isBeforeExit ? toStack : fromStack;
+            for (const subState of stackA) {
+              const { key } = subState;
+              /** @type {State | null} */
+              let subStateFound = null;
+              for (const subStateX of stackB) {
+                if (subStateX.key === key) {
+                  subStateFound = subStateX;
+                  break;
+                }
+              }
+              if (subStateFound) {
+                const newPromises = getBeforePromises(subState, subStateFound, [
+                  ...parents,
+                  fromState,
+                ]);
+                for (const newPromise of newPromises) {
+                  promises[promises.length] = newPromise;
+                }
+              } else {
+                /** @type {State[]} */
+                const list = [subState];
+                while (list.length > 0) {
+                  const state = /** @type {State} */ (list.pop());
 
-      /** @type {(fromState: State, toState: State) => void} */
-      const compareStates = (fromState, toState) => {
-        if (fromState !== toState) {
-          //           if (fromState.key !== toState.key) {
-          //   promises[promises.length] = {}
-          // }
-          const fromStack = fromState.stack;
-          const toStack = toState.stack;
-          for (const subState of fromStack) {
-            const { key } = subState;
-            let subStateRemoved = true;
-            for (const subStateX of toStack) {
-              if (subStateX.key === key) {
-                subStateRemoved = false;
-                break;
+                  if (isBeforeExit) {
+                    const { beforeExit } = hookMap[state.name] || defaultHooks;
+                    if (beforeExit) {
+                      promises[promises.length] = beforeExit(state, parents);
+                    }
+                  } else {
+                    const { beforeEnter } = hookMap[state.name] || defaultHooks;
+                    if (beforeEnter) {
+                      promises[promises.length] = beforeEnter(state, parents);
+                    }
+                  }
+                  for (const innerState of state.stack) {
+                    list[list.length] = innerState;
+                  }
+                }
               }
-            }
-            if (subStateRemoved) {
-              // run beforeExit for all inner states
-              // call beforeExit for it then call onExit for it
-              const { beforeExit } = hookMap[subState.name] || defaultHooks;
-              if (beforeExit) {
-                beforeExit(subState, [], []);
-              }
-            } else {
-              // call something
-            }
-          }
-          for (const subState of toStack) {
-            const { key } = subState;
-            let subStateAdded = true;
-            for (const subStateX of fromStack) {
-              if (subStateX.key === key) {
-                subStateAdded = false;
-                break;
-              }
-            }
-            if (subStateAdded) {
-              // run beforeEnter for all inner states
-              // call beforeEnter for it then call onEnter for it
-              const { beforeEnter } = hookMap[subState.name] || defaultHooks;
-              if (beforeEnter) {
-                beforeEnter(subState, [], []);
-              }
-            } else {
-              // call something
             }
           }
         }
-      };
+      }
+      return promises;
+    },
 
-      compareStates(fromState, toState);
+    /**
+     * Attempts to change current stack
+     * * If gouter.cancelTransition() called then transition aborted
+     * * Each route with beforeExit/beforeEnter hooks can return a callback
+     * * If a callback returned then and no cancelTransition called then they are executed
+     * * Executed only after all beforeEnter and beforeExit promises are resolved.
+     *
+     * @param {State} toState
+     * @returns {Promise<State>}
+     */
+    setState: (toState) => {
+      const { state: fromState, transitionId, getBeforePromises } = gouter;
+      gouter.hasTransition = false;
 
-      const areStatesEqual = false;
-      // const areStatesEqual =
-      //   fromStack.length === toStack.length &&
-      //   fromStack.every(({ url }, index) => url === toStack[index].url);
+      const beforePromises = getBeforePromises(fromState, toState, []);
 
-      // console.log(JSON.stringify(fromStack, null, 4));
-      // console.log(JSON.stringify(toStack, null, 4));
-      console.warn('check areStatesEqual condition!', areStatesEqual);
+      const areStatesEqual = false; //beforePromises.length === 0;
 
       if (!areStatesEqual) {
-        gouter.isTransitioning = true;
+        gouter.hasTransition = true;
+        gouter.transitionId += 1;
 
-        // const fromRoutesHooks = fromStack
-        //   .filter(({ key: fromStateKey }) =>
-        //     toStack.every(({ key: toStateKey }) => toStateKey !== fromStateKey),
-        //   )
-        //   .map(({ name }) => hookMap[name]);
-
-        // const toRoutesHooks = toStack
-        //   .filter(({ key: toStateKey }) =>
-        //     fromStack.every(
-        //       ({ key: fromStateKey }) => fromStateKey !== toStateKey,
-        //     ),
-        //   )
-        //   .map(({ name }) => hookMap[name]);
-
-        let canceled = false;
-        gouter.cancelHooks = () => {
-          canceled = true;
-        };
-
-        /** @type {(callbacks: (void | Function)[]) => void} */
+        /** @type {(callbacks: (void | Function)[]) => State} */
         const onFinish = (callbacks) => {
-          if (!canceled) {
+          if (transitionId === gouter.transitionId) {
             for (const callback of callbacks) {
-              if (typeof callback === 'function') {
+              if (callback) {
                 callback();
               }
             }
-            console.warn('onFinish');
-            gouter.isTransitioning = false;
+            gouter.hasTransition = false;
             gouter.state = toState;
             for (const listener of gouter.listeners) {
               listener(toState);
             }
-            // for (const fromRoutesHook of fromRoutesHooks) {
-            //   if (fromRoutesHook && fromRoutesHook.onExit) {
-            //     fromRoutesHook.onExit(fromState, toState);
-            //   }
-            // }
-            // for (const toRoutesHook of toRoutesHooks) {
-            //   if (toRoutesHook && toRoutesHook.onEnter) {
-            //     toRoutesHook.onEnter(fromState, toState);
-            //   }
-            // }
+            return toState;
+          } else {
+            return fromState;
           }
         };
 
-        // /** @type {Promise<any>[]} */
-        // const promises = [];
-
-        // for (const fromRoutesHook of fromRoutesHooks) {
-        //   if (fromRoutesHook && fromRoutesHook.beforeExit) {
-        //     promises[promises.length] = fromRoutesHook.beforeExit(
-        //       fromState,
-        //       toState,
-        //     );
-        //   }
-        // }
-        // for (const toRoutesHook of toRoutesHooks) {
-        //   if (toRoutesHook && toRoutesHook.beforeEnter) {
-        //     promises[promises.length] = toRoutesHook.beforeEnter(
-        //       fromState,
-        //       toState,
-        //     );
-        //   }
-        // }
-
-        Promise.all(promises).then(onFinish, (reason) => {
-          gouter.isTransitioning = false;
+        return Promise.all(beforePromises).then(onFinish, (reason) => {
+          gouter.hasTransition = false;
           gouter.hookCatch(reason);
+          return fromState;
         });
-
-        return toState;
       } else {
-        return fromState;
+        return Promise.resolve(fromState);
       }
     },
 
     /**
-     * Get focused states as list from top to root
+     * Get list of focused states from top to root
      * @param {State} state
      * @returns {State[]}
      */
@@ -643,7 +602,10 @@ const newGouter = (routes) => {
               hookMap[focusedState.name] || defaultHooks;
             const hasHook = state ? shouldGoTo : shouldGoBack;
             if (hasHook) {
-              const parents = focusedStates.slice(index);
+              const parents =
+                /** @type {[StateMap[Name] & State, ...State[]]} */ (
+                  focusedStates.slice(index)
+                );
               const should = state
                 ? shouldGoTo && shouldGoTo(parents, state)
                 : shouldGoBack && shouldGoBack(parents);
@@ -667,7 +629,7 @@ const newGouter = (routes) => {
           }
         }
       }
-      setState(nextState);
+      return setState(nextState);
     },
 
     /**
@@ -676,21 +638,21 @@ const newGouter = (routes) => {
      * @param {N} name
      * @param {StateMap[N]['params']} params
      * @param {State[]} [stack]
-     * @returns {void}
+     * @returns {Promise<State>}
      */
     goTo: (name, params, stack) => {
       const { newState, goOn } = gouter;
       const state = newState(name, params, stack);
-      goOn(state);
+      return goOn(state);
     },
 
     /**
      * Go back to previous state
-     * @returns {void}
+     * @returns {Promise<State>}
      */
     goBack: () => {
       const { goOn } = gouter;
-      goOn(null);
+      return goOn(null);
     },
 
     /**
@@ -700,24 +662,33 @@ const newGouter = (routes) => {
     listeners: [],
 
     /**
-     * Add new listener of router state changes to listeners
+     * Add new listener of router state changes to listeners.
+     * Returns unlisten callback.
      * @param {Listener} listener
+     * @returns {() => void} unlisten callback
      */
     listen: (listener) => {
       const { listeners } = gouter;
       gouter.listeners = [...listeners, listener];
+      const unlisten = () => {
+        gouter.listeners = gouter.listeners.filter(
+          (prevListener) => prevListener !== listener,
+        );
+      };
+      return unlisten;
     },
 
-    /**
-     * Remove old listener of router state changes from listeners
-     * @param {Listener} listener
-     */
-    unlisten: (listener) => {
-      const { listeners } = gouter;
-      gouter.listeners = listeners.filter(
-        (prevListener) => prevListener !== listener,
-      );
-    },
+    // /**
+    //  * Remove old listener of router state changes from listeners
+    //  * @param {Listener} listener
+    //  * @returns {void}
+    //  */
+    // unlisten: (listener) => {
+    //   const { listeners } = gouter;
+    //   gouter.listeners = listeners.filter(
+    //     (prevListener) => prevListener !== listener,
+    //   );
+    // },
 
     /**
      * Updates browser/memory history and url from state
