@@ -25,10 +25,8 @@ const { tokensToFunction, tokensToRegexp } = require('path-to-regexp');
  * `GenericHooks` is set of functions called while transition between router states
  * @typedef {{
  * onStackInit: <S extends Gouter['state']>(state: S) => S[]
- * shouldGoTo: <S extends Gouter['state']>(parents: S[], state: S) => boolean
- * shouldGoBack: <S extends Gouter['state']>(parents: S[]) => boolean
- * onGoTo: <S extends Gouter['state']>(parents: S[], state: S) => S
- * onGoBack: <S extends Gouter['state']>(parents: S[]) => S
+ * shouldGo: <S extends Gouter['state']>(state: S | null, parents: S[]) => boolean
+ * onGo: <S extends Gouter['state']>(state: S | null, parents: S[]) => S
  * beforeExit: <S extends Gouter['state']>(state: S, parents: S[]) => Promise<void | function>
  * beforeEnter: <S extends Gouter['state']>(state: S, parents: S[]) => Promise<void | function>
  * }} GenericHooks
@@ -77,10 +75,8 @@ const newGouter = (routes) => {
    * @template {Name} N
    * @typedef {{
    * onStackInit: (state: StateMap[N] & State) => State[]
-   * shouldGoTo: (parents: [StateMap[N] & State, ...State[]], state: State) => boolean
-   * shouldGoBack: (parents: [StateMap[N] & State, ...State[]]) => boolean
-   * onGoTo: (parents: [StateMap[N] & State, ...State[]], state: State) => State
-   * onGoBack: (parents: [StateMap[N] & State, ...State[]]) => State
+   * shouldGo: (state: State | null, parents: [StateMap[N] & State, ...State[]]) => boolean
+   * onGo: (state: State | null, parents: [StateMap[N] & State, ...State[]]) => State
    * beforeExit: (state: StateMap[N] & State, parents: State[]) => Promise<void | function>
    * beforeEnter: (state: StateMap[N] & State, parents: State[]) => Promise<void | function>
    * }} TransitionHooks
@@ -102,6 +98,9 @@ const newGouter = (routes) => {
 
     /** @type {HookMap} */
     hookMap: {},
+
+    /** @type {Partial<TransitionHooks<Name>>} */
+    defaultHooks: {},
 
     /** @type {import('history').History | null}  */
     history: null,
@@ -128,13 +127,13 @@ const newGouter = (routes) => {
 
     transitionId: 0,
 
+    /** @type {boolean} is router state attempts to change? */
+    hasTransition: false,
+
     emptyStack: [],
 
     /** @type {(reason: any) => void} */
     hookCatch: () => {},
-
-    /** @type {boolean} is router state attempts to change? */
-    hasTransition: false,
 
     /**
      * PathFunction options.
@@ -294,15 +293,23 @@ const newGouter = (routes) => {
       let queryStr = '';
       const route = routeMap[name];
       for (const key in params) {
-        const value = params[key];
-        const keyEncoded = encodeURIComponent(key);
         const segment = route[key];
         const encode =
           typeof segment === 'object' &&
           !Array.isArray(segment) &&
           segment.encode;
         if (encode) {
-          const valueEncoded = encodeURIComponent(encode(value));
+          const value = params[key];
+          /** @type {string} */
+          let keyEncoded = key;
+          try {
+            keyEncoded = encodeURIComponent(key);
+          } catch (e) {}
+          const valueStr = encode(value);
+          let valueEncoded = encodeURIComponent(valueStr);
+          try {
+            valueEncoded = encodeURIComponent(valueStr);
+          } catch (e) {}
           queryStr += `&${keyEncoded}=${valueEncoded}`;
         }
       }
@@ -372,15 +379,23 @@ const newGouter = (routes) => {
       const route = routeMap[name];
       for (const keyValueStr of queryStr.split('&')) {
         const splitIndex = keyValueStr.indexOf('=');
-        const key = decodeURIComponent(keyValueStr.slice(0, splitIndex));
-        const rawValue = decodeURIComponent(keyValueStr.slice(splitIndex + 1));
+        const keyEncoded = keyValueStr.slice(0, splitIndex);
+        let key = keyEncoded;
+        try {
+          key = decodeURIComponent(keyEncoded);
+        } catch (e) {}
         const routeValue = route[key];
         const decode =
           typeof routeValue === 'object' &&
           !Array.isArray(routeValue) &&
           routeValue.decode;
         if (decode) {
-          const value = decode(rawValue);
+          const valueStr = keyValueStr.slice(splitIndex + 1);
+          let valueEncoded = valueStr;
+          try {
+            valueEncoded = decodeURIComponent(valueStr);
+          } catch (e) {}
+          const value = decode(valueEncoded);
           params[/** @type {keyof State['params']} */ (key)] = value;
         }
       }
@@ -437,12 +452,6 @@ const newGouter = (routes) => {
 
     /** @type {(fromState: State, toState: State, parents: State[]) => Promise<void | function>[]} */
     getBeforePromises: (fromState, toState, parents) => {
-      console.warn(
-        'from',
-        JSON.stringify(fromState),
-        'to',
-        JSON.stringify(toState),
-      );
       const { hookMap, defaultHooks, getBeforePromises } = gouter;
       /** @type {Promise<void | function>[]} */
       const promises = [];
@@ -453,18 +462,18 @@ const newGouter = (routes) => {
           for (const isBeforeExit of [true, false]) {
             const stackA = isBeforeExit ? fromStack : toStack;
             const stackB = isBeforeExit ? toStack : fromStack;
-            for (const subState of stackA) {
-              const { key } = subState;
+            for (const stateA of stackA) {
+              const { key } = stateA;
               /** @type {State | null} */
-              let subStateFound = null;
-              for (const subStateX of stackB) {
-                if (subStateX.key === key) {
-                  subStateFound = subStateX;
+              let stateFound = null;
+              for (const stateB of stackB) {
+                if (stateB.key === key) {
+                  stateFound = stateB;
                   break;
                 }
               }
-              if (subStateFound) {
-                const newPromises = getBeforePromises(subState, subStateFound, [
+              if (stateFound) {
+                const newPromises = getBeforePromises(stateA, stateFound, [
                   ...parents,
                   fromState,
                 ]);
@@ -473,23 +482,22 @@ const newGouter = (routes) => {
                 }
               } else {
                 /** @type {State[]} */
-                const list = [subState];
-                while (list.length > 0) {
-                  const state = /** @type {State} */ (list.pop());
-
-                  if (isBeforeExit) {
+                const list = [stateA];
+                if (isBeforeExit) {
+                  while (list.length) {
+                    const state = /** @type {State} */ (list.pop());
                     const { beforeExit } = hookMap[state.name] || defaultHooks;
                     if (beforeExit) {
                       promises[promises.length] = beforeExit(state, parents);
                     }
-                  } else {
+                  }
+                } else {
+                  while (list.length) {
+                    const state = /** @type {State} */ (list.pop());
                     const { beforeEnter } = hookMap[state.name] || defaultHooks;
                     if (beforeEnter) {
                       promises[promises.length] = beforeEnter(state, parents);
                     }
-                  }
-                  for (const innerState of state.stack) {
-                    list[list.length] = innerState;
                   }
                 }
               }
@@ -511,17 +519,19 @@ const newGouter = (routes) => {
      * @returns {Promise<State>}
      */
     setState: (toState) => {
-      const { state: fromState, transitionId, getBeforePromises } = gouter;
+      const { state: fromState, getBeforePromises } = gouter;
       gouter.hasTransition = false;
 
       const beforePromises = getBeforePromises(fromState, toState, []);
 
+      const transitionId = gouter.transitionId + 1;
+      gouter.transitionId = transitionId;
+      gouter.hasTransition = true;
+
       const areStatesEqual = false; //beforePromises.length === 0;
+      console.error('check states equality');
 
       if (!areStatesEqual) {
-        gouter.hasTransition = true;
-        gouter.transitionId += 1;
-
         /** @type {(callbacks: (void | Function)[]) => State} */
         const onFinish = (callbacks) => {
           if (transitionId === gouter.transitionId) {
@@ -547,6 +557,7 @@ const newGouter = (routes) => {
           return fromState;
         });
       } else {
+        gouter.hasTransition = false;
         return Promise.resolve(fromState);
       }
     },
@@ -570,14 +581,11 @@ const newGouter = (routes) => {
       }
     },
 
-    /** @type {Partial<TransitionHooks<Name>>} */
-    defaultHooks: {},
-
     /**
-     * Go to state
+     * Go on through the chain of actions
      * @param {...(State | null)} statesOrNulls
      */
-    goOn: (...statesOrNulls) => {
+    goThrough: (...statesOrNulls) => {
       const {
         history,
         state: currentState,
@@ -598,21 +606,16 @@ const newGouter = (routes) => {
           const focusedStates = getFocusedStates(nextState);
           for (let index = 0; index < focusedStates.length; index++) {
             const focusedState = focusedStates[index];
-            const { onGoTo, shouldGoTo, onGoBack, shouldGoBack } =
+            const { shouldGo, onGo } =
               hookMap[focusedState.name] || defaultHooks;
-            const hasHook = state ? shouldGoTo : shouldGoBack;
-            if (hasHook) {
+            if (shouldGo) {
               const parents =
                 /** @type {[StateMap[Name] & State, ...State[]]} */ (
                   focusedStates.slice(index)
                 );
-              const should = state
-                ? shouldGoTo && shouldGoTo(parents, state)
-                : shouldGoBack && shouldGoBack(parents);
-              if (should) {
-                const subState = state
-                  ? onGoTo && onGoTo(parents, state)
-                  : onGoBack && onGoBack(parents);
+              const should = shouldGo(state, parents);
+              if (should && onGo) {
+                const subState = onGo(state, parents);
                 if (subState) {
                   let childState = subState;
                   for (const parent of parents.slice(1)) {
@@ -641,9 +644,9 @@ const newGouter = (routes) => {
      * @returns {Promise<State>}
      */
     goTo: (name, params, stack) => {
-      const { newState, goOn } = gouter;
+      const { newState, goThrough } = gouter;
       const state = newState(name, params, stack);
-      return goOn(state);
+      return goThrough(state);
     },
 
     /**
@@ -651,8 +654,8 @@ const newGouter = (routes) => {
      * @returns {Promise<State>}
      */
     goBack: () => {
-      const { goOn } = gouter;
-      return goOn(null);
+      const { goThrough } = gouter;
+      return goThrough(null);
     },
 
     /**
@@ -677,18 +680,6 @@ const newGouter = (routes) => {
       };
       return unlisten;
     },
-
-    // /**
-    //  * Remove old listener of router state changes from listeners
-    //  * @param {Listener} listener
-    //  * @returns {void}
-    //  */
-    // unlisten: (listener) => {
-    //   const { listeners } = gouter;
-    //   gouter.listeners = listeners.filter(
-    //     (prevListener) => prevListener !== listener,
-    //   );
-    // },
 
     /**
      * Updates browser/memory history and url from state
@@ -754,32 +745,6 @@ const newGouter = (routes) => {
       goToLocation({ location: history.location, action });
       return gouter;
     },
-
-    // /**
-    //  * Set struct
-    //  * @param {ExtPartialState} struct
-    //  */
-    // withStruct: (struct) => {
-    //   /** @type {Partial<Record<keyof T, ExtPartialState[][]>>} */
-    //   const pathMap = {};
-    //   /** @type {(subStruct: ExtPartialState, path: ExtPartialState[]) => void} */
-    //   const fillPaths = (subStruct, path) => {
-    //     /** @type {ExtPartialState[]} */
-    //     const nextPath = [...path, subStruct];
-    //     /** @type {ExtPartialState[][]} */
-    //     const pathList = pathMap[subStruct.name] || [];
-    //     pathList[pathList.length] = nextPath;
-    //     pathMap[subStruct.name] = pathList;
-    //     if (subStruct.stack) {
-    //       for (const subSubStruct of subStruct.stack) {
-    //         fillPaths(subSubStruct, nextPath);
-    //       }
-    //     }
-    //   };
-    //   fillPaths(struct, []);
-    //   gouter.pathMap = pathMap;
-    //   return gouter;
-    // },
 
     /**
      * Set hooks
