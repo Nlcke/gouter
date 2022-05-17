@@ -1,4 +1,4 @@
-const { tokensToFunction, tokensToRegexp } = require('path-to-regexp');
+import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
 
 /**
  * @typedef {[
@@ -24,7 +24,7 @@ const { tokensToFunction, tokensToRegexp } = require('path-to-regexp');
 /**
  * `GenericHooks` is set of functions called while transition between router states
  * @typedef {{
- * onStackInit: <S extends Gouter['state']>(state: S) => S[]
+ * onInit: <S extends Gouter['state']>(state: S) => S[]
  * shouldGo: <S extends Gouter['state']>(state: S | null, parents: S[]) => boolean
  * onGo: <S extends Gouter['state']>(state: S | null, parents: S[]) => S
  * beforeExit: <S extends Gouter['state']>(state: S, parents: S[]) => Promise<void | function>
@@ -74,7 +74,7 @@ const newGouter = (routes) => {
    * `TransitionHooks` is set of functions called while transition between router states
    * @template {Name} N
    * @typedef {{
-   * onStackInit: (state: StateMap[N] & State) => State[]
+   * onInit: (state: StateMap[N] & State) => State[]
    * shouldGo: (state: State | null, parents: [StateMap[N] & State, ...State[]]) => boolean
    * onGo: (state: State | null, parents: [StateMap[N] & State, ...State[]]) => State
    * beforeExit: (state: StateMap[N] & State, parents: State[]) => Promise<void | function>
@@ -93,6 +93,15 @@ const newGouter = (routes) => {
    * @typedef {Partial<{[K in Name]: Partial<TransitionHooks<K>>}>} HookMap
    */
 
+  /** @type {State} */
+  const initialState = {
+    name: '',
+    params: /** @type {any} */ ({}),
+    url: '',
+    key: '',
+    stack: [],
+  };
+
   const gouter = {
     routeMap: routes,
 
@@ -106,24 +115,10 @@ const newGouter = (routes) => {
     history: null,
 
     /** @type {State} */
-    state: {
-      name: '',
-      /** @type {any} */
-      params: {},
-      url: '',
-      key: '',
-      stack: [],
-    },
+    state: initialState,
 
     /** @type {State} */
-    notFoundState: {
-      name: '',
-      /** @type {any} */
-      params: {},
-      url: '',
-      key: '',
-      stack: [],
-    },
+    notFoundState: initialState,
 
     transitionId: 0,
 
@@ -357,9 +352,9 @@ const newGouter = (routes) => {
         key,
       };
       if (!stack) {
-        const { onStackInit } = hookMap[name] || defaultHooks;
-        if (onStackInit) {
-          state.stack = onStackInit(
+        const { onInit } = hookMap[name] || defaultHooks;
+        if (onInit) {
+          state.stack = onInit(
             /** @type {State & {name: N} & StateMap[N]} */ (state),
           );
         }
@@ -423,10 +418,12 @@ const newGouter = (routes) => {
             }
           }
           const state = newState(name, params);
+          state.url = url;
           return state;
         }
       }
-      return notFoundState;
+      const state = { ...notFoundState, url, key: pathname };
+      return state;
     },
 
     /**
@@ -632,7 +629,9 @@ const newGouter = (routes) => {
           }
         }
       }
-      return setState(nextState);
+      if (!history) {
+        return setState(nextState);
+      }
     },
 
     /**
@@ -715,24 +714,6 @@ const newGouter = (routes) => {
     },
 
     /**
-     * Set initial state to start from
-     * @param {State} state
-     */
-    withInitialState: (state) => {
-      gouter.state = state;
-      return gouter;
-    },
-
-    /**
-     * Set NotFound state to fallback when route name does not exist
-     * @param {State} state
-     */
-    withNotFoundState: (state) => {
-      gouter.notFoundState = state;
-      return gouter;
-    },
-
-    /**
      * Set history and enable listeners for history and router events
      * @param {import('history').History} history
      */
@@ -759,4 +740,4 @@ const newGouter = (routes) => {
   return gouter;
 };
 
-module.exports = newGouter;
+export default newGouter;
