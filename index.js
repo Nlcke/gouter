@@ -1,6 +1,8 @@
 import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
 
 /**
+ * `PathSegment` is used to define required parameter inside parameters definition at route map.
+ * It will convert segment of url path into named parameter as string and vice versa.
  * @typedef {[
  * prefix?: string,
  * regexp?: RegExp | null,
@@ -10,6 +12,9 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
+ * `Serializable` is used to define optional query parameter inside parameters definition at
+ * route map. It will convert part of url query into named parameter using `decode` and vice versa
+ * using `encode`.
  * @template T
  * @typedef {{
  * decode: (str: string) => T
@@ -17,148 +22,183 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  * }} Serializable
  */
 
-/** @typedef {Record<string, PathSegment | string | Serializable<any>>} Route */
-
-/** @typedef {ReturnType<typeof newGouter>} Gouter */
-
 /**
- * `GenericHooks` is set of functions called while transition between router states
- * @typedef {{
- * onInit: <S extends Gouter['state']>(state: S) => S[]
- * shouldGo: <S extends Gouter['state']>(state: S | null, parents: S[]) => boolean
- * onGo: <S extends Gouter['state']>(state: S | null, parents: S[]) => S
- * beforeExit: <S extends Gouter['state']>(state: S, parents: S[]) => Promise<void | function>
- * beforeEnter: <S extends Gouter['state']>(state: S, parents: S[]) => Promise<void | function>
- * }} GenericHooks
+ * `ParamValueDef` is used to define parts of url (`string`), required (`PathSegment`) and
+ * optional (`Serializable`) parameters.
+ * @typedef {string | PathSegment | Serializable<any>} ParamValueDef
  */
 
 /**
- * Creates `Gouter` instance.
- * It allows transitioning between states using `goTo` and `goBack` methods.
- * It allows to add and remove listeners via `listen` and `unlisten` methods.
- * @template {Record<string, Route>} T
+ * `ParamsDef` is used to define parameters of a route at route map.
+ * @typedef {Record<string, ParamValueDef>} ParamsDef
+ */
+
+/**
+ * Creates `Gouter` instance with available routes. It's methods are used to modify navigation
+ * state and then notify listeners about it.
+ * @template {Record<string, ParamsDef>} T
  * @param {T} routes map of routes
  */
-const newGouter = (routes) => {
-  /**
-   * `Name`
-   * @typedef {keyof T & string} Name
-   */
-
-  /**
-   * `StateMap`
-   * @typedef {{[N in Name]: {
-   * name: N
-   * params: {[K in keyof T[N] as
-   * T[N][K] extends PathSegment ?
-   * T[N][K][3] extends '' ? K : T[N][K][3] extends '+' ?
-   * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never : never]:
-   * T[N][K] extends PathSegment ? T[N][K][3] extends '+' ? string[] : string : string}
-   * & {[K in keyof T[N] as
-   * T[N][K] extends PathSegment ?
-   * T[N][K][3] extends '?' ? K : T[N][K][3] extends '*' ?
-   * K : never : T[N][K] extends Serializable<any> ?
-   * K : never]?: T[N][K] extends PathSegment ?
-   * T[N][K][3] extends '?' ? string : T[N][K][3] extends '*' ?
-   * string[] : never : T[N][K] extends Serializable<any> ?
-   * ReturnType<T[N][K]['decode']> : never}
-   * }}} StateMap
-   */
-
-  /**
-   * `State`
-   * @typedef {StateMap[keyof StateMap] & {url: string, key: string, stack: State[]}} State
-   */
-
-  /**
-   * `TransitionHooks` is set of functions called while transition between router states
-   * @template {Name} N
-   * @typedef {{
-   * onInit: (state: StateMap[N] & State) => State[]
-   * shouldGo: (state: State | null, parents: [StateMap[N] & State, ...State[]]) => boolean
-   * onGo: (state: State | null, parents: [StateMap[N] & State, ...State[]]) => State
-   * beforeExit: (state: StateMap[N] & State, parents: State[]) => Promise<void | function>
-   * beforeEnter: (state: StateMap[N] & State, parents: State[]) => Promise<void | function>
-   * }} TransitionHooks
-   */
-
-  /**
-   * `Listener` function receives state and is called after router transition
-   * @callback Listener
-   * @param {State} state
-   * @returns {void}
-   */
-
-  /**
-   * @typedef {Partial<{[K in Name]: Partial<TransitionHooks<K>>}>} HookMap
-   */
-
-  /** @type {State} */
-  const initialState = {
-    name: '',
-    params: /** @type {any} */ ({}),
-    url: '',
-    key: '',
-    stack: [],
-  };
-
-  const gouter = {
-    routeMap: routes,
-
-    /** @type {HookMap} */
-    hookMap: {},
-
-    /** @type {Partial<TransitionHooks<Name>>} */
-    defaultHooks: {},
-
-    /** @type {import('history').History | null}  */
-    history: null,
-
-    /** @type {State} */
-    state: initialState,
-
-    /** @type {State} */
-    notFoundState: initialState,
-
-    transitionId: 0,
-
-    /** @type {boolean} is router state attempts to change? */
-    hasTransition: false,
-
-    emptyStack: [],
-
-    /** @type {(reason: any) => void} */
-    hookCatch: () => {},
+class Gouter {
+  /** @param {T} routes map of routes  */
+  constructor(routes) {
+    /** @typedef {keyof T & string} Name */
 
     /**
-     * PathFunction options.
-     * @type {import('path-to-regexp').ParseOptions & import('path-to-regexp').TokensToRegexpOptions}
+     * `StateMap` is used to get route state from route name.
+     * @typedef {{[N in Name]: {
+     * name: N
+     * params: {[K in keyof T[N] as
+     * T[N][K] extends PathSegment ?
+     * T[N][K][3] extends '' ? K : T[N][K][3] extends '+' ?
+     * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never : never]:
+     * T[N][K] extends PathSegment ? T[N][K][3] extends '+' ? string[] : string : string}
+     * & {[K in keyof T[N] as
+     * T[N][K] extends PathSegment ?
+     * T[N][K][3] extends '?' ? K : T[N][K][3] extends '*' ?
+     * K : never : T[N][K] extends Serializable<any> ?
+     * K : never]?: T[N][K] extends PathSegment ?
+     * T[N][K][3] extends '?' ? string : T[N][K][3] extends '*' ?
+     * string[] : never : T[N][K] extends Serializable<any> ?
+     * ReturnType<T[N][K]['decode']> : never}
+     * }}} StateMap
      */
-    pathToRegexpOptions: {},
 
     /**
-     * Generate path-to-regexp tokens from route.
-     * Generated tokens should be used for `tokensToRegexp` and `tokensToFunction`.
-     * @param {Route} route
-     * @param {import('path-to-regexp').ParseOptions} options
-     * @returns {(string | import('path-to-regexp').Key)[]} path-to-regexp tokens
+     * `State` is Gouter unit with required name, params and optional stack of states to create
+     * complex navigation.
+     * @typedef {StateMap[keyof StateMap] & {stack?: State[]}} State
      */
-    getTokensFromRoute: (route, options) => {
+
+    /**
+     * `TransitionHooks` is set of functions called when you attempt to change current state:
+     * * `onInit` is called when you use `newState`.
+     * * `shouldGoTo` and `onGoTo` are called on `goTo`.
+     * * `shouldGoBack` and `onGoBack` are called on `goBack`.
+     * @template {Name} N
+     * @typedef {{
+     * onInit: (state: StateMap[N] & State) => StateMap[N] & State
+     * shouldGoTo: (state: State, parent: StateMap[N] & State, ...parents: State[]) => boolean
+     * onGoTo: (state: State, parent: StateMap[N] & State, ...parents: State[]) => State
+     * shouldGoBack: (state: State, parent: StateMap[N] & State, ...parents: State[]) => boolean
+     * onGoBack: (state: State, parent: StateMap[N] & State, ...parents: State[]) => State
+     * }} TransitionHooks
+     */
+
+    /**
+     * `Listener` function is called with current state when it changes.
+     * @callback Listener
+     * @param {State} state
+     * @returns {void}
+     */
+
+    /**
+     * `HookMap` is used to define `TransitionHooks` for each route where you need it.
+     * @typedef {Partial<{[K in Name]: Partial<TransitionHooks<K>>}>} HookMap
+     */
+
+    /**
+     * `routeMap` stores routes passed to Gouter. They are used to decode and encode states and
+     * urls, and help with type suggestions for route parameters.
+     * @type {T}
+     */
+    this.routeMap = routes;
+
+    /**
+     * `initialState` is initial state passed to current `state` and `notFoundState` at
+     * Gouter instantiation.
+     * @type {State}
+     */
+    const initialState = {
+      name: '',
+      params: /** @type {any} */ ({}),
+      url: '',
+      key: '',
+      stack: [],
+    };
+
+    /**
+     * `state` stores current router state.
+     * @type {State}
+     */
+    this.state = initialState;
+
+    /**
+     * `notFoundState` stores router state used when `decodeUrl` fails to find appropriate route.
+     * @type {State}
+     */
+    this.notFoundState = initialState;
+
+    /**
+     * `hookMap` stores current TransitionHooks customized for each route where you need it.
+     * You may set it using `setHooks` and get it using `getHooks`.
+     * @type {HookMap}
+     */
+    this.hookMap = {};
+
+    /**
+     * `defaultHooks` stores current default hooks used when customized route hook not found in
+     * `hookMap`. You may set them directly.
+     * @type {Partial<TransitionHooks<Name>>}
+     */
+    this.defaultHooks = {};
+
+    /**
+     * `history` stores `history` instance used for web navigation.
+     * @web
+     * @type {import('history').History | null}
+     */
+    this.history = null;
+
+    /**
+     * `pathToRegexpOptions` are options used to encode states into urls' paths at `encodePath`.
+     * @type {import('path-to-regexp').ParseOptions
+     * & import('path-to-regexp').TokensToRegexpOptions}
+     */
+    this.pathToRegexpOptions = {};
+
+    /**
+     * `regexpFunctionCache` stores Regexp function cache used for `getRegexpFunction` to decode
+     * urls into states.
+     * @type {Object<string, RegExp['exec']>}
+     */
+    this.regexpFunctionCache = {};
+
+    /**
+     * `pathFunctionCache` stores PathFunction cache used to encode states into urls' paths at
+     * `encodePath`.
+     * @type {Object<string, import('path-to-regexp').PathFunction<object>>}
+     */
+    this.pathFunctionCache = {};
+
+    /**
+     * `pathCacheByName` stores path cache for each route name to speed up `encodePath`.
+     * @type {Record<string, WeakMap<object, string>>}
+     */
+    this.pathCacheByName = {};
+
+    /**
+     * `listeners` stores list of listeners called when current state changes.
+     * @type {Listener[]}
+     */
+    this.listeners = [];
+
+    /**
+     * Generates path-to-regexp tokens from parameters definition.
+     * Generated tokens are used for `getRegexpFunction` and `encodePath`.
+     * @type {(paramsDef: ParamsDef, options: import('path-to-regexp').ParseOptions)
+     * => (string | import('path-to-regexp').Key)[]}
+     */
+    this.getTokensFromParamsDef = (paramsDef, options) => {
       /** @type {(string | import('path-to-regexp').Key)[]} */
       const tokens = [];
       const escapeRegexp = /([.+*?=^!:${}()[\]|/\\])/g;
-      const defaultPattern = `[^${(options.delimiter || '/#?').replace(
-        escapeRegexp,
-        '\\$1',
-      )}]+?`;
-      for (const name in route) {
-        const segment = route[name];
+      const defaultPattern = `[^${(options.delimiter || '/#?').replace(escapeRegexp, '\\$1')}]+?`;
+      for (const name in paramsDef) {
+        const segment = paramsDef[name];
         if (Array.isArray(segment)) {
-          const [prefix = '', regexp = null, suffix = '', modifier = ''] =
-            segment;
-          const pattern = regexp
-            ? regexp.toString().slice(1, -1)
-            : defaultPattern;
+          const [prefix = '', regexp = null, suffix = '', modifier = ''] = segment;
+          const pattern = regexp ? regexp.toString().slice(1, -1) : defaultPattern;
           /** @type {import('path-to-regexp').Key} */
           const key = {
             name,
@@ -173,61 +213,47 @@ const newGouter = (routes) => {
         }
       }
       return tokens;
-    },
+    };
 
     /**
-     * Regexp function cache.
-     * @type {Object<string, RegExp['exec']>}
+     * Get regexp function from route name. It is used for `decodePath`.
+     * @type {(name: Name) => RegExp['exec']}
      */
-    regexpFunctionCache: {},
-
-    /**
-     * Get pattern info
-     * @param {Name} name
-     * @returns {RegExp['exec']} regexp function
-     */
-    getRegexpFunction: (name) => {
-      const {
-        regexpFunctionCache,
-        routeMap,
-        pathToRegexpOptions,
-        getTokensFromRoute,
-      } = gouter;
+    this.getRegexpFunction = (name) => {
+      const { regexpFunctionCache, routeMap, pathToRegexpOptions, getTokensFromParamsDef } = this;
       const regexpFunction = regexpFunctionCache[name];
       if (regexpFunction) {
         return regexpFunction;
-      } else {
-        const route = routeMap[name];
-        const tokens = getTokensFromRoute(route, pathToRegexpOptions);
-        const regexp = tokensToRegexp(tokens, undefined, pathToRegexpOptions);
-        const newRegexpFunction = regexp.exec.bind(regexp);
-        regexpFunctionCache[name] = newRegexpFunction;
-        return newRegexpFunction;
       }
-    },
+      const paramsDef = routeMap[name];
+      const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
+      const regexp =
+        tokens.length > 0 ? tokensToRegexp(tokens, undefined, pathToRegexpOptions) : /^$/;
+      const newRegexpFunction = regexp.exec.bind(regexp);
+      regexpFunctionCache[name] = newRegexpFunction;
+      return newRegexpFunction;
+    };
 
     /**
-     * Matches path to params.
-     * @template {Name} N
-     * @param {string} path
-     * @param {Name} name
-     * @returns {StateMap[N]['params'] | null} params or null
+     * Get required state params from path or null if path is not matched.
+     * @type {<N extends Name>(name: N, path: string) => StateMap[N]['params'] | null}
      */
-    decodePath: (path, name) => {
-      const { getRegexpFunction, routeMap } = gouter;
+    this.decodePath = (name, path) => {
+      const { getRegexpFunction, routeMap } = this;
       const regexpFunction = getRegexpFunction(name);
       const match = regexpFunction(path);
       if (match) {
-        const params = /** @type {StateMap[N]['params']} */ ({});
-        const route = routeMap[name];
+        const params = /** @type {StateMap[typeof name]['params']} */ ({});
+        const paramsDef = routeMap[name];
         let index = 0;
-        for (const key in route) {
-          const paramsKey = /** @type {keyof StateMap[N]['params']} */ (
+        for (const key in paramsDef) {
+          const paramsKey = /** @type {keyof StateMap[typeof name]['params']} */ (
             /** @type {unknown} */ (key)
           );
-          const segment = route[key];
+          const segment = paramsDef[key];
           if (Array.isArray(segment)) {
-            const result = match[++index];
+            index += 1;
+            const result = match[index];
             const modifier = segment[3];
             if (modifier === '+' || modifier === '*') {
               const prefix = segment[0] || '';
@@ -242,202 +268,186 @@ const newGouter = (routes) => {
           }
         }
         return params;
-      } else {
-        return null;
       }
-    },
+      return null;
+    };
 
     /**
-     * PathFunction cache.
-     * @type {Object<string, import('path-to-regexp').PathFunction<object>>}
+     * Creates url path string from state name and params.
+     * @type {<N extends Name>(name: N, params: StateMap[N]['params']) => string}
      */
-    pathFunctionCache: {},
-
-    /**
-     * Creates a pathFunction from a pattern.
-     * @param {Name} name
-     * @returns {import('path-to-regexp').PathFunction<object>} pathFunction
-     */
-    getPathFunction: (name) => {
+    this.encodePath = (name, params) => {
       const {
         routeMap,
         pathFunctionCache,
         pathToRegexpOptions,
-        getTokensFromRoute,
-      } = gouter;
+        getTokensFromParamsDef,
+        pathCacheByName,
+      } = this;
       const pathFunction = pathFunctionCache[name];
       if (pathFunction) {
-        return pathFunction;
-      } else {
-        const route = routeMap[name];
-        const tokens = getTokensFromRoute(route, pathToRegexpOptions);
-        const newPathFunction = tokensToFunction(tokens, pathToRegexpOptions);
-        pathFunctionCache[name] = newPathFunction;
-        return newPathFunction;
+        return pathFunction(params);
       }
-    },
+      const paramsDef = routeMap[name];
+      const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
+      const newPathFunction = tokensToFunction(tokens, pathToRegexpOptions);
+      const pathCache = pathCacheByName[name] || new WeakMap();
+      pathCacheByName[name] = pathCache;
+      /** @type {import('path-to-regexp').PathFunction<object>} */
+      const newPathFunctionWithCache = (parameters = {}) => {
+        const path = pathCache.get(parameters);
+        if (path !== undefined) {
+          return path;
+        }
+        const newPath = newPathFunction(parameters);
+        pathCache.set(parameters, newPath);
+        return newPath;
+      };
+      pathFunctionCache[name] = newPathFunctionWithCache;
+      return newPathFunctionWithCache(params);
+    };
 
     /**
-     * Generates query string from state name and params.
-     * @param {Name} name
-     * @param {StateMap[Name]['params']} params
-     * @returns {string} query string
+     * Create url query string from state name and params.
+     * @type {(name: Name, params: StateMap[Name]['params']) => string}
      */
-    encodeQuery: (name, params) => {
-      const { routeMap } = gouter;
+    this.encodeQuery = (name, params) => {
+      const { routeMap } = this;
       let queryStr = '';
-      const route = routeMap[name];
+      const paramsDef = routeMap[name];
       for (const key in params) {
-        const segment = route[key];
-        const encode =
-          typeof segment === 'object' &&
-          !Array.isArray(segment) &&
-          segment.encode;
+        const segment = paramsDef[key];
+        const encode = typeof segment === 'object' && !Array.isArray(segment) && segment.encode;
         if (encode) {
           const value = params[key];
           /** @type {string} */
           let keyEncoded = key;
           try {
             keyEncoded = encodeURIComponent(key);
-          } catch (e) {}
+          } catch (e) {
+            /* empty */
+          }
           const valueStr = encode(value);
           let valueEncoded = encodeURIComponent(valueStr);
           try {
             valueEncoded = encodeURIComponent(valueStr);
-          } catch (e) {}
+          } catch (e) {
+            /* empty */
+          }
           queryStr += `&${keyEncoded}=${valueEncoded}`;
         }
       }
       if (queryStr) {
-        queryStr = '?' + queryStr.slice(1);
+        queryStr = `?${queryStr.slice(1)}`;
       }
       return queryStr;
-    },
+    };
 
     /**
-     * Generates URL from state name and params.
-     * @param {Name} name
-     * @param {StateMap[Name]['params']} params
-     * @returns {string} `URL`
+     * Create url from state name and params.
+     * @type {(name: Name, params: StateMap[Name]['params']) => string}
      */
-    generateUrl: (name, params) => {
-      const { getPathFunction, encodeQuery } = gouter;
-      const pathFunction = getPathFunction(name);
-      const path = pathFunction(params);
+    this.encodeUrl = (name, params) => {
+      const { encodePath, encodeQuery } = this;
+      const pathStr = encodePath(name, params);
       const queryStr = encodeQuery(name, params);
-      const url = path + queryStr;
+      const url = pathStr + queryStr;
       return url;
-    },
+    };
 
     /**
-     * Creates new `Gouter.State` from partial state
-     * @template {Name} N
-     * @param {N} name
-     * @param {StateMap[N]['params']} params
-     * @param {State[]} [stack]
-     * @returns {State & {name: N}}
+     * Create new `State` from route name, params and optional stack. If `onInit` hook set for
+     * route name then it's called to modify this state.
+     * @type {<N extends Name>(name: N, params: StateMap[N]['params'], stack?: State[])
+     * => State & {name: N}}
      */
-    newState: (name, params, stack) => {
-      const { emptyStack, generateUrl, hookMap, defaultHooks } = gouter;
-      const fullParams = /** @type {StateMap[Name]['params']} */ (params);
-      const fullStack = stack || emptyStack;
-      const url = generateUrl(name, fullParams);
-      const [key] = url.split('?');
-      /** @type {State & {name: N}} */
-      const state = {
+    this.newState = (name, params, stack) => {
+      const { hookMap, defaultHooks } = this;
+      const state = /** @type {State & {name: typeof name}} */ ({
         name,
-        params: fullParams,
-        stack: fullStack,
-        url,
-        key,
-      };
-      if (!stack) {
-        const { onInit } = hookMap[name] || defaultHooks;
-        if (onInit) {
-          state.stack = onInit(
-            /** @type {State & {name: N} & StateMap[N]} */ (state),
-          );
-        }
+        params,
+        stack,
+      });
+      const { onInit } = hookMap[name] || defaultHooks;
+      if (onInit) {
+        const stateAfterInit = /** @type {State & {name: typeof name}} */ (
+          onInit(/** @type {any} */ (state))
+        );
+        return stateAfterInit;
       }
       return state;
-    },
+    };
 
     /**
-     * Generates query object from query string and route name.
-     * @param {string} queryStr
-     * @param {Name} name
-     * @returns {State['params']} query object
+     * Generates optional route parameters from url query string and route name.
+     * @type {<N extends Name>(name: N, queryStr: string) => StateMap[N]['params']}
      */
-    decodeQuery: (queryStr, name) => {
-      const { routeMap } = gouter;
-      const params = /** @type {State['params']} */ ({});
-      const route = routeMap[name];
+    this.decodeQuery = (name, queryStr) => {
+      const { routeMap } = this;
+      const params = /** @type {StateMap[typeof name]['params']} */ ({});
+      const paramsDef = routeMap[name];
       for (const keyValueStr of queryStr.split('&')) {
         const splitIndex = keyValueStr.indexOf('=');
         const keyEncoded = keyValueStr.slice(0, splitIndex);
         let key = keyEncoded;
         try {
           key = decodeURIComponent(keyEncoded);
-        } catch (e) {}
-        const routeValue = route[key];
-        const decode =
-          typeof routeValue === 'object' &&
-          !Array.isArray(routeValue) &&
-          routeValue.decode;
+        } catch (e) {
+          /* empty */
+        }
+        const segment = paramsDef[key];
+        const decode = typeof segment === 'object' && !Array.isArray(segment) && segment.decode;
         if (decode) {
           const valueStr = keyValueStr.slice(splitIndex + 1);
           let valueEncoded = valueStr;
           try {
             valueEncoded = decodeURIComponent(valueStr);
-          } catch (e) {}
+          } catch (e) {
+            /* empty */
+          }
           const value = decode(valueEncoded);
-          params[/** @type {keyof State['params']} */ (key)] = value;
+          params[/** @type {keyof StateMap[typeof name]['params']} */ (key)] = value;
         }
       }
       return params;
-    },
+    };
 
     /**
-     * Generates router state from url.
-     * If route not matched then notFoundState returned.
-     * @param {string} url
-     * @returns {State} state
+     * Generates router state from url. If route not found then notFoundState returned.
+     * @type {(url: string) => State}
      */
-    newStateFromUrl: (url) => {
-      const { decodePath, routeMap, newState, decodeQuery, notFoundState } =
-        gouter;
+    this.decodeUrl = (url) => {
+      const { decodePath, routeMap, newState, decodeQuery, notFoundState } = this;
       const [urlWithoutHash] = url.split('#');
       const [pathname, search = ''] = urlWithoutHash.split('?');
       for (const name in routeMap) {
-        const params = decodePath(pathname, name);
+        const params = decodePath(name, pathname);
         if (params) {
           if (search) {
-            const query = decodeQuery(search, name);
+            const query = decodeQuery(name, search);
             for (const key in query) {
               params[key] = query[key];
             }
           }
           const state = newState(name, params);
-          state.url = url;
           return state;
         }
       }
       const state = { ...notFoundState, url, key: pathname };
       return state;
-    },
+    };
 
     /**
-     * Creates flat array of every state inside current state at any depth
-     * @param {State} state
-     * @returns {State[]}
+     * Recursively creates flat list of every child state inside current state.
+     * @type {(state: State) => State[]}
      */
-    stateToStack: (state) => {
-      const { stateToStack } = gouter;
+    this.stateToStack = (state) => {
+      const { stateToStack } = this;
       const stateList = [state];
-      const { stack } = state;
+      const stack = state.stack || [];
       for (const subState of stack) {
         stateList[stateList.length] = subState;
-        if (subState.stack.length > 0) {
+        if (subState.stack && subState.stack.length > 0) {
           const subStateStack = stateToStack(subState);
           for (const subStateStackState of subStateStack) {
             stateList[stateList.length] = subStateStackState;
@@ -445,130 +455,38 @@ const newGouter = (routes) => {
         }
       }
       return stateList;
-    },
-
-    /** @type {(fromState: State, toState: State, parents: State[]) => Promise<void | function>[]} */
-    getBeforePromises: (fromState, toState, parents) => {
-      const { hookMap, defaultHooks, getBeforePromises } = gouter;
-      /** @type {Promise<void | function>[]} */
-      const promises = [];
-      if (fromState !== toState) {
-        const fromStack = fromState.stack;
-        const toStack = toState.stack;
-        if (fromStack !== toStack) {
-          for (const isBeforeExit of [true, false]) {
-            const stackA = isBeforeExit ? fromStack : toStack;
-            const stackB = isBeforeExit ? toStack : fromStack;
-            for (const stateA of stackA) {
-              const { key } = stateA;
-              /** @type {State | null} */
-              let stateFound = null;
-              for (const stateB of stackB) {
-                if (stateB.key === key) {
-                  stateFound = stateB;
-                  break;
-                }
-              }
-              if (stateFound) {
-                const newPromises = getBeforePromises(stateA, stateFound, [
-                  ...parents,
-                  fromState,
-                ]);
-                for (const newPromise of newPromises) {
-                  promises[promises.length] = newPromise;
-                }
-              } else {
-                /** @type {State[]} */
-                const list = [stateA];
-                if (isBeforeExit) {
-                  while (list.length) {
-                    const state = /** @type {State} */ (list.pop());
-                    const { beforeExit } = hookMap[state.name] || defaultHooks;
-                    if (beforeExit) {
-                      promises[promises.length] = beforeExit(state, parents);
-                    }
-                  }
-                } else {
-                  while (list.length) {
-                    const state = /** @type {State} */ (list.pop());
-                    const { beforeEnter } = hookMap[state.name] || defaultHooks;
-                    if (beforeEnter) {
-                      promises[promises.length] = beforeEnter(state, parents);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      return promises;
-    },
+    };
 
     /**
-     * Attempts to change current stack
-     * * If gouter.cancelTransition() called then transition aborted
-     * * Each route with beforeExit/beforeEnter hooks can return a callback
-     * * If a callback returned then and no cancelTransition called then they are executed
-     * * Executed only after all beforeEnter and beforeExit promises are resolved.
-     *
-     * @param {State} toState
-     * @returns {Promise<State>}
+     * Get current router state
+     * @type {() => State}
      */
-    setState: (toState) => {
-      const { state: fromState, getBeforePromises } = gouter;
-      gouter.hasTransition = false;
-
-      const beforePromises = getBeforePromises(fromState, toState, []);
-
-      const transitionId = gouter.transitionId + 1;
-      gouter.transitionId = transitionId;
-      gouter.hasTransition = true;
-
-      const areStatesEqual = false; //beforePromises.length === 0;
-      console.error('check states equality');
-
-      if (!areStatesEqual) {
-        /** @type {(callbacks: (void | Function)[]) => State} */
-        const onFinish = (callbacks) => {
-          if (transitionId === gouter.transitionId) {
-            for (const callback of callbacks) {
-              if (callback) {
-                callback();
-              }
-            }
-            gouter.hasTransition = false;
-            gouter.state = toState;
-            for (const listener of gouter.listeners) {
-              listener(toState);
-            }
-            return toState;
-          } else {
-            return fromState;
-          }
-        };
-
-        return Promise.all(beforePromises).then(onFinish, (reason) => {
-          gouter.hasTransition = false;
-          gouter.hookCatch(reason);
-          return fromState;
-        });
-      } else {
-        gouter.hasTransition = false;
-        return Promise.resolve(fromState);
-      }
-    },
+    this.getState = () => {
+      const { state } = this;
+      return state;
+    };
 
     /**
-     * Get list of focused states from top to root
-     * @param {State} state
-     * @returns {State[]}
+     * Set current router state and call listeners with it if any.
+     * @type {(state: State) => void}
      */
-    getFocusedStates: (state) => {
+    this.setState = (state) => {
+      const { listeners } = this;
+      this.state = state;
+      for (const listener of listeners) {
+        listener(state);
+      }
+    };
+
+    /**
+     * Get list of focused states from top to root.
+     * @type {(state: State) => State[]}
+     */
+    this.getFocusedStates = (state) => {
       const focusedStates = [state];
       let lastState = state;
-      while (true) {
-        const { stack } = lastState;
+      for (;;) {
+        const stack = lastState.stack || [];
         lastState = stack[stack.length - 1];
         if (lastState && focusedStates.indexOf(lastState) === -1) {
           focusedStates[focusedStates.length] = lastState;
@@ -576,168 +494,202 @@ const newGouter = (routes) => {
           return focusedStates.reverse();
         }
       }
-    },
+    };
 
     /**
-     * Go on through the chain of actions
-     * @param {...(State | null)} statesOrNulls
+     * Go through the chain of actions where `State` is used for `goTo` and `null` is used
+     * for `goBack`.
+     * @type {(...statesOrNulls: (State | null)[]) => void}
      */
-    goThrough: (...statesOrNulls) => {
-      const {
-        history,
-        state: currentState,
-        hookMap,
-        setState,
-        defaultHooks,
-        getFocusedStates,
-      } = gouter;
+    this.go = (...statesOrNulls) => {
+      const { state: currentState, hookMap, setState, defaultHooks, getFocusedStates } = this;
       let nextState = currentState;
       for (const state of statesOrNulls) {
-        if (history) {
-          if (state) {
-            history.push(state.url);
-          } else {
-            history.back();
-          }
-        } else {
-          const focusedStates = getFocusedStates(nextState);
-          for (let index = 0; index < focusedStates.length; index++) {
-            const focusedState = focusedStates[index];
-            const { shouldGo, onGo } =
-              hookMap[focusedState.name] || defaultHooks;
-            if (shouldGo) {
-              const parents =
-                /** @type {[StateMap[Name] & State, ...State[]]} */ (
-                  focusedStates.slice(index)
-                );
-              const should = shouldGo(state, parents);
-              if (should && onGo) {
-                const subState = onGo(state, parents);
-                if (subState) {
-                  let childState = subState;
-                  for (const parent of parents.slice(1)) {
-                    childState = {
-                      ...parent,
-                      stack: [...parent.stack.slice(0, -1), childState],
-                    };
-                  }
-                  nextState = childState;
-                  break;
+        const focusedStates = getFocusedStates(nextState);
+        for (let index = 0; index < focusedStates.length; index += 1) {
+          const focusedState = focusedStates[index];
+          const { shouldGoTo, onGoTo, shouldGoBack, onGoBack } =
+            hookMap[focusedState.name] || defaultHooks;
+          const shouldGo = state ? shouldGoTo : shouldGoBack;
+          const onGo = state ? onGoTo : onGoBack;
+          if (shouldGo && onGo) {
+            const parents = /** @type {[StateMap[Name] & State, ...State[]]} */ (
+              focusedStates.slice(index)
+            );
+            const [firstParent] = parents;
+            const passedState =
+              state ||
+              (firstParent &&
+                firstParent.stack &&
+                firstParent.stack[firstParent.stack.length - 1]) ||
+              currentState;
+            const should = shouldGo(passedState, ...parents);
+            if (should) {
+              const subState = onGo(passedState, ...parents);
+              if (subState) {
+                let childState = subState;
+                for (const parent of parents.slice(1)) {
+                  childState = {
+                    ...parent,
+                    stack: [...(parent.stack ? parent.stack.slice(0, -1) : []), childState],
+                  };
                 }
+                nextState = childState;
+                break;
               }
             }
           }
         }
       }
-      if (!history) {
-        return setState(nextState);
-      }
-    },
+      setState(nextState);
+    };
 
     /**
-     * Go to partial state
-     * @template {Name} N
-     * @param {N} name
-     * @param {StateMap[N]['params']} params
-     * @param {State[]} [stack]
-     * @returns {Promise<State>}
+     * Go to state using `shouldGoTo` and `onGoTo` hooks.
+     * @type {<N extends Name>(name: N, params: StateMap[N]['params'], stack?: State[]) => void}
      */
-    goTo: (name, params, stack) => {
-      const { newState, goThrough } = gouter;
+    this.goTo = (name, params, stack) => {
+      const { newState, go } = this;
       const state = newState(name, params, stack);
-      return goThrough(state);
-    },
+      go(state);
+    };
 
     /**
-     * Go back to previous state
-     * @returns {Promise<State>}
+     * Go back using `shouldGoBack` and `onGoBack` hooks.
+     * @type {() => void}
      */
-    goBack: () => {
-      const { goThrough } = gouter;
-      return goThrough(null);
-    },
+    this.goBack = () => {
+      const { go } = this;
+      go(null);
+    };
 
     /**
-     * List of listeners
-     * @type {Listener[]}
+     * Get state parents to use for `replace`.
+     * @type {(state: State, parents?: State[]) => State[]}
      */
-    listeners: [],
+    this.getStateParents = (state, parents = [this.state]) => {
+      const parent = parents[parents.length - 1];
+      if (parent) {
+        if (parent === state) {
+          return parents.slice(0, -1);
+        }
+        for (const parentState of parent.stack || []) {
+          const nextParents = this.getStateParents(state, [...parents, parentState]);
+          if (nextParents.length > 0) {
+            return nextParents;
+          }
+        }
+      }
+      return [];
+    };
 
     /**
-     * Add new listener of router state changes to listeners.
-     * Returns unlisten callback.
-     * @param {Listener} listener
-     * @returns {() => void} unlisten callback
+     * Finds `searchState` and replaces it by `replaceState`. Return `true` if state was replaced,
+     * `false` otherwise. It compares states using strict equality (===).
+     * @type {(searchState: State, replaceState: State) => boolean}
      */
-    listen: (listener) => {
-      const { listeners } = gouter;
-      gouter.listeners = [...listeners, listener];
+    this.replace = (searchState, replaceState) => {
+      const { state, setState, getStateParents } = this;
+      if (searchState === state) {
+        setState(replaceState);
+        return true;
+      }
+      const parents = getStateParents(searchState);
+      if (parents.length > 0) {
+        const nextState = { ...state };
+        let subState = nextState;
+        for (const parent of [...parents.slice(1), searchState]) {
+          if (!subState.stack) {
+            break;
+          }
+          const index = subState.stack.indexOf(parent);
+          subState.stack = [...subState.stack];
+          const nextSubState = { ...parent };
+          subState.stack[index] = parent === searchState ? replaceState : nextSubState;
+          subState = nextSubState;
+        }
+        setState(nextState);
+        return true;
+      }
+      return false;
+    };
+
+    /**
+     * Adds new listener of router state changes to listeners and returns `unlisten` callback.
+     * @type {(listener: Listener) => () => void}
+     */
+    this.listen = (listener) => {
+      const { listeners } = this;
+      this.listeners = [...listeners, listener];
       const unlisten = () => {
-        gouter.listeners = gouter.listeners.filter(
-          (prevListener) => prevListener !== listener,
-        );
+        this.listeners = this.listeners.filter((prevListener) => prevListener !== listener);
       };
       return unlisten;
-    },
+    };
 
     /**
-     * Updates browser/memory history and url from state
-     * @param {State} state
-     * @returns {void}
+     * Get transition hooks.
+     * @type {() => HookMap}
      */
-    updateHistory: (state) => {
-      const { notFoundState, history } = gouter;
+    this.getHooks = () => {
+      const { hookMap } = this;
+      return hookMap;
+    };
+
+    /**
+     * Set transition hooks.
+     * @type {(hooks: HookMap) => void}
+     */
+    this.setHooks = (hooks) => {
+      this.hookMap = hooks;
+    };
+
+    /**
+     * Updates browser/memory history and url from state.
+     * @web
+     * @type {(state: State) => void}
+     */
+    this.updateHistory = (state) => {
+      const { notFoundState, history } = this;
       if (history && state.name !== notFoundState.name) {
-        const stateUrl = state.url;
+        const stateUrl = this.encodeUrl(state.name, state.params);
         const { location } = history;
         const browserUrl = `${location.pathname}${location.search}`;
         if (browserUrl !== stateUrl) {
           history.push(stateUrl);
         }
       }
-    },
+    };
 
     /**
-     * Go to new router state from history location:
+     * Goes to new router state from history location:
      * * history location is transformed into url
      * * url is transformed into new router state or not-found state
      * * router goes to router state if it is different from previous one
+     * @web
      * @type {import('history').Listener}
      */
-    goToLocation: ({ location, action }) => {
-      const { state: fromState, newStateFromUrl, setState } = gouter;
+    this.goToLocation = ({ location }) => {
+      const { decodeUrl, go } = this;
       const url = location.pathname + location.search;
-      const toState = newStateFromUrl(url);
-      if (toState && (!fromState || fromState.url !== toState.url)) {
-        setState(toState);
-      }
-    },
+      const toState = decodeUrl(url);
+      go(toState);
+    };
 
     /**
-     * Set history and enable listeners for history and router events
-     * @param {import('history').History} history
+     * Enables `history` package for web browser support.
+     * @web
+     * @type {(history: import('history').History) => void}
      */
-    withHistory: (history) => {
-      const { listen, updateHistory, goToLocation } = gouter;
-      gouter.history = history;
+    this.enableHistory = (history) => {
+      const { listen, updateHistory, goToLocation } = this;
+      this.history = history;
       listen(updateHistory);
       history.listen(goToLocation);
       const action = /** @type {import('history').Action} */ ('PUSH');
       goToLocation({ location: history.location, action });
-      return gouter;
-    },
+    };
+  }
+}
 
-    /**
-     * Set hooks
-     * @param {HookMap} hooks
-     */
-    withHooks: (hooks) => {
-      gouter.hookMap = hooks;
-      return gouter;
-    },
-  };
-
-  return gouter;
-};
-
-export default newGouter;
+export default Gouter;

@@ -1,4 +1,4 @@
-/** @type {Parameters<import('prettier')['format']>[1]} */
+/** @type {import('prettier').Config} */
 module.exports = {
   printWidth: 100,
   semi: true,

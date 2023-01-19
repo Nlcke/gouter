@@ -1,25 +1,45 @@
 {
   "name": "gouter",
-  "version": "1.0.0",
-  "description": "universal fully featured promise-based router",
+  "version": "0.5.0",
+  "description": "universal router",
   "main": "index.js",
+  "type": "module",
   "dependencies": {
     "path-to-regexp": "6.2.0"
   },
   "devDependencies": {
     "@react-native-community/eslint-config": "^3.0.0",
-    "eslint": "^7.30.0",
+    "eslint": "^8.2.0",
+    "eslint-config-airbnb": "^19.0.4",
+    "eslint-config-prettier": "^8.6.0",
+    "eslint-plugin-import": "^2.25.3",
+    "eslint-plugin-jsx-a11y": "^6.5.1",
+    "eslint-plugin-react": "^7.28.0",
+    "eslint-plugin-react-hooks": "^4.3.0",
+    "prettier": "^2.8.2",
+    "typedoc": "^0.23.24"
+  },
+  "peerDependencies": {
     "history": "^5.3.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "files": [
+    "index.js",
+    "native/index.js",
+    "hooks/index.js"
+  ],
   "keywords": [
     "web",
-    "app",
-    "server",
+    "react",
+    "react-native",
     "router"
   ],
   "author": "N1cke",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nlcke/gouter.git"
+  }
 }

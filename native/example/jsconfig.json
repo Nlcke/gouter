@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "experimentalDecorators": true,
+    "checkJs": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "jsx": "react-native",
+    "strict": true,
+    "exactOptionalPropertyTypes": false,
+    "noImplicitReturns": true,
+    "pretty": true,
+    "baseUrl": "./src"
+  }
+}

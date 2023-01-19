@@ -1,0 +1,9 @@
+{
+  "name": "gouter-native",
+  "description": "react-native component for gouter",
+  "main": "index.js",
+  "dependencies": {
+    "react": "^16.8.6",
+    "react-native": "^0.60.6"
+  }
+}
