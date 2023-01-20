@@ -241,3 +241,10 @@ const AppWrapper = () => {
 
 export default AppWrapper;
 ```
+### Part 3: Navigate
+
+Use exported methods from your router anywhere:
+- `goTo` to navigate to state 
+- `goBack` to navigate back
+- `replace` to replace target state for parameters and/or stack updates 
+- `go` for advanced use cases like navigate back twice and then go to some state etc.
