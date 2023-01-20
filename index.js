@@ -100,38 +100,28 @@ class Gouter {
     /**
      * `routeMap` stores routes passed to Gouter. They are used to decode and encode states and
      * urls, and help with type suggestions for route parameters.
+     * @private
      * @type {T}
      */
     this.routeMap = routes;
 
     /**
-     * `initialState` is initial state passed to current `state` and `notFoundState` at
-     * Gouter instantiation.
-     * @type {State}
-     */
-    const initialState = {
-      name: '',
-      params: /** @type {any} */ ({}),
-      url: '',
-      key: '',
-      stack: [],
-    };
-
-    /**
-     * `state` stores current router state.
-     * @type {State}
-     */
-    this.state = initialState;
-
-    /**
      * `notFoundState` stores router state used when `decodeUrl` fails to find appropriate route.
      * @type {State}
      */
-    this.notFoundState = initialState;
+    this.notFoundState = { name: '', params: /** @type {any} */ ({}) };
+
+    /**
+     * `state` stores current router state. Initially it set to `notFoundState`
+     * @private
+     * @type {State}
+     */
+    this.state = this.notFoundState;
 
     /**
      * `hookMap` stores current TransitionHooks customized for each route where you need it.
      * You may set it using `setHooks` and get it using `getHooks`.
+     * @private
      * @type {HookMap}
      */
     this.hookMap = {};
@@ -145,6 +135,7 @@ class Gouter {
 
     /**
      * `history` stores `history` instance used for web navigation.
+     * @private
      * @web
      * @type {import('history').History | null}
      */
@@ -160,6 +151,7 @@ class Gouter {
     /**
      * `regexpFunctionCache` stores Regexp function cache used for `getRegexpFunction` to decode
      * urls into states.
+     * @private
      * @type {Object<string, RegExp['exec']>}
      */
     this.regexpFunctionCache = {};
@@ -167,18 +159,21 @@ class Gouter {
     /**
      * `pathFunctionCache` stores PathFunction cache used to encode states into urls' paths at
      * `encodePath`.
+     * @private
      * @type {Object<string, import('path-to-regexp').PathFunction<object>>}
      */
     this.pathFunctionCache = {};
 
     /**
      * `pathCacheByName` stores path cache for each route name to speed up `encodePath`.
+     * @private
      * @type {Record<string, WeakMap<object, string>>}
      */
     this.pathCacheByName = {};
 
     /**
      * `listeners` stores list of listeners called when current state changes.
+     * @private
      * @type {Listener[]}
      */
     this.listeners = [];
@@ -186,6 +181,7 @@ class Gouter {
     /**
      * Generates path-to-regexp tokens from parameters definition.
      * Generated tokens are used for `getRegexpFunction` and `encodePath`.
+     * @private
      * @type {(paramsDef: ParamsDef, options: import('path-to-regexp').ParseOptions)
      * => (string | import('path-to-regexp').Key)[]}
      */
@@ -213,63 +209,6 @@ class Gouter {
         }
       }
       return tokens;
-    };
-
-    /**
-     * Get regexp function from route name. It is used for `decodePath`.
-     * @type {(name: Name) => RegExp['exec']}
-     */
-    this.getRegexpFunction = (name) => {
-      const { regexpFunctionCache, routeMap, pathToRegexpOptions, getTokensFromParamsDef } = this;
-      const regexpFunction = regexpFunctionCache[name];
-      if (regexpFunction) {
-        return regexpFunction;
-      }
-      const paramsDef = routeMap[name];
-      const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
-      const regexp =
-        tokens.length > 0 ? tokensToRegexp(tokens, undefined, pathToRegexpOptions) : /^$/;
-      const newRegexpFunction = regexp.exec.bind(regexp);
-      regexpFunctionCache[name] = newRegexpFunction;
-      return newRegexpFunction;
-    };
-
-    /**
-     * Get required state params from path or null if path is not matched.
-     * @type {<N extends Name>(name: N, path: string) => StateMap[N]['params'] | null}
-     */
-    this.decodePath = (name, path) => {
-      const { getRegexpFunction, routeMap } = this;
-      const regexpFunction = getRegexpFunction(name);
-      const match = regexpFunction(path);
-      if (match) {
-        const params = /** @type {StateMap[typeof name]['params']} */ ({});
-        const paramsDef = routeMap[name];
-        let index = 0;
-        for (const key in paramsDef) {
-          const paramsKey = /** @type {keyof StateMap[typeof name]['params']} */ (
-            /** @type {unknown} */ (key)
-          );
-          const segment = paramsDef[key];
-          if (Array.isArray(segment)) {
-            index += 1;
-            const result = match[index];
-            const modifier = segment[3];
-            if (modifier === '+' || modifier === '*') {
-              const prefix = segment[0] || '';
-              const suffix = segment[2] || '';
-              const divider = prefix + suffix;
-              params[paramsKey] = /** @type {params[paramsKey]} */ (
-                divider ? result.split(divider) : [result]
-              );
-            } else {
-              params[paramsKey] = /** @type {params[paramsKey]} */ (result);
-            }
-          }
-        }
-        return params;
-      }
-      return null;
     };
 
     /**
@@ -356,26 +295,61 @@ class Gouter {
     };
 
     /**
-     * Create new `State` from route name, params and optional stack. If `onInit` hook set for
-     * route name then it's called to modify this state.
-     * @type {<N extends Name>(name: N, params: StateMap[N]['params'], stack?: State[])
-     * => State & {name: N}}
+     * Get regexp function from route name. It is used for `decodePath`.
+     * @private
+     * @type {(name: Name) => RegExp['exec']}
      */
-    this.newState = (name, params, stack) => {
-      const { hookMap, defaultHooks } = this;
-      const state = /** @type {State & {name: typeof name}} */ ({
-        name,
-        params,
-        stack,
-      });
-      const { onInit } = hookMap[name] || defaultHooks;
-      if (onInit) {
-        const stateAfterInit = /** @type {State & {name: typeof name}} */ (
-          onInit(/** @type {any} */ (state))
-        );
-        return stateAfterInit;
+    this.getRegexpFunction = (name) => {
+      const { regexpFunctionCache, routeMap, pathToRegexpOptions, getTokensFromParamsDef } = this;
+      const regexpFunction = regexpFunctionCache[name];
+      if (regexpFunction) {
+        return regexpFunction;
       }
-      return state;
+      const paramsDef = routeMap[name];
+      const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
+      const regexp =
+        tokens.length > 0 ? tokensToRegexp(tokens, undefined, pathToRegexpOptions) : /^$/;
+      const newRegexpFunction = regexp.exec.bind(regexp);
+      regexpFunctionCache[name] = newRegexpFunction;
+      return newRegexpFunction;
+    };
+
+    /**
+     * Get required state params from path or null if path is not matched.
+     * @type {<N extends Name>(name: N, path: string) => StateMap[N]['params'] | null}
+     */
+    this.decodePath = (name, path) => {
+      const { getRegexpFunction, routeMap } = this;
+      const regexpFunction = getRegexpFunction(name);
+      const match = regexpFunction(path);
+      if (match) {
+        const params = /** @type {StateMap[typeof name]['params']} */ ({});
+        const paramsDef = routeMap[name];
+        let index = 0;
+        for (const key in paramsDef) {
+          const paramsKey = /** @type {keyof StateMap[typeof name]['params']} */ (
+            /** @type {unknown} */ (key)
+          );
+          const segment = paramsDef[key];
+          if (Array.isArray(segment)) {
+            index += 1;
+            const result = match[index];
+            const modifier = segment[3];
+            if (modifier === '+' || modifier === '*') {
+              const prefix = segment[0] || '';
+              const suffix = segment[2] || '';
+              const divider = prefix + suffix;
+              params[paramsKey] = /** @type {params[paramsKey]} */ (
+                divider ? result.split(divider) : [result]
+              );
+            } else {
+              params[paramsKey] = /** @type {params[paramsKey]} */ (result);
+            }
+          }
+        }
+        return params;
+      }
+      return null;
     };
 
     /**
@@ -439,6 +413,7 @@ class Gouter {
 
     /**
      * Recursively creates flat list of every child state inside current state.
+     * @private
      * @type {(state: State) => State[]}
      */
     this.stateToStack = (state) => {
@@ -455,6 +430,30 @@ class Gouter {
         }
       }
       return stateList;
+    };
+
+    /**
+     * Create new `State` from route name, params and optional stack. If `onInit` hook set for
+     * route name then it's called to modify this state.
+     * @private
+     * @type {<N extends Name>(name: N, params: StateMap[N]['params'], stack?: State[])
+     * => State & {name: N}}
+     */
+    this.newState = (name, params, stack) => {
+      const { hookMap, defaultHooks } = this;
+      const state = /** @type {State & {name: typeof name}} */ ({
+        name,
+        params,
+        stack,
+      });
+      const { onInit } = hookMap[name] || defaultHooks;
+      if (onInit) {
+        const stateAfterInit = /** @type {State & {name: typeof name}} */ (
+          onInit(/** @type {any} */ (state))
+        );
+        return stateAfterInit;
+      }
+      return state;
     };
 
     /**
@@ -480,6 +479,7 @@ class Gouter {
 
     /**
      * Get list of focused states from top to root.
+     * @private
      * @type {(state: State) => State[]}
      */
     this.getFocusedStates = (state) => {
@@ -646,6 +646,7 @@ class Gouter {
 
     /**
      * Updates browser/memory history and url from state.
+     * @private
      * @web
      * @type {(state: State) => void}
      */
@@ -666,6 +667,7 @@ class Gouter {
      * * history location is transformed into url
      * * url is transformed into new router state or not-found state
      * * router goes to router state if it is different from previous one
+     * @private
      * @web
      * @type {import('history').Listener}
      */
