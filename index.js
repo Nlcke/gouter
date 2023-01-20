@@ -564,17 +564,17 @@ class Gouter {
     };
 
     /**
-     * Get state parents to use for `replace`.
+     * Find state parents to use in `replace`.
      * @type {(state: State, parents?: State[]) => State[]}
      */
-    this.getStateParents = (state, parents = [this.state]) => {
+    this.findStateParents = (state, parents = [this.state]) => {
       const parent = parents[parents.length - 1];
       if (parent) {
         if (parent === state) {
           return parents.slice(0, -1);
         }
         for (const parentState of parent.stack || []) {
-          const nextParents = this.getStateParents(state, [...parents, parentState]);
+          const nextParents = this.findStateParents(state, [...parents, parentState]);
           if (nextParents.length > 0) {
             return nextParents;
           }
@@ -589,12 +589,12 @@ class Gouter {
      * @type {(searchState: State, replaceState: State) => boolean}
      */
     this.replace = (searchState, replaceState) => {
-      const { state, setState, getStateParents } = this;
+      const { state, setState, findStateParents } = this;
       if (searchState === state) {
         setState(replaceState);
         return true;
       }
-      const parents = getStateParents(searchState);
+      const parents = findStateParents(searchState);
       if (parents.length > 0) {
         const nextState = { ...state };
         let subState = nextState;
