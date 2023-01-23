@@ -7,15 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import GouterNative from 'gouter/native';
-import {
-  getState,
-  goBack,
-  goTo,
-  listen,
-  newState,
-  replace,
-  encodePath,
-} from './router';
+import {getState, goBack, goTo, listen, replace, encodePath} from './router';
 
 const styles = StyleSheet.create({
   container: {
@@ -68,12 +60,12 @@ const Login = ({state}) => {
       <Button
         title={'change name'}
         onPress={() =>
-          replace(
-            state,
-            newState('Login', {
+          replace(state, {
+            name: 'Login',
+            params: {
               name: state.params.name === 'user' ? 'guest' : 'user',
-            }),
-          )
+            },
+          })
         }
       />
     </View>

@@ -48,7 +48,7 @@ const getSwipeBackPanHandlers = (onSwipeBack) => {
  * GouterNative
  * @type {React.FC<{
  * state: import('..').default<any>['state']
- * encodePath: import('..').default<any>['encodePath']
+ * encodePath: (state: {name: any, params: Record<string, any>}) => string
  * screenMap: Partial<Record<string, React.ComponentType<any>>>
  * animationDuration: number
  * defaultAnimation?: Animation
@@ -81,10 +81,8 @@ const GouterNative = memo(
 
     const prevStackRef = useRef(nextStack || emptyStack);
     const stackDiff = prevStackRef.current.filter((prevState) => {
-      const prevPath = encodePath(prevState.name, prevState.params);
-      return !nextStack.find(
-        (nextState) => prevPath === encodePath(nextState.name, nextState.params),
-      );
+      const prevPath = encodePath(prevState);
+      return !nextStack.find((nextState) => prevPath === encodePath(nextState));
     });
     prevStackRef.current = nextStack;
 
@@ -98,9 +96,9 @@ const GouterNative = memo(
 
     /** @type {(subState: typeof state) => void} */
     const onSubStateUnmount = useCallback((subState) => {
-      const subPath = encodePath(subState.name, subState.params);
+      const subPath = encodePath(subState);
       staleStackRef.current = staleStackRef.current.filter(
-        (staleState) => subPath !== encodePath(staleState.name, staleState.params),
+        (staleState) => subPath !== encodePath(staleState),
       );
       updateCounter((counter) => (counter + 1) % 1e9);
     }, []);
@@ -159,7 +157,7 @@ const GouterNative = memo(
       () =>
         stack.map((subState, index) =>
           createElement(GouterNative, {
-            key: encodePath(subState.name, subState.params),
+            key: encodePath(subState),
             state: subState,
             encodePath,
             defaultAnimation,
@@ -182,7 +180,7 @@ const GouterNative = memo(
       ],
     );
 
-    const key = encodePath(state.name, state.params);
+    const key = encodePath(state);
 
     return createElement(Animated.View, {
       key,

@@ -1,13 +1,5 @@
 import Gouter from 'gouter';
-import {
-  shouldGoToForNames,
-  onGoToInStack,
-  shouldGoBackInStack,
-  onGoBackInStack,
-  onGoToInTabs,
-  shouldGoBackInTabs,
-  onGoBackInTabs,
-} from 'gouter/hooks';
+import {newStackNavigator, newTabNavigator} from 'gouter/navigators';
 
 const gouter = new Gouter({
   App: {
@@ -37,8 +29,8 @@ const gouter = new Gouter({
 
 const {
   setState,
-  newState,
-  setHooks,
+  setBuilders,
+  setNavigators,
   goTo,
   goBack,
   getState,
@@ -47,38 +39,29 @@ const {
   encodePath,
 } = gouter;
 
-setHooks({
-  App: {
-    onInit: state => ({...state, stack: [newState('Login', {})]}),
-    shouldGoTo: shouldGoToForNames(gouter, [
-      'Login',
-      'LoginConfirmation',
-      'Tabs',
-    ]),
-    onGoTo: onGoToInStack(gouter),
-    shouldGoBack: shouldGoBackInStack(gouter),
-    onGoBack: onGoBackInStack(gouter),
-  },
-  Login: {
-    onInit: state => ({name: 'Login', params: {name: 'user', ...state.params}}),
-  },
-  Tabs: {
-    onInit: state => ({
-      ...state,
-      stack: [
-        newState('Home', {}),
-        newState('NewPost', {}),
-        newState('Profile', {}),
-      ],
-    }),
-    shouldGoTo: shouldGoToForNames(gouter, ['Home', 'NewPost', 'Profile']),
-    onGoTo: onGoToInTabs(gouter),
-    shouldGoBack: shouldGoBackInTabs(gouter, 'Profile'),
-    onGoBack: onGoBackInTabs(gouter, 'Profile'),
-  },
+setBuilders({
+  App: state => ({...state, stack: [{name: 'Login', params: {}}]}),
+  Login: state => ({name: 'Login', params: {name: 'user', ...state.params}}),
+  Tabs: state => ({
+    ...state,
+    stack: [
+      {name: 'Home', params: {}},
+      {name: 'NewPost', params: {}},
+      {name: 'Profile', params: {}},
+    ],
+  }),
 });
 
-setState(newState('App', {}));
+setNavigators({
+  App: newStackNavigator(gouter, {
+    names: ['Login', 'LoginConfirmation', 'Tabs'],
+  }),
+  Tabs: newTabNavigator(gouter, {
+    names: ['Home', 'NewPost', 'Profile'],
+  }),
+});
+
+setState({name: 'App', params: {}});
 
 /**
  * @typedef {{[Name in keyof gouter['routeMap']]: React.FC<
@@ -86,4 +69,4 @@ setState(newState('App', {}));
  * >}} ScreenMap
  */
 
-export {goTo, goBack, replace, getState, listen, newState, encodePath};
+export {goTo, goBack, replace, getState, listen, encodePath};
