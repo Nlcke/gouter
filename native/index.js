@@ -80,28 +80,69 @@ const GouterNative = memo(
     const nextStack = state.stack || emptyStack;
 
     const prevStackRef = useRef(nextStack || emptyStack);
-    const stackDiff = prevStackRef.current.filter((prevState) => {
-      const prevPath = encodePath(prevState);
-      return !nextStack.find((nextState) => prevPath === encodePath(nextState));
-    });
+    const prevStack = prevStackRef.current;
     prevStackRef.current = nextStack;
 
-    const staleStackRef = useRef(/** @type {typeof nextStack} */ ([]));
-    if (stackDiff.length > 0) {
-      staleStackRef.current = [...staleStackRef.current, ...stackDiff];
-    }
-    const staleStack = staleStackRef.current;
+    const stack = useMemo(() => {
+      if (prevStack === nextStack || prevStack.length === 0) {
+        return nextStack;
+      }
 
-    const stack = useMemo(() => [...nextStack, ...staleStack], [nextStack, staleStack]);
+      const prevPaths = prevStack.map(encodePath);
+      const nextPaths = nextStack.map(encodePath);
+
+      let lastPath = null;
+
+      for (let prevIndex = prevPaths.length - 1; prevIndex >= 0; prevIndex -= 1) {
+        const prevPath = prevPaths[prevIndex];
+        if (nextPaths.indexOf(prevPath) >= 0) {
+          lastPath = prevPath;
+          break;
+        }
+      }
+
+      const joinedPaths = lastPath === null ? [...prevPaths] : [];
+
+      for (let nextIndex = 0; nextIndex < nextPaths.length; nextIndex += 1) {
+        const nextPath = nextPaths[nextIndex];
+        const prevIndex = prevPaths.indexOf(nextPath);
+        if (prevIndex === -1) {
+          joinedPaths[joinedPaths.length] = nextPath;
+        } else {
+          for (let index = 0; index <= prevIndex; index += 1) {
+            const path = prevPaths[index];
+            if (joinedPaths.indexOf(path) === -1 && nextPaths.indexOf(path, nextIndex + 1) === -1) {
+              joinedPaths[joinedPaths.length] = path;
+            }
+          }
+        }
+        if (nextPath === lastPath) {
+          const lastIndex = prevPaths.indexOf(lastPath);
+          for (let index = lastIndex + 1; index < prevPaths.length; index += 1) {
+            const path = prevPaths[index];
+            joinedPaths[joinedPaths.length] = path;
+          }
+        }
+      }
+
+      const joinedStack = joinedPaths.map(
+        (path) => nextStack[nextPaths.indexOf(path)] || prevStack[prevPaths.indexOf(path)],
+      );
+
+      return joinedStack;
+    }, [nextStack, prevStack]);
 
     /** @type {(subState: typeof state) => void} */
-    const onSubStateUnmount = useCallback((subState) => {
-      const subPath = encodePath(subState);
-      staleStackRef.current = staleStackRef.current.filter(
-        (staleState) => subPath !== encodePath(staleState),
-      );
-      updateCounter((counter) => (counter + 1) % 1e9);
-    }, []);
+    const onSubStateUnmount = useCallback(
+      (subState) => {
+        const subPath = encodePath(subState);
+        prevStackRef.current = prevStackRef.current.filter(
+          (prevState) => subPath !== encodePath(prevState),
+        );
+        updateCounter((counter) => (counter + 1) % 1e9);
+      },
+      [encodePath],
+    );
 
     const animatedValue = useMemo(() => new Animated.Value(0), []);
 
@@ -144,7 +185,7 @@ const GouterNative = memo(
       dateRef.current = date;
     }, [animatedValue, isStale, animationDuration, unmount, mount]);
 
-    useEffect(onAnimation, [onAnimation, isStale]);
+    useEffect(onAnimation, [onAnimation]);
 
     const panHandlers = useMemo(
       () => (onSwipeBack ? getSwipeBackPanHandlers(onSwipeBack) : null),
@@ -163,7 +204,7 @@ const GouterNative = memo(
             defaultAnimation,
             animationDuration,
             screenMap,
-            isStale: index >= nextStack.length,
+            isStale: nextStack.indexOf(subState) === -1,
             onUnmount: onSubStateUnmount,
             onSwipeBack,
             isFocused: index === nextStack.length - 1,
@@ -172,18 +213,17 @@ const GouterNative = memo(
       [
         defaultAnimation,
         animationDuration,
-        nextStack.length,
+        nextStack,
         onSubStateUnmount,
         onSwipeBack,
         screenMap,
         stack,
+        encodePath,
       ],
     );
 
-    const key = encodePath(state);
-
     return createElement(Animated.View, {
-      key,
+      key: encodePath(state),
       ...panHandlers,
       style: animatedStyle,
       children: Screen ? createElement(Screen, { state, isFocused, children }) : null,
