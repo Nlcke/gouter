@@ -28,15 +28,18 @@ export const newTabNavigator =
       if (names.includes(state.name)) {
         const path = encodePath(state);
         const stack = parent.stack || [];
-        const nextStack = [...stack.filter((stackState) => encodePath(stackState) !== path), state];
-        return { ...parent, stack: nextStack };
+        const nextStack = [...stack];
+        const index = nextStack.findIndex((stackState) => encodePath(stackState) === path);
+        const nextIndex = index >= 0 ? index : nextStack.length;
+        nextStack[nextIndex] = state;
+        return { ...parent, stack: nextStack, index: nextIndex };
       }
     } else {
-      const stack = parent.stack || [];
-      const lastState = stack[stack.length - 1];
-      if (lastState && lastState.name !== names[0]) {
-        const nextStack = stack.slice(0, -1);
-        return { ...parent, stack: nextStack };
+      const lastIndex = (parent.stack || []).length - 1;
+      const index = parent.index !== undefined ? parent.index : lastIndex;
+      const nextIndex = index + 1;
+      if (nextIndex <= lastIndex) {
+        return { ...parent, index: nextIndex };
       }
     }
     return null;

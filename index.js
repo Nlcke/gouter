@@ -75,9 +75,9 @@ class Gouter {
    */
 
   /**
-   * `State` is Gouter unit with required name, params and optional stack of states to create
-   * complex navigation.
-   * @typedef {StateMap[keyof StateMap] & {stack?: State[]}} State
+   * `State` is Gouter unit with required name, params, optional stack of states and optional
+   * index of focused state in state stack to create complex navigation.
+   * @typedef {StateMap[keyof StateMap] & {stack?: State[], index?: number}} State
    */
 
   /**
@@ -520,12 +520,14 @@ class Gouter {
      */
     this.getFocusedStates = (state) => {
       const focusedStates = [state];
-      let lastState = state;
+      let focusedState = state;
       for (;;) {
-        const stack = lastState.stack || [];
-        lastState = stack[stack.length - 1];
-        if (lastState && focusedStates.indexOf(lastState) === -1) {
-          focusedStates[focusedStates.length] = lastState;
+        const stack = focusedState.stack || [];
+        const lastIndex = stack.length - 1;
+        const index = focusedState.index !== undefined ? focusedState.index : lastIndex;
+        focusedState = stack[index] || stack[lastIndex];
+        if (focusedState && focusedStates.indexOf(focusedState) === -1) {
+          focusedStates[focusedStates.length] = focusedState;
         } else {
           return focusedStates.reverse();
         }
@@ -554,10 +556,12 @@ class Gouter {
             if (subState) {
               let childState = subState;
               for (const parent of parents.slice(1)) {
-                childState = {
-                  ...parent,
-                  stack: [...(parent.stack ? parent.stack.slice(0, -1) : []), childState],
-                };
+                const maybeStack = parent.stack;
+                const stack = maybeStack && maybeStack.length > 1 ? [...maybeStack] : [childState];
+                const parentIndex = parent.index !== undefined ? parent.index : stack.length - 1;
+                const childStateIndex = Math.min(Math.max(0, parentIndex), stack.length - 1);
+                stack[childStateIndex] = childState;
+                childState = { ...parent, stack };
               }
               nextState = childState;
               break;

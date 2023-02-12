@@ -1,8 +1,9 @@
 /** @type {import('eslint').Linter.Config} */
 module.exports = {
   root: true,
-  extends: ['airbnb', 'prettier'],
+  extends: ['airbnb', 'prettier', 'plugin:react-hooks/recommended'],
   rules: {
+    'react-hooks/exhaustive-deps': 'error',
     'no-restricted-syntax': 'off',
     'operator-linebreak': 'off',
     'implicit-arrow-linebreak': 'off',
