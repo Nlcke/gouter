@@ -96,9 +96,7 @@ class Gouter {
 
   /**
    * `Listener` function is called with current state when it changes.
-   * @callback Listener
-   * @param {State} state
-   * @returns {void}
+   * @typedef {(state: State) => void} Listener
    */
 
   /**
@@ -225,7 +223,7 @@ class Gouter {
       for (const name in paramsDef) {
         const segment = paramsDef[name];
         if (Array.isArray(segment)) {
-          const [prefix = '', regexp = null, suffix = '', modifier = ''] = segment;
+          const [prefix = '/', regexp = null, suffix = '', modifier = ''] = segment;
           const pattern = regexp ? regexp.toString().slice(1, -1) : defaultPattern;
           /** @type {import('path-to-regexp').Key} */
           const key = {
@@ -696,7 +694,7 @@ class Gouter {
      * Updates browser/memory history and url from state.
      * @protected
      * @web
-     * @type {(state: State) => void}
+     * @type {Listener}
      */
     this.updateHistory = (state) => {
       const { history, getNotFoundStateFromUrl } = this;
