@@ -19,8 +19,8 @@ const gouter = new Gouter({
   Home: {
     _: '/home',
   },
-  NewPost: {
-    _: '/new-post',
+  Post: {
+    _: '/post',
   },
   Profile: {
     _: '/profile',
@@ -46,7 +46,7 @@ setBuilders({
     ...state,
     stack: [
       {name: 'Home', params: {}},
-      {name: 'NewPost', params: {}},
+      {name: 'Post', params: {}},
       {name: 'Profile', params: {}},
     ],
   }),
@@ -57,16 +57,12 @@ setNavigators({
     names: ['Login', 'LoginConfirmation', 'Tabs'],
   }),
   Tabs: newTabNavigator(gouter, {
-    names: ['Home', 'NewPost', 'Profile'],
+    names: ['Home', 'Post', 'Profile'],
   }),
 });
 
 setState({name: 'App', params: {}});
 
-/**
- * @typedef {{[Name in keyof gouter['routeMap']]: React.FC<
- * import('gouter/native').ScreenProps<gouter['state'] & {name: Name}>
- * >}} ScreenMap
- */
+/** @typedef {gouter['state']} State */
 
-export {goTo, goBack, replace, getState, listen, encodePath};
+export {goTo, goBack, replace, getState, setState, listen, encodePath};
