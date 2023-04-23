@@ -114,7 +114,6 @@ class Gouter {
     /**
      * `routeMap` stores routes passed to Gouter. They are used to decode and encode states and
      * urls, and help with type suggestions for route parameters.
-     * @protected
      * @type {T}
      */
     this.routeMap = routes;
@@ -658,7 +657,7 @@ class Gouter {
 
     /**
      * Get navigators map.
-     * @type {() => navigators}
+     * @type {() => Navigators}
      */
     this.getNavigators = () => {
       const { navigators } = this;
