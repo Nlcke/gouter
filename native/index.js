@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState, createElement } from 'react';
-import { PanResponder, Animated, StyleSheet, Dimensions, View } from 'react-native';
+import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /** @typedef {import('..').default<any>} Gouter */
 
@@ -15,9 +15,11 @@ import { PanResponder, Animated, StyleSheet, Dimensions, View } from 'react-nati
  * }} ScreenProps
  */
 
+/** @typedef {Animated.WithAnimatedValue<import('react-native').ViewStyle>} AnimatedStyle */
+
 /**
  * @typedef {(value: Animated.AnimatedSubtraction<number>, size: Animated.ValueXY, focused: Animated.Value)
- * => Animated.WithAnimatedValue<import('react-native').ViewStyle>} Animation
+ * => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation
  */
 
 /**
@@ -229,13 +231,16 @@ const GouterNativeStack = memo(
     }
     prevIsFocusedRef.current = isFocused;
 
-    const animatedStyle = useMemo(
-      () => [
-        StyleSheet.absoluteFill,
+    const animatedStyleOrStyles = useMemo(
+      () =>
         stackAnimation ? stackAnimation(animatedValue, animatedSize, animatedIsFocused) : null,
-      ],
       [stackAnimation, animatedValue, animatedSize, animatedIsFocused],
     );
+    const animatedStyle = Array.isArray(animatedStyleOrStyles)
+      ? animatedStyleOrStyles[1]
+      : animatedStyleOrStyles;
+    const style = useMemo(() => [StyleSheet.absoluteFill, animatedStyle], [animatedStyle]);
+    const overlayStyle = Array.isArray(animatedStyleOrStyles) ? animatedStyleOrStyles[0] : null;
 
     const focusedIndexRef = useRef(focusedIndex);
     const prevFocusedIndex = focusedIndexRef.current;
@@ -409,9 +414,10 @@ const GouterNativeStack = memo(
 
     const layoutChild = useMemo(
       () =>
-        createElement(View, {
+        createElement(Animated.View, {
           key: '',
           style: { ...StyleSheet.absoluteFillObject, opacity: 0 },
+          pointerEvents: 'none',
           onLayout: ({ nativeEvent }) => {
             const { width, height } = nativeEvent.layout;
             const shouldUpdate = thisSize.width === 0 || thisSize.height === 0;
@@ -426,6 +432,18 @@ const GouterNativeStack = memo(
       [thisAnimatedSize, thisSize],
     );
 
+    const overlayChild = useMemo(
+      () =>
+        overlayStyle
+          ? createElement(Animated.View, {
+              key: '',
+              style: { ...StyleSheet.absoluteFillObject, opacity: 0, ...overlayStyle },
+              pointerEvents: 'none',
+            })
+          : null,
+      [overlayStyle],
+    );
+
     const hasSize = size.width > 0 && size.height > 0;
 
     const extendedChildren = useMemo(
@@ -436,15 +454,19 @@ const GouterNativeStack = memo(
     return createElement(Animated.View, {
       key: encodePath(state),
       ...panHandlers,
-      style: animatedStyle,
-      children: Screen
-        ? createElement(Screen, {
-            state,
-            isFocused,
-            isStale,
-            children: extendedChildren,
-          })
-        : null,
+      style,
+      children: [
+        Screen
+          ? createElement(Screen, {
+              key: encodePath(state),
+              state,
+              isFocused,
+              isStale,
+              children: extendedChildren,
+            })
+          : null,
+        overlayChild,
+      ],
     });
   },
 );

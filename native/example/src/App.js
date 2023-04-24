@@ -43,6 +43,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#cccccc',
   },
   modalContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 128,
+    overflow: 'hidden',
+  },
+  modalPlaceholder: {
     width: '100%',
     flex: 1,
     borderRadius: 16,
@@ -78,9 +84,8 @@ const LoginWithModal = ({children}) => {
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginModal']} */
 const LoginModal = () => {
   return (
-    <View style={styles.container}>
-      <Text>Modal</Text>
-      <View style={styles.modalContainer} />
+    <View style={styles.modalContainer}>
+      <View style={styles.modalPlaceholder} />
     </View>
   );
 };
@@ -277,19 +282,28 @@ const screenConfigMap = {
   },
   LoginWithModal: {
     component: LoginWithModal,
-    stackAnimation: (value, size) => ({
-      transform: [
-        {
-          translateY: Animated.multiply(
-            size.y,
-            value.interpolate({
-              inputRange: [-1, 0, 1],
-              outputRange: [0, 0, 1],
-            }),
-          ),
-        },
-      ],
-    }),
+    stackAnimation: (value, size) => [
+      {
+        backgroundColor: 'black',
+        opacity: value.interpolate({
+          inputRange: [-1, 0, 1],
+          outputRange: [0.5, 0, 0],
+        }),
+      },
+      {
+        transform: [
+          {
+            translateY: Animated.multiply(
+              size.y,
+              value.interpolate({
+                inputRange: [-1, 0, 1],
+                outputRange: [0, 0, 1],
+              }),
+            ),
+          },
+        ],
+      },
+    ],
     stackAnimationDuration: 256,
     stackSwipeGesture: 'vertical',
   },
@@ -312,6 +326,7 @@ const screenConfigMap = {
     component: Tabs,
     stackAnimation: defaultAnimation,
     stackAnimationDuration: 1256,
+    stackSwipeGesture: 'horizontal',
   },
   Home: {
     component: Home,
