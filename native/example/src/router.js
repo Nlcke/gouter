@@ -5,9 +5,15 @@ const gouter = new Gouter({
   App: {
     _: '/',
   },
+  LoginWithModal: {
+    _: '/login-with-modal',
+  },
   Login: {
     _: '/login',
     name: {decode: str => str, encode: str => str},
+  },
+  LoginModal: {
+    _: '/login/modal',
   },
   LoginConfirmation: {
     _: '/login-confirmation',
@@ -40,7 +46,8 @@ const {
 } = gouter;
 
 setBuilders({
-  App: state => ({...state, stack: [{name: 'Login', params: {}}]}),
+  App: state => ({...state, stack: [{name: 'LoginWithModal', params: {}}]}),
+  LoginWithModal: state => ({...state, stack: [{name: 'Login', params: {}}]}),
   Login: state => ({name: 'Login', params: {name: 'user', ...state.params}}),
   Tabs: state => ({
     ...state,
@@ -54,7 +61,10 @@ setBuilders({
 
 setNavigators({
   App: newStackNavigator(gouter, {
-    names: ['Login', 'LoginConfirmation', 'Tabs'],
+    names: ['LoginWithModal', 'LoginConfirmation', 'Tabs'],
+  }),
+  LoginWithModal: newStackNavigator(gouter, {
+    names: ['Login', 'LoginModal'],
   }),
   Tabs: newTabNavigator(gouter, {
     names: ['Home', 'Post', 'Profile'],

@@ -42,6 +42,13 @@ const styles = StyleSheet.create({
   buttonContainerSelected: {
     backgroundColor: '#cccccc',
   },
+  modalContainer: {
+    width: '100%',
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    backgroundColor: '#EEEEEE',
+  },
 });
 
 /** @type {React.FC<{title: string, onPress: () => void, selected?: boolean}>} */
@@ -59,6 +66,21 @@ const App = ({children}) => {
     <View style={styles.container}>
       <Text>App</Text>
       {children}
+    </View>
+  );
+};
+
+/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginWithModal']} */
+const LoginWithModal = ({children}) => {
+  return <View style={styles.container}>{children}</View>;
+};
+
+/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginModal']} */
+const LoginModal = () => {
+  return (
+    <View style={styles.container}>
+      <Text>Modal</Text>
+      <View style={styles.modalContainer}></View>
     </View>
   );
 };
@@ -85,6 +107,7 @@ const Login = ({state}) => {
           })
         }
       />
+      <Button title={'show modal'} onPress={() => goTo('LoginModal', {})} />
     </View>
   );
 };
@@ -218,7 +241,8 @@ const Profile = () => {
 };
 
 /** @type {import('gouter/native').Animation} */
-const defaultAnimation = (value, size) => ({
+const defaultAnimation = (value, size, focused) => ({
+  zIndex: focused,
   opacity: value.interpolate({
     inputRange: [-1, 0, 1],
     outputRange: [0, 1, 0],
@@ -248,6 +272,29 @@ const stackAnimationDuration = 256;
 const screenConfigMap = {
   App: {
     component: App,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration,
+  },
+  LoginWithModal: {
+    component: LoginWithModal,
+    stackAnimation: (value, size) => ({
+      transform: [
+        {
+          translateY: Animated.multiply(
+            size.y,
+            value.interpolate({
+              inputRange: [-1, 0, 1],
+              outputRange: [0, 0, 1],
+            }),
+          ),
+        },
+      ],
+    }),
+    stackAnimationDuration: 256,
+    stackSwipeGesture: 'vertical',
+  },
+  LoginModal: {
+    component: LoginModal,
     stackAnimation: defaultAnimation,
     stackAnimationDuration,
   },
