@@ -15,5 +15,8 @@ module.exports = {
     'react/prop-types': 'off',
     'no-nested-ternary': 'off',
     'react/no-children-prop': 'off',
+    'import/no-extraneous-dependencies': 'off',
+    'react/jsx-filename-extension': 'off',
+    'arrow-body-style': 'off',
   },
 };

@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react';
+import GouterNative from 'gouter/native';
 import {
   StyleSheet,
   Text,
@@ -7,8 +8,8 @@ import {
   TouchableOpacity,
   Animated,
   Keyboard,
+  ScrollView,
 } from 'react-native';
-import GouterNative from 'gouter/native';
 import {
   getState,
   goBack,
@@ -18,7 +19,6 @@ import {
   encodePath,
   setState,
 } from './router';
-import {ScrollView} from 'react-native';
 
 const styles = StyleSheet.create({
   container: {
@@ -80,7 +80,7 @@ const LoginModal = () => {
   return (
     <View style={styles.container}>
       <Text>Modal</Text>
-      <View style={styles.modalContainer}></View>
+      <View style={styles.modalContainer} />
     </View>
   );
 };
@@ -92,12 +92,12 @@ const Login = ({state}) => {
       <Text>Login</Text>
       <Text>Name: {state.params.name}</Text>
       <Button
-        title={'go to Login Confirmation'}
+        title="go to Login Confirmation"
         onPress={() => goTo('LoginConfirmation', {phone: '2398723987'})}
       />
       <Text>{'login '.repeat(100)}</Text>
       <Button
-        title={'change name'}
+        title="change name"
         onPress={() =>
           replace(state, {
             name: 'Login',
@@ -107,7 +107,7 @@ const Login = ({state}) => {
           })
         }
       />
-      <Button title={'show modal'} onPress={() => goTo('LoginModal', {})} />
+      <Button title="show modal" onPress={() => goTo('LoginModal', {})} />
     </View>
   );
 };
@@ -118,11 +118,11 @@ const LoginConfirmation = ({state}) => {
     <View style={styles.container}>
       <Text>Login Confirmation</Text>
       <Text>Phone: {state.params.phone}</Text>
-      <Button title={'go to Tabs'} onPress={() => goTo('Tabs', {})} />
+      <Button title="go to Tabs" onPress={() => goTo('Tabs', {})} />
       <Text>{'confirmation '.repeat(100)}</Text>
-      <Button title={'go back'} onPress={goBack} />
+      <Button title="go back" onPress={goBack} />
       <Button
-        title={'add Login'}
+        title="add Login"
         onPress={() => {
           const appState = getState();
           setState({
@@ -135,7 +135,7 @@ const LoginConfirmation = ({state}) => {
         }}
       />
       <Button
-        title={'remove Login'}
+        title="remove Login"
         onPress={() => {
           const appState = getState();
           setState({
@@ -145,7 +145,7 @@ const LoginConfirmation = ({state}) => {
         }}
       />
       <Button
-        title={'goTo Login'}
+        title="goTo Login"
         onPress={() => {
           goTo('Login', {});
         }}
@@ -173,7 +173,7 @@ const Tabs = ({state, children}) => {
         ))}
         <Button
           key="remove"
-          title={'- Post'}
+          title="- Post"
           onPress={() => {
             const appState = getState();
             const nextStack = (appState.stack || []).map(subState =>
@@ -190,10 +190,10 @@ const Tabs = ({state, children}) => {
             setState({...appState, stack: nextStack});
           }}
         />
-        <Button key="add" title={'+ Post'} onPress={() => goTo('Post', {})} />
+        <Button key="add" title="+ Post" onPress={() => goTo('Post', {})} />
         <Button
           key="reverse"
-          title={'Reverse'}
+          title="Reverse"
           onPress={() =>
             replace(state, {
               ...state,
@@ -212,7 +212,7 @@ const Home = () => {
   return (
     <View style={styles.container}>
       <Text>Home</Text>
-      <Button title={'go back'} onPress={goBack} />
+      <Button title="go back" onPress={goBack} />
       <Text>{'home '.repeat(100)}</Text>
     </View>
   );
@@ -223,7 +223,7 @@ const Post = () => {
   return (
     <View style={styles.container}>
       <Text>Post</Text>
-      <Button title={'go back'} onPress={goBack} />
+      <Button title="go back" onPress={goBack} />
       <Text>{'post '.repeat(100)}</Text>
     </View>
   );
@@ -234,7 +234,7 @@ const Profile = () => {
   return (
     <ScrollView style={styles.container}>
       <Text>Profile</Text>
-      <Button title={'go back'} onPress={goBack} />
+      <Button title="go back" onPress={goBack} />
       <Text>{'profile '.repeat(500)}</Text>
     </ScrollView>
   );
