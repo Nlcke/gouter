@@ -9,14 +9,14 @@ Tiny navigation library for React Native with simple API and rich features.
 ## Available Imports
 
 ```js
-import Gouter 'gouter'; // core
+import Gouter from 'gouter'; // router
 import GouterNative from 'gouter/native'; // React Native component
-import * as hooks from 'gouter/hooks'; // hooks for routing
+import { newStackNavigator, newTabNavigator } from 'gouter/navigators'; // navigators
 ```
 
 ## Usage
 
-### Part 1: Create router file
+### Part 1: Router
 
 Here you will define available routes, rules for navigation and export router methods.
 
@@ -58,7 +58,7 @@ const gouter = new Gouter({
 });
 ```
 
-#### Extract and export methods
+#### Extract methods
 
 Since Gouter is highly customizable it doesn't hide any methods and/or fields. You decide what you
 will export from it's instance. However some parts are mandatory in order to use `GouterNative` like
@@ -67,78 +67,92 @@ will export from it's instance. However some parts are mandatory in order to use
 ```js
 const { setState, newState, setHooks, goTo, goBack, getState, listen, replace, encodePath } =
   gouter;
-
-export { goTo, goBack, replace, getState, listen, newState, encodePath };
 ```
 
-#### Set hooks
+#### Set Builders
 
-Gouter hooks is powerful mechanism to control navigation. You may customize each route behavior
-through `onInit`, `shouldGoTo`, `onGoTo`, `shouldGoBack` and `onGoBack` hooks:
+Gouter `setBuilders` method customizes how stacks are created when you go to some state.
 
 ```js
-import {
-  shouldGoToForNames,
-  onGoToInStack,
-  shouldGoBackInStack,
-  onGoBackInStack,
-} from 'gouter/hooks';
-
-setHooks({
-  App: {
-    onInit: (state) => ({ ...state, stack: [newState('Login', {})] }),
-    shouldGoTo: shouldGoToForNames(gouter, ['Login', 'LoginConfirmation', 'Home']),
-    onGoTo: onGoToInStack(gouter),
-    shouldGoBack: shouldGoBackInStack(gouter),
-    onGoBack: onGoBackInStack(gouter),
-  },
+setBuilders({
+  App: (state) => ({ ...state, stack: [{ name: 'LoginWithModal', params: {} }] }),
+  LoginWithModal: (state) => ({ ...state, stack: [{ name: 'Login', params: {} }] }),
+  Login: (state) => ({ name: 'Login', params: { name: 'user', ...state.params } }),
+  Tabs: (state) => ({
+    ...state,
+    stack: [
+      { name: 'Home', params: {} },
+      { name: 'Post', params: {} },
+      { name: 'Profile', params: {} },
+    ],
+  }),
 });
 ```
 
-For convenience we imported ready hooks creators from `gouter/hooks`. However you may easily create
+#### Set navigators
+
+Gouter navigators is powerful mechanism to control navigation flow.
+
+```js
+import { newStackNavigator, newTabNavigator } from 'gouter/navigators';
+
+setNavigators({
+  App: newStackNavigator(gouter, {
+    names: ['LoginWithModal', 'LoginConfirmation', 'Tabs'],
+  }),
+  LoginWithModal: newStackNavigator(gouter, {
+    names: ['Login', 'LoginModal'],
+  }),
+  Tabs: newTabNavigator(gouter, {
+    names: ['Home', 'Post', 'Profile'],
+  }),
+});
+```
+
+For convenience we imported ready navigators from `gouter/navigators`. However you may easily create
 your own hooks for special needs:
 
-- `onInit(state)` is called when this route state is created using `newState` and here you may
-  modify it's params and/or stack
-- `shouldGoTo(state, parent)` checks if a state passed to `goTo` should be handled inside this route
-  state (parent)
-- `onGoTo(state, parent)` is called only when `shouldGoTo` passed and usually returns parent with
-  modified stack
-- `shouldGoBack(state, parent)` checks if `goBack` should be handled inside this route state
-  (parent)
-- `onGoBack(state, parent)` is called only when `shouldGoBack` passed and usually returns parent
-  with modified stack
+```js
+
+```
 
 #### Set state
 
 Before you add any listeners you should pass initial state:
 
 ```js
-setState(newState('App', {}));
+setState({ name: 'App', params: {} });
 ```
 
 #### Add type for screens
 
-This type will enable type inference for every screen component.
+This type will help you with type inference.
 
 ```js
-/**
- * @typedef {{[Name in keyof gouter['routeMap']]: React.FC<
- * import('gouter/native').ScreenProps<gouter['state'] & {name: Name}>
- * >}} ScreenMap
- */
+/** @typedef {gouter['state']} State */
 ```
 
-Usage:
+#### Export extracted methods
 
 ```js
-/** @type {import('./router').ScreenMap['LoginConfirmation']} */
-const LoginConfirmation = ({}) => {
-  // screen body
+export { goTo, goBack, replace, getState, listen, newState, encodePath };
+```
+
+### Part 2: Screens
+
+```js
+/** @type {import('gouter/native').ScreenMap<import('./router').State>['App']} */
+const App = ({ children }) => {
+  return (
+    <View style={styles.container}>
+      <Text>App</Text>
+      {children}
+    </View>
+  );
 };
 ```
 
-### Part 2: Add GouterNative to app
+### Part 3: App
 
 #### Import
 
@@ -208,13 +222,12 @@ Finally you create wrapper component:
 
 ```js
 const AppWrapper = () => {
-  // same state as in router updated through `listen`
-  const [state, setState] = useState(getState);
+  const [appState, setAppState] = useState(getState);
 
-  // to receive fresh state from router and store it locally
-  useEffect(() => listen(setState), []);
+  useEffect(() => listen(setAppState), []);
 
-  // to handle hardware back press
+  useEffect(() => listen(Keyboard.dismiss), []);
+
   useEffect(() => {
     const onHardwareBackPress = () => {
       goBack();
@@ -228,23 +241,22 @@ const AppWrapper = () => {
 
   return (
     <GouterNative
-      screenMap={screenMap}
-      state={state}
+      state={appState}
+      screenConfigMap={screenConfigMap}
       encodePath={encodePath}
-      animationDuration={256}
-      defaultAnimation={defaultAnimation}
-      animationMap={animationMap}
-      onSwipeBack={goBack}
+      goTo={goTo}
     />
   );
 };
 
 export default AppWrapper;
 ```
-### Part 3: Navigate
+
+### Part 4: Navigation
 
 Use exported methods from your router anywhere:
-- `goTo` to navigate to state 
+
+- `goTo` to navigate to state
 - `goBack` to navigate back
-- `replace` to replace target state for parameters and/or stack updates 
+- `replace` to replace target state for parameters and/or stack updates
 - `go` for advanced use cases like navigate back twice and then go to some state etc.
