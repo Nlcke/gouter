@@ -127,32 +127,36 @@ const LoginConfirmation = ({state}) => {
       <Text>{'confirmation '.repeat(100)}</Text>
       <Button title="go back" onPress={goBack} />
       <Button
-        title="add Login"
+        title="add LoginWithModal"
         onPress={() => {
           const appState = getState();
           setState({
             ...appState,
             stack: [
-              {name: 'Login', params: {name: 'user'}},
-              ...(appState.stack || []).filter(({name}) => name !== 'Login'),
+              {name: 'LoginWithModal', params: {}},
+              ...(appState.stack || []).filter(
+                ({name}) => name !== 'LoginWithModal',
+              ),
             ],
           });
         }}
       />
       <Button
-        title="remove Login"
+        title="remove LoginWithModal"
         onPress={() => {
           const appState = getState();
           setState({
             ...appState,
-            stack: (appState.stack || []).filter(({name}) => name !== 'Login'),
+            stack: (appState.stack || []).filter(
+              ({name}) => name !== 'LoginWithModal',
+            ),
           });
         }}
       />
       <Button
-        title="goTo Login"
+        title="goTo LoginWithModal"
         onPress={() => {
-          goTo('Login', {});
+          goTo('LoginWithModal', {});
         }}
       />
     </View>
