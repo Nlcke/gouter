@@ -275,39 +275,67 @@ const defaultAnimation = (value, size, focused) => ({
   ],
 });
 
+/** @type {import('gouter/native').Animation} */
+const iOSAnimation = (value, size) => [
+  {
+    backgroundColor: 'black',
+    opacity: value.interpolate({
+      inputRange: [-1, 0, 1],
+      outputRange: [0.2, 0, 0],
+    }),
+  },
+  {
+    transform: [
+      {
+        translateX: Animated.multiply(
+          size.x,
+          value.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [-0.25, 0, 1],
+          }),
+        ),
+      },
+    ],
+  },
+];
+
+/** @type {import('gouter/native').Animation} */
+const modalAnimation = (value, size) => [
+  {
+    backgroundColor: 'black',
+    opacity: value.interpolate({
+      inputRange: [-1, 0, 1],
+      outputRange: [0.5, 0, 0],
+    }),
+  },
+  {
+    transform: [
+      {
+        translateY: Animated.multiply(
+          size.y,
+          value.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [0, 0, 1],
+          }),
+        ),
+      },
+    ],
+  },
+];
+
 const stackAnimationDuration = 256;
 
 /** @type {import('gouter/native').ScreenConfigMap<import('./router').State>} */
 const screenConfigMap = {
   App: {
     component: App,
-    stackAnimation: defaultAnimation,
+    stackAnimation: iOSAnimation,
     stackAnimationDuration,
+    stackSwipeGesture: 'horizontal',
   },
   LoginWithModal: {
     component: LoginWithModal,
-    stackAnimation: (value, size) => [
-      {
-        backgroundColor: 'black',
-        opacity: value.interpolate({
-          inputRange: [-1, 0, 1],
-          outputRange: [0.5, 0, 0],
-        }),
-      },
-      {
-        transform: [
-          {
-            translateY: Animated.multiply(
-              size.y,
-              value.interpolate({
-                inputRange: [-1, 0, 1],
-                outputRange: [0, 0, 1],
-              }),
-            ),
-          },
-        ],
-      },
-    ],
+    stackAnimation: modalAnimation,
     stackAnimationDuration: 256,
     stackSwipeGesture: 'vertical',
   },
