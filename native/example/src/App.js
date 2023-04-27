@@ -359,6 +359,7 @@ const screenConfigMap = {
     stackAnimation: defaultAnimation,
     stackAnimationDuration: 1256,
     stackSwipeGesture: 'horizontal',
+    stackSwipeBounce: 0.2,
   },
   Home: {
     component: Home,

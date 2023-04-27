@@ -34,6 +34,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * stackAnimation: Animation
  * stackAnimationDuration: number
  * stackSwipeGesture?: 'horizontal' | 'vertical' | 'none'
+ * stackSwipeBounce?: number
  * }} ScreenConfig
  */
 
@@ -133,6 +134,8 @@ const defaultAnimationDurationRef = { current: 0 };
 
 const defaultStackSwipeGestureRef = { current: undefined };
 
+const defaultStackSwipeBounceRef = { current: 0 };
+
 /**
  * @type {React.FC<{
  * state: State
@@ -149,6 +152,7 @@ const defaultStackSwipeGestureRef = { current: undefined };
  * animatedSize: Animated.ValueXY
  * animationDurationRef: React.MutableRefObject<number>
  * stackSwipeGestureRef: React.MutableRefObject<ScreenConfig['stackSwipeGesture']>
+ * stackSwipeBounceRef: React.MutableRefObject<number>
  * }>}
  */
 const GouterNativeStack = memo(
@@ -167,6 +171,7 @@ const GouterNativeStack = memo(
     animatedSize,
     animationDurationRef,
     stackSwipeGestureRef,
+    stackSwipeBounceRef,
   }) => {
     const [, updateState] = useState([]);
 
@@ -282,6 +287,8 @@ const GouterNativeStack = memo(
     const thisStackAnimation = thisScreenConfig.stackAnimation;
     const thisStackSwipeGestureRef = useRef(thisScreenConfig.stackSwipeGesture);
     thisStackSwipeGestureRef.current = thisScreenConfig.stackSwipeGesture;
+    const thisStackSwipeBounceRef = useRef(thisScreenConfig.stackSwipeBounce || 0);
+    thisStackSwipeBounceRef.current = thisScreenConfig.stackSwipeBounce || 0;
 
     const children = useMemo(
       () =>
@@ -302,6 +309,7 @@ const GouterNativeStack = memo(
             animatedSize: thisAnimatedSize,
             animationDurationRef: thisAnimationDurationRef,
             stackSwipeGestureRef: thisStackSwipeGestureRef,
+            stackSwipeBounceRef: thisStackSwipeBounceRef,
           }),
         ),
       [
@@ -357,9 +365,15 @@ const GouterNativeStack = memo(
         const delta = isHorizontal ? dx : dy;
         const side = isHorizontal ? size.width : size.height;
         const offset = delta / side || 0;
-        animatedFocusedIndex.setValue(valueRef.current - offset);
+        const bounce =
+          (indexRef.current === 0 && offset > 0) ||
+          (indexRef.current === stackRef.current.length - 1 && offset < 0)
+            ? stackSwipeBounceRef.current
+            : 1;
+        const value = valueRef.current - offset * bounce;
+        animatedFocusedIndex.setValue(value);
       },
-      [animatedFocusedIndex, size, stackSwipeGestureRef],
+      [animatedFocusedIndex, size, stackRef, stackSwipeBounceRef, stackSwipeGestureRef],
     );
 
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
@@ -378,7 +392,12 @@ const GouterNativeStack = memo(
 
         const offset = delta / side || 0;
         const velocityOffset = Math.max(Math.min(0.5, 0.25 * velocity), -0.5);
-        const value = valueRef.current - offset - velocityOffset;
+        const bounce =
+          (indexRef.current === 0 && offset > 0) ||
+          (indexRef.current === stackRef.current.length - 1 && offset < 0)
+            ? stackSwipeBounceRef.current
+            : 1;
+        const value = valueRef.current - bounce * (offset + velocityOffset);
 
         const nextPossibleIndex = Math.round(value);
         const nextState = stackRef.current[nextPossibleIndex] || stateRef.current;
@@ -397,7 +416,15 @@ const GouterNativeStack = memo(
           }
         });
       },
-      [animatedFocusedIndex, animationDurationRef, goTo, size, stackRef, stackSwipeGestureRef],
+      [
+        animatedFocusedIndex,
+        animationDurationRef,
+        goTo,
+        size,
+        stackRef,
+        stackSwipeBounceRef,
+        stackSwipeGestureRef,
+      ],
     );
 
     const panHandlers = useMemo(
@@ -491,6 +518,7 @@ const GouterNative = memo((props) =>
     animatedSize: defaultAnimatedSize,
     animationDurationRef: defaultAnimationDurationRef,
     stackSwipeGestureRef: defaultStackSwipeGestureRef,
+    stackSwipeBounceRef: defaultStackSwipeBounceRef,
     ...props,
   }),
 );
