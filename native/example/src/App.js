@@ -250,24 +250,27 @@ const Profile = () => {
 };
 
 /** @type {import('gouter/native').Animation} */
-const defaultAnimation = (value, size, focused) => ({
+const defaultAnimation = ({index, size, focused, bounce}) => ({
   zIndex: focused,
-  opacity: value.interpolate({
+  opacity: index.interpolate({
     inputRange: [-1, 0, 1],
     outputRange: [0, 1, 0],
   }),
   transform: [
     {
-      translateX: Animated.multiply(size.x, value),
+      translateX: Animated.multiply(
+        size.x,
+        Animated.subtract(index, Animated.multiply(bounce, 0.25)),
+      ),
     },
     {
-      scale: value.interpolate({
+      scale: index.interpolate({
         inputRange: [-1, 0, 1],
         outputRange: [0.9, 1, 0.9],
       }),
     },
     {
-      rotate: value.interpolate({
+      rotate: index.interpolate({
         inputRange: [-1, 0, 1],
         outputRange: ['-30deg', '0deg', '30deg'],
       }),
@@ -276,10 +279,10 @@ const defaultAnimation = (value, size, focused) => ({
 });
 
 /** @type {import('gouter/native').Animation} */
-const iOSAnimation = (value, size) => [
+const iOSAnimation = ({index, size}) => [
   {
     backgroundColor: 'black',
-    opacity: value.interpolate({
+    opacity: index.interpolate({
       inputRange: [-1, 0, 1],
       outputRange: [0.2, 0, 0],
     }),
@@ -289,7 +292,7 @@ const iOSAnimation = (value, size) => [
       {
         translateX: Animated.multiply(
           size.x,
-          value.interpolate({
+          index.interpolate({
             inputRange: [-1, 0, 1],
             outputRange: [-0.25, 0, 1],
           }),
@@ -300,10 +303,10 @@ const iOSAnimation = (value, size) => [
 ];
 
 /** @type {import('gouter/native').Animation} */
-const modalAnimation = (value, size) => [
+const modalAnimation = ({index, size}) => [
   {
     backgroundColor: 'black',
-    opacity: value.interpolate({
+    opacity: index.interpolate({
       inputRange: [-1, 0, 1],
       outputRange: [0.5, 0, 0],
     }),
@@ -313,7 +316,7 @@ const modalAnimation = (value, size) => [
       {
         translateY: Animated.multiply(
           size.y,
-          value.interpolate({
+          index.interpolate({
             inputRange: [-1, 0, 1],
             outputRange: [0, 0, 1],
           }),
@@ -359,7 +362,6 @@ const screenConfigMap = {
     stackAnimation: defaultAnimation,
     stackAnimationDuration: 1256,
     stackSwipeGesture: 'horizontal',
-    stackSwipeBounce: 0.2,
   },
   Home: {
     component: Home,

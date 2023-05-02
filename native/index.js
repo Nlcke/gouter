@@ -18,7 +18,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 /** @typedef {Animated.WithAnimatedValue<import('react-native').ViewStyle>} AnimatedStyle */
 
 /**
- * @typedef {(value: Animated.AnimatedSubtraction<number>, size: Animated.ValueXY, focused: Animated.Value)
+ * @typedef {(props: {index: Animated.AnimatedSubtraction<number>, size: Animated.ValueXY, focused: Animated.Value, bounce: Animated.Value})
  * => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation
  */
 
@@ -34,7 +34,6 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * stackAnimation: Animation
  * stackAnimationDuration: number
  * stackSwipeGesture?: 'horizontal' | 'vertical' | 'none'
- * stackSwipeBounce?: number
  * }} ScreenConfig
  */
 
@@ -136,11 +135,13 @@ let panRespondersBlocked = false;
 
 const defaultAnimatedSize = new Animated.ValueXY();
 
+const defaultBounceRef = { current: 0 };
+
+const defaultAnimatedBounce = new Animated.Value(0);
+
 const defaultAnimationDurationRef = { current: 0 };
 
 const defaultStackSwipeGestureRef = { current: undefined };
-
-const defaultStackSwipeBounceRef = { current: 0 };
 
 /**
  * @type {React.FC<{
@@ -156,9 +157,10 @@ const defaultStackSwipeBounceRef = { current: 0 };
  * stackAnimation?: Animation
  * size: {width: number, height: number}
  * animatedSize: Animated.ValueXY
+ * bounceRef: React.MutableRefObject<number>
+ * animatedBounce: Animated.Value
  * animationDurationRef: React.MutableRefObject<number>
  * stackSwipeGestureRef: React.MutableRefObject<ScreenConfig['stackSwipeGesture']>
- * stackSwipeBounceRef: React.MutableRefObject<number>
  * }>}
  */
 const GouterNativeStack = memo(
@@ -175,9 +177,10 @@ const GouterNativeStack = memo(
     stackAnimation,
     size,
     animatedSize,
+    bounceRef,
+    animatedBounce,
     animationDurationRef,
     stackSwipeGestureRef,
-    stackSwipeBounceRef,
   }) => {
     const [, updateState] = useState([]);
 
@@ -242,8 +245,15 @@ const GouterNativeStack = memo(
 
     const animatedStyleOrStyles = useMemo(
       () =>
-        stackAnimation ? stackAnimation(animatedValue, animatedSize, animatedIsFocused) : null,
-      [stackAnimation, animatedValue, animatedSize, animatedIsFocused],
+        stackAnimation
+          ? stackAnimation({
+              index: animatedValue,
+              size: animatedSize,
+              focused: animatedIsFocused,
+              bounce: animatedBounce,
+            })
+          : null,
+      [stackAnimation, animatedValue, animatedSize, animatedIsFocused, animatedBounce],
     );
     const animatedStyle = Array.isArray(animatedStyleOrStyles)
       ? animatedStyleOrStyles[1]
@@ -288,6 +298,9 @@ const GouterNativeStack = memo(
       thisAnimatedFocusedIndex.stopAnimation(onIndexChange);
     }
 
+    const thisBounceRef = useRef(0);
+    const thisAnimatedBounce = useRef(new Animated.Value(0)).current;
+
     const Screen = thisScreenConfig.component;
     const thisStackRef = useRef(stack);
     thisStackRef.current = stack;
@@ -295,8 +308,6 @@ const GouterNativeStack = memo(
     const thisStackAnimation = thisScreenConfig.stackAnimation;
     const thisStackSwipeGestureRef = useRef(thisScreenConfig.stackSwipeGesture);
     thisStackSwipeGestureRef.current = thisScreenConfig.stackSwipeGesture;
-    const thisStackSwipeBounceRef = useRef(thisScreenConfig.stackSwipeBounce || 0);
-    thisStackSwipeBounceRef.current = thisScreenConfig.stackSwipeBounce || 0;
 
     const children = useMemo(
       () =>
@@ -315,22 +326,24 @@ const GouterNativeStack = memo(
             stackAnimation: thisStackAnimation,
             size: thisSize,
             animatedSize: thisAnimatedSize,
+            bounceRef: thisBounceRef,
+            animatedBounce: thisAnimatedBounce,
             animationDurationRef: thisAnimationDurationRef,
             stackSwipeGestureRef: thisStackSwipeGestureRef,
-            stackSwipeBounceRef: thisStackSwipeBounceRef,
           }),
         ),
       [
-        screenConfigMap,
-        encodePath,
-        focusedIndex,
-        goTo,
-        nextStack,
         stack,
+        encodePath,
+        goTo,
+        screenConfigMap,
+        nextStack,
+        focusedIndex,
         thisAnimatedFocusedIndex,
-        thisAnimatedSize,
         thisStackAnimation,
         thisSize,
+        thisAnimatedSize,
+        thisAnimatedBounce,
       ],
     );
 
@@ -372,6 +385,22 @@ const GouterNativeStack = memo(
       [animatedFocusedIndex, onValue, stackSwipeGestureRef],
     );
 
+    const bounceAnimation = useMemo(
+      () => Animated.spring(animatedBounce, { toValue: 0, useNativeDriver: true }),
+      [animatedBounce],
+    );
+    const bounceOffsetRef = useRef(0);
+    const bounceCallback = useCallback(
+      (/** @type {number} */ currentValue) => {
+        const bounceRaw = currentValue + bounceOffsetRef.current;
+        const maxIndex = stackRef.current.length - 1;
+        bounceRef.current = Math.max(Math.min(bounceRaw, maxIndex + 1), -1);
+        animatedBounce.setValue(bounceRef.current);
+        bounceAnimation.start();
+      },
+      [animatedBounce, bounceAnimation, bounceRef, stackRef],
+    );
+
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderMove']>} */
     const onPanResponderMove = useCallback(
       (_, { dx, dy }) => {
@@ -379,15 +408,17 @@ const GouterNativeStack = memo(
         const delta = isHorizontal ? dx : dy;
         const side = isHorizontal ? size.width : size.height;
         const offset = delta / side || 0;
-        const bounce =
-          (indexRef.current === 0 && offset > 0) ||
-          (indexRef.current === stackRef.current.length - 1 && offset < 0)
-            ? stackSwipeBounceRef.current
-            : 1;
-        const value = valueRef.current - offset * bounce;
+        const valueRaw = valueRef.current - offset;
+        const maxIndex = stackRef.current.length - 1;
+        const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
+        if (value !== valueRaw) {
+          valueRef.current = (valueRaw > maxIndex ? maxIndex : 0) + offset;
+          bounceOffsetRef.current = valueRaw - value;
+          animatedBounce.stopAnimation(bounceCallback);
+        }
         animatedFocusedIndex.setValue(value);
       },
-      [animatedFocusedIndex, size, stackRef, stackSwipeBounceRef, stackSwipeGestureRef],
+      [animatedBounce, animatedFocusedIndex, bounceCallback, size, stackRef, stackSwipeGestureRef],
     );
 
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
@@ -407,13 +438,10 @@ const GouterNativeStack = memo(
 
         const offset = delta / side || 0;
         const velocityOffset = Math.max(Math.min(0.5, 0.25 * velocity), -0.5);
-        const bounce =
-          (indexRef.current === 0 && offset > 0) ||
-          (indexRef.current === stackRef.current.length - 1 && offset < 0)
-            ? stackSwipeBounceRef.current
-            : 1;
-        const value = valueRef.current - bounce * (offset + velocityOffset);
 
+        const valueRaw = valueRef.current - offset - velocityOffset;
+        const maxIndex = stackRef.current.length - 1;
+        const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
         const nextPossibleIndex = Math.round(value);
         const nextState = stackRef.current[nextPossibleIndex] || stateRef.current;
         const nextIndex = nextState === stateRef.current ? indexRef.current : nextPossibleIndex;
@@ -431,15 +459,7 @@ const GouterNativeStack = memo(
           }
         });
       },
-      [
-        animatedFocusedIndex,
-        animationDurationRef,
-        goTo,
-        size,
-        stackRef,
-        stackSwipeBounceRef,
-        stackSwipeGestureRef,
-      ],
+      [animatedFocusedIndex, animationDurationRef, goTo, size, stackRef, stackSwipeGestureRef],
     );
 
     onPanResponderFinishRef.current = onPanResponderReleaseOrTerminate;
@@ -533,9 +553,10 @@ const GouterNative = memo((props) =>
     stackAnimation: defaultScreenConfig.stackAnimation,
     size: defaultSize,
     animatedSize: defaultAnimatedSize,
+    bounceRef: defaultBounceRef,
+    animatedBounce: defaultAnimatedBounce,
     animationDurationRef: defaultAnimationDurationRef,
     stackSwipeGestureRef: defaultStackSwipeGestureRef,
-    stackSwipeBounceRef: defaultStackSwipeBounceRef,
     ...props,
   }),
 );
