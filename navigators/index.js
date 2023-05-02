@@ -9,7 +9,10 @@ export const newStackNavigator =
         const path = encodePath(state);
         const stack = parent.stack || [];
         const index = stack.findIndex((stackState) => encodePath(stackState) === path);
-        const nextStack = [...stack.slice(0, index >= 0 ? index : undefined), state];
+        const prevStateIndex = stack[index] ? stack[index].index : undefined;
+        const nextState =
+          prevStateIndex !== undefined ? { index: prevStateIndex, ...state } : state;
+        const nextStack = [...stack.slice(0, index >= 0 ? index : undefined), nextState];
         return { ...parent, stack: nextStack };
       }
     } else if (parent.stack && parent.stack.length > 1) {
