@@ -316,11 +316,10 @@ const GouterNativeStack = memo(
       [thisAnimatedBounce],
     );
 
-    const panResponderStartBlockedRef = useRef(false);
-
-    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onStartShouldSetPanResponder']>} */
-    const onStartShouldSetPanResponder = useCallback(
-      (event) => {
+    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onMoveShouldSetPanResponder']>} */
+    const onMoveShouldSetPanResponder = useCallback(
+      (event, { dx, dy, moveX, moveY }) => {
+        event.preventDefault();
         event.stopPropagation();
         const { stackSwipeGesture, stackSwipeLeftAndTopSize, stackSwipeRightAndBottomSize } =
           screenConfigRef.current;
@@ -337,28 +336,14 @@ const GouterNativeStack = memo(
           (typeof stackSwipeRightAndBottomSize === 'string'
             ? 0.01 * parseFloat(stackSwipeRightAndBottomSize) * side
             : stackSwipeRightAndBottomSize) || 0;
-        const { locationX, locationY } = event.nativeEvent;
-        const locationValue = isHorizontal ? locationX : locationY;
-        const panResponderStartBlocked =
-          locationValue > startValue && locationValue < side - endValue;
-        panResponderStartBlockedRef.current = panResponderStartBlocked;
-        return false;
-      },
-      [animatedHeight, animatedWidth, screenConfigRef],
-    );
-
-    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onMoveShouldSetPanResponder']>} */
-    const onMoveShouldSetPanResponder = useCallback(
-      (event, { dx, dy }) => {
-        event.stopPropagation();
-        if (panResponderStartBlockedRef.current) {
+        const locationValue = isHorizontal ? moveX : moveY;
+        const blocked =
+          locationValue < 0 ||
+          locationValue > side ||
+          (locationValue > startValue && locationValue < side - endValue);
+        if (blocked) {
           return false;
         }
-        const { stackSwipeGesture } = screenConfigRef.current;
-        if (!stackSwipeGesture || stackSwipeGesture === 'none') {
-          return false;
-        }
-        const isHorizontal = stackSwipeGesture === 'horizontal';
         const shouldSet =
           event.nativeEvent.touches.length === 1 &&
           Math.abs(isHorizontal ? dx : dy) > swipeStartThreshold &&
@@ -368,12 +353,13 @@ const GouterNativeStack = memo(
         }
         return shouldSet;
       },
-      [animatedFocusedIndex, screenConfigRef],
+      [animatedFocusedIndex.value, animatedHeight, animatedWidth, screenConfigRef],
     );
 
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderMove']>} */
     const onPanResponderMove = useCallback(
       (event, { dx, dy }) => {
+        event.preventDefault();
         event.stopPropagation();
         const isHorizontal = screenConfigRef.current.stackSwipeGesture === 'horizontal';
         const delta = isHorizontal ? dx : dy;
@@ -393,8 +379,8 @@ const GouterNativeStack = memo(
       },
       [
         animatedFocusedIndex,
-        animatedHeight,
-        animatedWidth,
+        animatedHeight.value,
+        animatedWidth.value,
         bounceAnimation,
         screenConfigRef,
         stackRef,
@@ -405,6 +391,7 @@ const GouterNativeStack = memo(
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
     const onPanResponderReleaseOrTerminate = useCallback(
       (event, { dx, vx, dy, vy }) => {
+        event.preventDefault();
         event.stopPropagation();
         const isHorizontal = screenConfigRef.current.stackSwipeGesture === 'horizontal';
         const delta = isHorizontal ? dx : dy;
@@ -436,19 +423,13 @@ const GouterNativeStack = memo(
     const panHandlers = useMemo(
       () =>
         PanResponder.create({
-          onStartShouldSetPanResponder,
           onMoveShouldSetPanResponder,
           onPanResponderMove,
           onPanResponderRelease: onPanResponderReleaseOrTerminate,
           onPanResponderTerminate: onPanResponderReleaseOrTerminate,
           onPanResponderTerminationRequest: () => false,
         }).panHandlers,
-      [
-        onMoveShouldSetPanResponder,
-        onPanResponderMove,
-        onPanResponderReleaseOrTerminate,
-        onStartShouldSetPanResponder,
-      ],
+      [onMoveShouldSetPanResponder, onPanResponderMove, onPanResponderReleaseOrTerminate],
     );
 
     const layoutChild = useMemo(
