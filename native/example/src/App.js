@@ -355,7 +355,7 @@ const screenConfigMap = {
     stackAnimation: iOSAnimation,
     stackAnimationDuration,
     stackSwipeGesture: 'horizontal',
-    stackSwipeLeftAndTopSize: 10,
+    stackSwipeLeftAndTopSize: 20,
   },
   LoginWithModal: {
     component: LoginWithModal,
@@ -383,6 +383,7 @@ const screenConfigMap = {
     stackAnimation: defaultAnimation,
     stackAnimationDuration: 1256,
     stackSwipeGesture: 'horizontal',
+    stackSwipeLeftAndTopSize: '100%',
   },
   Home: {
     component: Home,
