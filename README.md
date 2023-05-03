@@ -31,29 +31,37 @@ presented as required state parameters. Objects are used for url queries and wil
 optional state parameters.
 
 ```js
-import Gouter 'gouter';
+import Gouter from 'gouter';
 
 const gouter = new Gouter({
-  // -> { name: "App", params: {} }
   App: {
     _: '/',
   },
-  // -> { name: "Login", params: {} }
+  LoginWithModal: {
+    _: '/login-with-modal',
+  },
   Login: {
     _: '/login',
+    name: { decode: (str) => str, encode: (str) => str },
   },
-  // -> { name: "LoginConfirmation", params: { phone: string } }
+  LoginModal: {
+    _: '/login/modal',
+  },
   LoginConfirmation: {
     _: '/login-confirmation',
     phone: ['/', /\d+/],
   },
-  // -> { name: "Home", params: { minRating?: number | undefined } }
+  Tabs: {
+    _: '/tabs',
+  },
   Home: {
     _: '/home',
-    minRating: {
-      decode: parseFloat,
-      encode: String,
-    },
+  },
+  Post: {
+    _: '/post',
+  },
+  Profile: {
+    _: '/profile',
   },
 });
 ```
@@ -65,13 +73,25 @@ will export from it's instance. However some parts are mandatory in order to use
 `getState`, `listen`, `goBack`, `encodePath`.
 
 ```js
-const { setState, newState, setHooks, goTo, goBack, getState, listen, replace, encodePath } =
-  gouter;
+const {
+  setState,
+  setBuilders,
+  setNavigators,
+  goTo,
+  goBack,
+  getState,
+  listen,
+  replace,
+  encodePath,
+} = gouter;
 ```
 
 #### Set Builders
 
-Gouter `setBuilders` method customizes how stacks are created when you go to some state.
+Gouter `setBuilders` method customizes how stacks and params are created when you go to some state.
+For each route you may define special function called `builder` which will be launched when you add
+a state without `stack` field to your navigation. It accepts current raw state with list of all
+parent states and returns updated state.
 
 ```js
 setBuilders({
@@ -109,11 +129,20 @@ setNavigators({
 });
 ```
 
-For convenience we imported ready navigators from `gouter/navigators`. However you may easily create
-your own hooks for special needs:
+For convenience we imported ready navigators from `gouter/navigators`. The `navigator` is special
+functions which accepts passed state or null, parent state (and rarely grandparents) and returns
+modified parent state or `null`. In case of `null` parent navigator will try to modify it's state
+and so on. You may create your own navigators for special needs, for example here you create a
+navigator which fully replaces current stack with new state:
 
 ```js
-
+const switchNavigator = (state, parent) => {
+  if (state) {
+    return { ...parent, stack: [state] };
+  } else {
+    return null;
+  }
+};
 ```
 
 #### Set state
@@ -126,23 +155,25 @@ setState({ name: 'App', params: {} });
 
 #### Add type for screens
 
-This type will help you with type inference.
+This type will help you with type inference when you define screens:
 
-```js
-/** @typedef {gouter['state']} State */
+```ts
+export type State = (typeof gouter)['state'];
 ```
 
 #### Export extracted methods
 
 ```js
-export { goTo, goBack, replace, getState, listen, newState, encodePath };
+export { goTo, goBack, replace, getState, setState, listen, encodePath };
 ```
 
 ### Part 2: Screens
 
-```js
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['App']} */
-const App = ({ children }) => {
+```tsx
+import { ScreenMap } from 'gouter/native';
+import { State } from './router';
+
+const App: ScreenMap<State>['App'] = ({ children }) => {
   return (
     <View style={styles.container}>
       <Text>App</Text>
@@ -156,76 +187,126 @@ const App = ({ children }) => {
 
 #### Import
 
-Import `GouterNative` and some mandatory parts from your Gouter instance (named `router` here) into
+Add `GouterNative` and some mandatory parts from your Gouter instance (named `router` here) into
 App:
 
 ```js
 import GouterNative from 'gouter/native';
-import { getState, listen, goBack, encodePath } from './router';
+import { getState, goBack, goTo, listen, replace, encodePath, setState } from './router';
 ```
 
-Import all your screens and put them into `screenMap`:
+Before you define GouterNative config you need to add an animation. Here `animation` is special
+function which receives animation props and returns react-native animated style or two. Animation
+props are just `Animated.Value`'s:
 
-```js
-import App from 'screens/App';
-import Login from 'screens/Login';
-import LoginConfirmation from 'screens/LoginConfirmation';
-import Home from 'screens/Home';
+- `index` is index relative to focused state index
+- `width` is current component layout width
+- `height` is current component layout height
+- `focused`is 1 if focused and 0 otherwise
+- `bounce` is to indicate first (bounce < 0) or last screen (bounce > 0) offset
 
-/** @type {import('./router').ScreenMap} */
-const screenMap = {
-  App,
-  Login,
-  LoginConfirmation,
-  Home,
+Usage example:
+
+```ts
+import { Animation } from 'gouter/native';
+
+const iOSAnimation: Animation = ({ index, width }) => [
+  {
+    backgroundColor: 'black',
+    opacity: index.interpolate({
+      inputRange: [-1, 0, 1],
+      outputRange: [0.2, 0, 0],
+    }),
+  },
+  {
+    transform: [
+      {
+        translateX: Animated.multiply(
+          width,
+          index.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [-0.25, 0, 1],
+          }),
+        ),
+      },
+    ],
+  },
+];
+```
+
+Import screens and put them into `screenConfigMap` `component` field with required `stackAnimation`
+and `stackAnimationDuration`. You may also define `stackSwipeDetection` and
+`stackSwipeDetectionSize` to navigate between screens using swipe gestures. Each screen may have
+custom config and even accepts functions `(state) => config` for advanced use cases.
+
+```ts
+import { ScreenConfigMap } from 'gouter/native';
+import { State } from './router';
+
+const stackAnimationDuration = 256;
+
+const screenConfigMap: ScreenConfigMap<State> = {
+  App: {
+    component: App,
+    stackAnimation: iOSAnimation,
+    stackAnimationDuration,
+    stackSwipeDetection: 'left',
+    stackSwipeDetectionSize: 40,
+  },
+  LoginWithModal: {
+    component: LoginWithModal,
+    stackAnimation: modalAnimation,
+    stackAnimationDuration: 256,
+    stackSwipeDetection: 'vertical',
+  },
+  LoginModal: {
+    component: LoginModal,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration,
+  },
+  Login: {
+    component: Login,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration,
+  },
+  LoginConfirmation: {
+    component: LoginConfirmation,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration,
+  },
+  Tabs: {
+    component: Tabs,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration: 1256,
+    stackSwipeDetection: 'horizontal',
+  },
+  Home: {
+    component: Home,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration,
+  },
+  Post: {
+    component: Post,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration,
+  },
+  Profile: {
+    component: Profile,
+    stackAnimation: defaultAnimation,
+    stackAnimationDuration,
+  },
 };
 ```
 
-You may define `defaultAnimation` used for transition effects between states by default. It is a
-function which receives `Animated.Value` and returns animated style.
-
-```js
-/** @type {import('gouter/native').Animation} */
-const defaultAnimation = (value) => ({
-  opacity: value,
-  transform: [
-    {
-      translateY: value.interpolate({
-        inputRange: [0, 1],
-        outputRange: [20, 0],
-      }),
-    },
-    {
-      scale: value.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0.95, 1],
-      }),
-    },
-  ],
-});
-```
-
-You may also define `animationMap` used to customize transition effects for each route. It is a
-object where key is route name and value is function which receives `Animated.Value` and returns
-animated style.
-
-```js
-/** @type {Partial<Record<keyof import('router').ScreenMap, import('gouter/native').Animation>>} */
-const animationMap = {
-  Home: (value) => ({
-    opacity: value,
-  }),
-};
-```
-
-Finally you create wrapper component:
+Finally you create and export main app component. Here we pass things we defined before to
+`GouterNative`. You may customize navigation behavior by `listen` function, for example you may
+dismiss onscreen keyboard before each transition.
 
 ```js
 const AppWrapper = () => {
   const [appState, setAppState] = useState(getState);
 
   useEffect(() => listen(setAppState), []);
-
   useEffect(() => listen(Keyboard.dismiss), []);
 
   useEffect(() => {
