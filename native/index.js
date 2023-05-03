@@ -6,20 +6,32 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 /** @typedef {Gouter['state']} State */
 
 /**
+ * @typedef {{
+ * index: Animated.AnimatedSubtraction<number>,
+ * width: EnhancedAnimatedValue,
+ * height: EnhancedAnimatedValue,
+ * focused: EnhancedAnimatedValue,
+ * bounce: EnhancedAnimatedValue
+ * }} AnimationProps
+ */
+
+/**
  * @template State
  * @typedef {{
- * state: State,
- * isFocused: boolean,
- * isStale: boolean,
+ * state: State
+ * isFocused: boolean
+ * isStale: boolean
+ * animationProps: AnimationProps
  * children: React.ReactNode
  * }} ScreenProps
  */
 
 /** @typedef {Animated.WithAnimatedValue<import('react-native').ViewStyle>} AnimatedStyle */
 
+/** @typedef {Animated.Value & {value: number}} EnhancedAnimatedValue */
+
 /**
- * @typedef {(props: {index: Animated.AnimatedSubtraction<number>, size: Animated.ValueXY, focused: Animated.Value, bounce: Animated.Value})
- * => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation
+ * @typedef {(props: AnimationProps) => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation
  */
 
 /**
@@ -34,6 +46,8 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * stackAnimation: Animation
  * stackAnimationDuration: number
  * stackSwipeGesture?: 'horizontal' | 'vertical' | 'none'
+ * stackSwipeLeftAndTopSize?: number | string
+ * stackSwipeRightAndBottomSize?: number | string
  * }} ScreenConfig
  */
 
@@ -48,6 +62,29 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * @template {State} ScreenState
  * @typedef {{[Name in ScreenState['name']]: React.FC<ScreenProps<ScreenState & {name: Name}>>}} ScreenMap
  */
+
+const swipeStartThreshold = 5;
+const swipeCancelThreshold = 20;
+
+/** @type {ScreenConfig} */
+const defaultScreenConfig = {
+  component: () => null,
+  stackAnimation: () => ({}),
+  stackAnimationDuration: 0,
+};
+
+const defaultScreenConfigRef = { current: defaultScreenConfig };
+
+/** @type {State[]} */
+const emptyStack = [];
+
+const defaultAnimatedValue = /** @type {EnhancedAnimatedValue} */ (new Animated.Value(0));
+defaultAnimatedValue.value = 0;
+defaultAnimatedValue.addListener(({ value }) => {
+  defaultAnimatedValue.value = value;
+});
+
+const defaultStackRef = { current: /** @type {State[]} */ ([]) };
 
 /**
  * Joins previous and next stacks together
@@ -106,42 +143,20 @@ const getJoinedStack = (prevStack, nextStack, encodePath) => {
   return joinedStack;
 };
 
-const swipeStartThreshold = 5;
-const swipeCancelThreshold = 20;
-
-/** @type {(event: any, gestureState: any) => void} */
-const defaultOnPanResponderFinish = () => {};
-
-/** @type {ScreenConfig} */
-const defaultScreenConfig = {
-  component: () => null,
-  stackAnimation: () => ({}),
-  stackAnimationDuration: 0,
+/** @type {(initialValue: number) => EnhancedAnimatedValue} */
+const useEnhancedAnimatedValue = (initialValue) => {
+  const animatedValueRef = useRef(defaultAnimatedValue);
+  const isDefault = animatedValueRef.current === defaultAnimatedValue;
+  if (isDefault) {
+    const animatedValue = /** @type {EnhancedAnimatedValue} */ (new Animated.Value(initialValue));
+    animatedValueRef.current = animatedValue;
+    animatedValue.value = initialValue;
+    animatedValue.addListener(({ value }) => {
+      animatedValue.value = value;
+    });
+  }
+  return animatedValueRef.current;
 };
-
-/** @type {State[]} */
-const emptyStack = [];
-
-const defaultAnimatedValue = new Animated.Value(0);
-
-const defaultSize = {
-  width: Dimensions.get('window').width,
-  height: Dimensions.get('window').height,
-};
-
-const defaultStackRef = { current: /** @type {State[]} */ ([]) };
-
-let panRespondersBlocked = false;
-
-const defaultAnimatedSize = new Animated.ValueXY();
-
-const defaultBounceRef = { current: 0 };
-
-const defaultAnimatedBounce = new Animated.Value(0);
-
-const defaultAnimationDurationRef = { current: 0 };
-
-const defaultStackSwipeGestureRef = { current: undefined };
 
 /**
  * @type {React.FC<{
@@ -151,16 +166,12 @@ const defaultStackSwipeGestureRef = { current: undefined };
  * goTo: Gouter['goTo']
  * isStale: boolean
  * isFocused: boolean
- * animatedFocusedIndex: Animated.Value
  * index: number
  * stackRef: React.MutableRefObject<State[]>
- * stackAnimation?: Animation
- * size: {width: number, height: number}
- * animatedSize: Animated.ValueXY
- * bounceRef: React.MutableRefObject<number>
- * animatedBounce: Animated.Value
- * animationDurationRef: React.MutableRefObject<number>
- * stackSwipeGestureRef: React.MutableRefObject<ScreenConfig['stackSwipeGesture']>
+ * screenConfigRef: React.MutableRefObject<ScreenConfig>
+ * animatedFocusedIndex: EnhancedAnimatedValue
+ * animatedWidth: EnhancedAnimatedValue
+ * animatedHeight: EnhancedAnimatedValue
  * }>}
  */
 const GouterNativeStack = memo(
@@ -171,16 +182,12 @@ const GouterNativeStack = memo(
     goTo,
     isStale,
     isFocused,
-    animatedFocusedIndex,
     index,
     stackRef,
-    stackAnimation,
-    size,
-    animatedSize,
-    bounceRef,
-    animatedBounce,
-    animationDurationRef,
-    stackSwipeGestureRef,
+    screenConfigRef,
+    animatedFocusedIndex,
+    animatedWidth,
+    animatedHeight,
   }) => {
     const [, updateState] = useState([]);
 
@@ -192,6 +199,14 @@ const GouterNativeStack = memo(
     const prevStackRef = useRef(nextStack);
     const prevStack = prevStackRef.current;
 
+    /** @type {Animated.EndCallback} */
+    const updateStack = useCallback(({ finished }) => {
+      if (finished) {
+        prevStackRef.current = nextStackRef.current;
+        updateState([]);
+      }
+    }, []);
+
     const stack = useMemo(
       () => getJoinedStack(prevStack, nextStack, encodePath),
       [encodePath, nextStack, prevStack],
@@ -199,34 +214,25 @@ const GouterNativeStack = memo(
 
     prevStackRef.current = stack;
 
+    const thisStackRef = useRef(stack);
+    thisStackRef.current = stack;
+
     const focusedFreshIndex = state.index !== undefined ? state.index : nextStack.length - 1;
     const focusedIndex = stack.indexOf(nextStack[focusedFreshIndex]);
+    const thisAnimatedFocusedIndex = useEnhancedAnimatedValue(focusedIndex);
 
-    const thisAnimatedFocusedIndex = useRef(new Animated.Value(focusedIndex)).current;
-
-    const maybeScreenConfig = screenConfigMap[state.name];
-    const thisScreenConfig =
-      typeof maybeScreenConfig === 'function'
-        ? maybeScreenConfig(state)
-        : maybeScreenConfig || defaultScreenConfig;
-
-    const thisAnimationDurationRef = useRef(thisScreenConfig.stackAnimationDuration);
-    thisAnimationDurationRef.current = thisScreenConfig.stackAnimationDuration;
+    const animatedIndex = useEnhancedAnimatedValue(index);
 
     const indexRef = useRef(index);
     const prevIndex = indexRef.current;
     indexRef.current = index;
 
-    const animatedIndex = useRef(new Animated.Value(index)).current;
-
     if (index !== prevIndex) {
-      animatedIndex.stopAnimation(() =>
-        Animated.timing(animatedIndex, {
-          toValue: index,
-          useNativeDriver: true,
-          duration: animationDurationRef.current,
-        }).start(),
-      );
+      Animated.timing(animatedIndex, {
+        toValue: index,
+        useNativeDriver: true,
+        duration: screenConfigRef.current.stackAnimationDuration,
+      }).start();
     }
 
     const animatedValue = useMemo(
@@ -234,26 +240,33 @@ const GouterNativeStack = memo(
       [animatedFocusedIndex, animatedIndex],
     );
 
-    const thisAnimatedSize = useRef(new Animated.ValueXY()).current;
+    const thisAnimatedBounce = useEnhancedAnimatedValue(0);
+    const thisAnimatedWidth = useEnhancedAnimatedValue(0);
+    const thisAnimatedHeight = useEnhancedAnimatedValue(0);
+    const animatedIsFocused = useEnhancedAnimatedValue(isFocused ? 1 : 0);
 
-    const animatedIsFocused = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
     const prevIsFocusedRef = useRef(isFocused);
     if (isFocused !== prevIsFocusedRef.current) {
       animatedIsFocused.setValue(isFocused ? 1 : 0);
     }
     prevIsFocusedRef.current = isFocused;
 
+    const animationProps = useMemo(
+      () => ({
+        index: animatedValue,
+        width: animatedWidth,
+        height: animatedHeight,
+        focused: animatedIsFocused,
+        bounce: thisAnimatedBounce,
+      }),
+      [animatedValue, animatedWidth, animatedHeight, animatedIsFocused, thisAnimatedBounce],
+    );
+
+    const { stackAnimation } = screenConfigRef.current;
+
     const animatedStyleOrStyles = useMemo(
-      () =>
-        stackAnimation
-          ? stackAnimation({
-              index: animatedValue,
-              size: animatedSize,
-              focused: animatedIsFocused,
-              bounce: animatedBounce,
-            })
-          : null,
-      [stackAnimation, animatedValue, animatedSize, animatedIsFocused, animatedBounce],
+      () => (stackAnimation ? stackAnimation(animationProps) : null),
+      [animationProps, stackAnimation],
     );
     const animatedStyle = Array.isArray(animatedStyleOrStyles)
       ? animatedStyleOrStyles[1]
@@ -269,45 +282,209 @@ const GouterNativeStack = memo(
     const prevFocusedFreshIndex = focusedFreshIndexRef.current;
     focusedFreshIndexRef.current = focusedFreshIndex;
 
-    const onIndexChange = useCallback(
-      (/** @type {number} */ currentIndex) => {
-        const duration =
-          thisAnimationDurationRef.current *
-          Math.min(1, Math.abs(currentIndex - focusedIndexRef.current));
-        if (duration === 0) {
-          prevStackRef.current = nextStackRef.current;
-          thisAnimatedFocusedIndex.setValue(focusedIndexRef.current);
-          updateState([]);
-        } else {
-          Animated.timing(thisAnimatedFocusedIndex, {
-            useNativeDriver: true,
-            toValue: focusedIndexRef.current,
-            duration,
-          }).start(({ finished }) => {
-            if (finished) {
-              prevStackRef.current = nextStackRef.current;
-              updateState([]);
-            }
-          });
-        }
-      },
-      [thisAnimatedFocusedIndex],
-    );
+    const maybeScreenConfig = screenConfigMap[state.name];
+    const thisScreenConfig =
+      typeof maybeScreenConfig === 'function'
+        ? maybeScreenConfig(state)
+        : maybeScreenConfig || defaultScreenConfig;
+    const thisScreenConfigRef = useRef(thisScreenConfig);
+    thisScreenConfigRef.current = thisScreenConfig;
 
     if (focusedIndex !== prevFocusedIndex || focusedFreshIndex !== prevFocusedFreshIndex) {
-      thisAnimatedFocusedIndex.stopAnimation(onIndexChange);
+      const duration =
+        thisScreenConfig.stackAnimationDuration *
+        Math.min(1, Math.abs(thisAnimatedFocusedIndex.value - focusedIndex));
+      if (duration === 0) {
+        thisAnimatedFocusedIndex.setValue(focusedIndex);
+        updateStack({ finished: true });
+      } else {
+        Animated.timing(thisAnimatedFocusedIndex, {
+          useNativeDriver: true,
+          toValue: focusedIndex,
+          duration,
+        }).start(updateStack);
+      }
     }
 
-    const thisBounceRef = useRef(0);
-    const thisAnimatedBounce = useRef(new Animated.Value(0)).current;
+    const valueRef = useRef(0);
+
+    const stateRef = useRef(state);
+    stateRef.current = state;
+
+    const bounceAnimation = useMemo(
+      () => Animated.spring(thisAnimatedBounce, { toValue: 0, useNativeDriver: true, delay: 32 }),
+      [thisAnimatedBounce],
+    );
+
+    const panResponderStartBlockedRef = useRef(false);
+
+    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onStartShouldSetPanResponder']>} */
+    const onStartShouldSetPanResponder = useCallback(
+      (event) => {
+        event.stopPropagation();
+        const { stackSwipeGesture, stackSwipeLeftAndTopSize, stackSwipeRightAndBottomSize } =
+          screenConfigRef.current;
+        if (!stackSwipeGesture || stackSwipeGesture === 'none') {
+          return false;
+        }
+        const isHorizontal = stackSwipeGesture === 'horizontal';
+        const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
+        const startValue =
+          (typeof stackSwipeLeftAndTopSize === 'string'
+            ? 0.01 * parseFloat(stackSwipeLeftAndTopSize) * side
+            : stackSwipeLeftAndTopSize) || 0;
+        const endValue =
+          (typeof stackSwipeRightAndBottomSize === 'string'
+            ? 0.01 * parseFloat(stackSwipeRightAndBottomSize) * side
+            : stackSwipeRightAndBottomSize) || 0;
+        const { locationX, locationY } = event.nativeEvent;
+        const locationValue = isHorizontal ? locationX : locationY;
+        const panResponderStartBlocked =
+          locationValue > startValue && locationValue < side - endValue;
+        panResponderStartBlockedRef.current = panResponderStartBlocked;
+        return false;
+      },
+      [animatedHeight, animatedWidth, screenConfigRef],
+    );
+
+    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onMoveShouldSetPanResponder']>} */
+    const onMoveShouldSetPanResponder = useCallback(
+      (event, { dx, dy }) => {
+        event.stopPropagation();
+        if (panResponderStartBlockedRef.current) {
+          return false;
+        }
+        const { stackSwipeGesture } = screenConfigRef.current;
+        if (!stackSwipeGesture || stackSwipeGesture === 'none') {
+          return false;
+        }
+        const isHorizontal = stackSwipeGesture === 'horizontal';
+        const shouldSet =
+          event.nativeEvent.touches.length === 1 &&
+          Math.abs(isHorizontal ? dx : dy) > swipeStartThreshold &&
+          Math.abs(isHorizontal ? dy : dx) < swipeCancelThreshold;
+        if (shouldSet) {
+          valueRef.current = animatedFocusedIndex.value;
+        }
+        return shouldSet;
+      },
+      [animatedFocusedIndex, screenConfigRef],
+    );
+
+    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderMove']>} */
+    const onPanResponderMove = useCallback(
+      (event, { dx, dy }) => {
+        event.stopPropagation();
+        const isHorizontal = screenConfigRef.current.stackSwipeGesture === 'horizontal';
+        const delta = isHorizontal ? dx : dy;
+        const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
+        const offset = delta / side || 0;
+        const valueRaw = valueRef.current - offset;
+        const maxIndex = stackRef.current.length - 1;
+        const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
+        if (value !== valueRaw) {
+          valueRef.current = (valueRaw > maxIndex ? maxIndex : 0) + offset;
+          const bounceRaw = thisAnimatedBounce.value + valueRaw - value;
+          const bounce = Math.max(Math.min(bounceRaw, maxIndex + 1), -1);
+          thisAnimatedBounce.setValue(bounce);
+          bounceAnimation.start();
+        }
+        animatedFocusedIndex.setValue(value);
+      },
+      [
+        animatedFocusedIndex,
+        animatedHeight,
+        animatedWidth,
+        bounceAnimation,
+        screenConfigRef,
+        stackRef,
+        thisAnimatedBounce,
+      ],
+    );
+
+    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
+    const onPanResponderReleaseOrTerminate = useCallback(
+      (event, { dx, vx, dy, vy }) => {
+        event.stopPropagation();
+        const isHorizontal = screenConfigRef.current.stackSwipeGesture === 'horizontal';
+        const delta = isHorizontal ? dx : dy;
+        const velocity = isHorizontal ? vx : vy;
+        const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
+        const offset = delta / side || 0;
+        const velocityOffset = Math.max(Math.min(0.5, 0.5 * velocity), -0.5);
+        const valueRaw = valueRef.current - offset - velocityOffset;
+        const maxIndex = stackRef.current.length - 1;
+        const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
+        const nextPossibleIndex = Math.round(value);
+        const nextState = stackRef.current[nextPossibleIndex] || stateRef.current;
+        const nextIndex = nextState === stateRef.current ? indexRef.current : nextPossibleIndex;
+        const diff = Math.abs(nextIndex - value);
+        const duration = Math.max(100, 500 * diff);
+        Animated.timing(animatedFocusedIndex, {
+          toValue: nextIndex,
+          useNativeDriver: true,
+          duration,
+        }).start(({ finished }) => {
+          if (finished) {
+            goTo(nextState.name, nextState.params, nextState.stack);
+          }
+        });
+      },
+      [animatedFocusedIndex, goTo, animatedWidth, animatedHeight, stackRef, screenConfigRef],
+    );
+
+    const panHandlers = useMemo(
+      () =>
+        PanResponder.create({
+          onStartShouldSetPanResponder,
+          onMoveShouldSetPanResponder,
+          onPanResponderMove,
+          onPanResponderRelease: onPanResponderReleaseOrTerminate,
+          onPanResponderTerminate: onPanResponderReleaseOrTerminate,
+          onPanResponderTerminationRequest: () => false,
+        }).panHandlers,
+      [
+        onMoveShouldSetPanResponder,
+        onPanResponderMove,
+        onPanResponderReleaseOrTerminate,
+        onStartShouldSetPanResponder,
+      ],
+    );
+
+    const layoutChild = useMemo(
+      () =>
+        createElement(Animated.View, {
+          key: '',
+          style: { ...StyleSheet.absoluteFillObject, opacity: 0 },
+          pointerEvents: 'none',
+          onLayout: ({ nativeEvent }) => {
+            const { width, height } = nativeEvent.layout;
+            const shouldUpdate = thisAnimatedWidth.value === 0 && thisAnimatedHeight.value === 0;
+            thisAnimatedWidth.setValue(width);
+            thisAnimatedHeight.setValue(height);
+            if (shouldUpdate) {
+              updateState([]);
+            }
+          },
+        }),
+      [thisAnimatedWidth, thisAnimatedHeight],
+    );
+
+    const overlayChild = useMemo(
+      () =>
+        overlayStyle
+          ? createElement(Animated.View, {
+              key: '',
+              style: { ...StyleSheet.absoluteFillObject, opacity: 0, ...overlayStyle },
+              pointerEvents: 'none',
+            })
+          : null,
+      [overlayStyle],
+    );
+
+    const hasSize = animatedWidth.value > 0 && animatedHeight.value > 0;
 
     const Screen = thisScreenConfig.component;
-    const thisStackRef = useRef(stack);
-    thisStackRef.current = stack;
-    const thisSize = useRef({ width: 0, height: 0 }).current;
-    const thisStackAnimation = thisScreenConfig.stackAnimation;
-    const thisStackSwipeGestureRef = useRef(thisScreenConfig.stackSwipeGesture);
-    thisStackSwipeGestureRef.current = thisScreenConfig.stackSwipeGesture;
 
     const children = useMemo(
       () =>
@@ -323,192 +500,24 @@ const GouterNativeStack = memo(
             animatedFocusedIndex: thisAnimatedFocusedIndex,
             index: subIndex,
             stackRef: thisStackRef,
-            stackAnimation: thisStackAnimation,
-            size: thisSize,
-            animatedSize: thisAnimatedSize,
-            bounceRef: thisBounceRef,
-            animatedBounce: thisAnimatedBounce,
-            animationDurationRef: thisAnimationDurationRef,
-            stackSwipeGestureRef: thisStackSwipeGestureRef,
+            animatedWidth: thisAnimatedWidth,
+            animatedHeight: thisAnimatedHeight,
+            screenConfigRef: thisScreenConfigRef,
           }),
         ),
       [
-        stack,
         encodePath,
-        goTo,
-        screenConfigMap,
-        nextStack,
         focusedIndex,
+        goTo,
+        nextStack,
+        screenConfigMap,
+        stack,
         thisAnimatedFocusedIndex,
-        thisStackAnimation,
-        thisSize,
-        thisAnimatedSize,
-        thisAnimatedBounce,
+        thisAnimatedHeight,
+        thisAnimatedWidth,
+        thisScreenConfigRef,
       ],
     );
-
-    const valueSyncedRef = useRef(false);
-    const animationShouldBeSyncedRef = useRef(false);
-    const valueRef = useRef(0);
-    const onPanResponderFinishRef = useRef(defaultOnPanResponderFinish);
-    const onValue = useCallback((/** @type {number} */ value) => {
-      valueSyncedRef.current = true;
-      valueRef.current = value;
-      if (animationShouldBeSyncedRef.current) {
-        onPanResponderFinishRef.current({}, { dx: 0, vx: 0, dy: 0, vy: 0 });
-        animationShouldBeSyncedRef.current = false;
-      }
-    }, []);
-
-    const stateRef = useRef(state);
-    stateRef.current = state;
-
-    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onMoveShouldSetPanResponder']>} */
-    const onMoveShouldSetPanResponder = useCallback(
-      (event, { dx, dy }) => {
-        const stackSwipeGesture = stackSwipeGestureRef.current;
-        if (panRespondersBlocked || !stackSwipeGesture || stackSwipeGesture === 'none') {
-          return false;
-        }
-        const isHorizontal = stackSwipeGesture === 'horizontal';
-        const shouldSet =
-          event.nativeEvent.touches.length === 1 &&
-          Math.abs(isHorizontal ? dx : dy) > swipeStartThreshold &&
-          Math.abs(isHorizontal ? dy : dx) < swipeCancelThreshold;
-        if (shouldSet) {
-          panRespondersBlocked = true;
-          valueSyncedRef.current = false;
-          animatedFocusedIndex.stopAnimation(onValue);
-        }
-        return shouldSet;
-      },
-      [animatedFocusedIndex, onValue, stackSwipeGestureRef],
-    );
-
-    const bounceAnimation = useMemo(
-      () => Animated.spring(animatedBounce, { toValue: 0, useNativeDriver: true }),
-      [animatedBounce],
-    );
-    const bounceOffsetRef = useRef(0);
-    const bounceCallback = useCallback(
-      (/** @type {number} */ currentValue) => {
-        const bounceRaw = currentValue + bounceOffsetRef.current;
-        const maxIndex = stackRef.current.length - 1;
-        bounceRef.current = Math.max(Math.min(bounceRaw, maxIndex + 1), -1);
-        animatedBounce.setValue(bounceRef.current);
-        bounceAnimation.start();
-      },
-      [animatedBounce, bounceAnimation, bounceRef, stackRef],
-    );
-
-    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderMove']>} */
-    const onPanResponderMove = useCallback(
-      (_, { dx, dy }) => {
-        const isHorizontal = stackSwipeGestureRef.current === 'horizontal';
-        const delta = isHorizontal ? dx : dy;
-        const side = isHorizontal ? size.width : size.height;
-        const offset = delta / side || 0;
-        const valueRaw = valueRef.current - offset;
-        const maxIndex = stackRef.current.length - 1;
-        const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
-        if (value !== valueRaw) {
-          valueRef.current = (valueRaw > maxIndex ? maxIndex : 0) + offset;
-          bounceOffsetRef.current = valueRaw - value;
-          animatedBounce.stopAnimation(bounceCallback);
-        }
-        animatedFocusedIndex.setValue(value);
-      },
-      [animatedBounce, animatedFocusedIndex, bounceCallback, size, stackRef, stackSwipeGestureRef],
-    );
-
-    /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
-    const onPanResponderReleaseOrTerminate = useCallback(
-      (_, { dx, vx, dy, vy }) => {
-        if (!valueSyncedRef.current) {
-          animationShouldBeSyncedRef.current = true;
-          return;
-        }
-
-        panRespondersBlocked = false;
-        const isHorizontal = stackSwipeGestureRef.current === 'horizontal';
-        const delta = isHorizontal ? dx : dy;
-
-        const velocity = isHorizontal ? vx : vy;
-        const side = isHorizontal ? size.width : size.height;
-
-        const offset = delta / side || 0;
-        const velocityOffset = Math.max(Math.min(0.5, 0.25 * velocity), -0.5);
-
-        const valueRaw = valueRef.current - offset - velocityOffset;
-        const maxIndex = stackRef.current.length - 1;
-        const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
-        const nextPossibleIndex = Math.round(value);
-        const nextState = stackRef.current[nextPossibleIndex] || stateRef.current;
-        const nextIndex = nextState === stateRef.current ? indexRef.current : nextPossibleIndex;
-
-        const diff = Math.abs(nextIndex - value);
-        const duration = animationDurationRef.current * diff;
-
-        Animated.timing(animatedFocusedIndex, {
-          toValue: nextIndex,
-          useNativeDriver: true,
-          duration,
-        }).start(({ finished }) => {
-          if (finished) {
-            goTo(nextState.name, nextState.params, nextState.stack);
-          }
-        });
-      },
-      [animatedFocusedIndex, animationDurationRef, goTo, size, stackRef, stackSwipeGestureRef],
-    );
-
-    onPanResponderFinishRef.current = onPanResponderReleaseOrTerminate;
-
-    const panHandlers = useMemo(
-      () =>
-        PanResponder.create({
-          onMoveShouldSetPanResponder,
-          onPanResponderMove,
-          onPanResponderRelease: onPanResponderReleaseOrTerminate,
-          onPanResponderTerminate: onPanResponderReleaseOrTerminate,
-          onPanResponderTerminationRequest: () => false,
-        }).panHandlers,
-      [onMoveShouldSetPanResponder, onPanResponderMove, onPanResponderReleaseOrTerminate],
-    );
-
-    const layoutChild = useMemo(
-      () =>
-        createElement(Animated.View, {
-          key: '',
-          style: { ...StyleSheet.absoluteFillObject, opacity: 0 },
-          pointerEvents: 'none',
-          onLayout: ({ nativeEvent }) => {
-            const { width, height } = nativeEvent.layout;
-            const shouldUpdate = thisSize.width === 0 || thisSize.height === 0;
-            thisSize.width = width;
-            thisSize.height = height;
-            thisAnimatedSize.setValue({ x: width, y: height });
-            if (shouldUpdate) {
-              updateState([]);
-            }
-          },
-        }),
-      [thisAnimatedSize, thisSize],
-    );
-
-    const overlayChild = useMemo(
-      () =>
-        overlayStyle
-          ? createElement(Animated.View, {
-              key: '',
-              style: { ...StyleSheet.absoluteFillObject, opacity: 0, ...overlayStyle },
-              pointerEvents: 'none',
-            })
-          : null,
-      [overlayStyle],
-    );
-
-    const hasSize = size.width > 0 && size.height > 0;
 
     const extendedChildren = useMemo(
       () => (hasSize ? [layoutChild, ...children] : layoutChild),
@@ -526,6 +535,7 @@ const GouterNativeStack = memo(
               state,
               isFocused,
               isStale,
+              animationProps,
               children: extendedChildren,
             })
           : null,
@@ -547,16 +557,12 @@ const GouterNative = memo((props) =>
   createElement(GouterNativeStack, {
     isStale: false,
     isFocused: true,
-    animatedFocusedIndex: defaultAnimatedValue,
     index: 0,
     stackRef: defaultStackRef,
-    stackAnimation: defaultScreenConfig.stackAnimation,
-    size: defaultSize,
-    animatedSize: defaultAnimatedSize,
-    bounceRef: defaultBounceRef,
-    animatedBounce: defaultAnimatedBounce,
-    animationDurationRef: defaultAnimationDurationRef,
-    stackSwipeGestureRef: defaultStackSwipeGestureRef,
+    screenConfigRef: defaultScreenConfigRef,
+    animatedFocusedIndex: useEnhancedAnimatedValue(0),
+    animatedWidth: useEnhancedAnimatedValue(Dimensions.get('window').width),
+    animatedHeight: useEnhancedAnimatedValue(Dimensions.get('window').height),
     ...props,
   }),
 );

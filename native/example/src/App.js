@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import GouterNative from 'gouter/native';
 import {
   StyleSheet,
@@ -84,8 +84,8 @@ const LoginWithModal = ({children}) => {
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginModal']} */
 const LoginModal = () => {
   return (
-    <View style={styles.modalContainer}>
-      <View style={styles.modalPlaceholder} />
+    <View style={styles.modalContainer} renderToHardwareTextureAndroid>
+      <View style={styles.modalPlaceholder} renderToHardwareTextureAndroid />
     </View>
   );
 };
@@ -118,10 +118,30 @@ const Login = ({state}) => {
 };
 
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginConfirmation']} */
-const LoginConfirmation = ({state}) => {
+const LoginConfirmation = ({state, animationProps: {index}}) => {
+  const animatedTextStyle = useMemo(
+    () => ({
+      opacity: index.interpolate({
+        inputRange: [-1, 0, 1],
+        outputRange: [0, 1, 0],
+      }),
+      transform: [
+        {
+          translateY: index.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [-80, 0, -80],
+          }),
+        },
+      ],
+    }),
+    [index],
+  );
+
   return (
     <View style={styles.container}>
-      <Text>Login Confirmation</Text>
+      <Animated.View style={animatedTextStyle}>
+        <Text>Login Confirmation</Text>
+      </Animated.View>
       <Text>Phone: {state.params.phone}</Text>
       <Button title="go to Tabs" onPress={() => goTo('Tabs', {})} />
       <Text>{'confirmation '.repeat(100)}</Text>
@@ -250,7 +270,7 @@ const Profile = () => {
 };
 
 /** @type {import('gouter/native').Animation} */
-const defaultAnimation = ({index, size, focused, bounce}) => ({
+const defaultAnimation = ({index, width, focused, bounce}) => ({
   zIndex: focused,
   opacity: index.interpolate({
     inputRange: [-1, 0, 1],
@@ -259,7 +279,7 @@ const defaultAnimation = ({index, size, focused, bounce}) => ({
   transform: [
     {
       translateX: Animated.multiply(
-        size.x,
+        width,
         Animated.subtract(index, Animated.multiply(bounce, 0.25)),
       ),
     },
@@ -279,7 +299,7 @@ const defaultAnimation = ({index, size, focused, bounce}) => ({
 });
 
 /** @type {import('gouter/native').Animation} */
-const iOSAnimation = ({index, size}) => [
+const iOSAnimation = ({index, width}) => [
   {
     backgroundColor: 'black',
     opacity: index.interpolate({
@@ -291,7 +311,7 @@ const iOSAnimation = ({index, size}) => [
     transform: [
       {
         translateX: Animated.multiply(
-          size.x,
+          width,
           index.interpolate({
             inputRange: [-1, 0, 1],
             outputRange: [-0.25, 0, 1],
@@ -303,7 +323,7 @@ const iOSAnimation = ({index, size}) => [
 ];
 
 /** @type {import('gouter/native').Animation} */
-const modalAnimation = ({index, size}) => [
+const modalAnimation = ({index, height}) => [
   {
     backgroundColor: 'black',
     opacity: index.interpolate({
@@ -315,7 +335,7 @@ const modalAnimation = ({index, size}) => [
     transform: [
       {
         translateY: Animated.multiply(
-          size.y,
+          height,
           index.interpolate({
             inputRange: [-1, 0, 1],
             outputRange: [0, 0, 1],
@@ -335,6 +355,7 @@ const screenConfigMap = {
     stackAnimation: iOSAnimation,
     stackAnimationDuration,
     stackSwipeGesture: 'horizontal',
+    stackSwipeLeftAndTopSize: 10,
   },
   LoginWithModal: {
     component: LoginWithModal,
