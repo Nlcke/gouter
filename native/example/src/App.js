@@ -354,14 +354,14 @@ const screenConfigMap = {
     component: App,
     stackAnimation: iOSAnimation,
     stackAnimationDuration,
-    stackSwipeGesture: 'horizontal',
-    stackSwipeLeftAndTopSize: 20,
+    stackSwipeDetection: 'left',
+    stackSwipeDetectionSize: 40,
   },
   LoginWithModal: {
     component: LoginWithModal,
     stackAnimation: modalAnimation,
     stackAnimationDuration: 256,
-    stackSwipeGesture: 'vertical',
+    stackSwipeDetection: 'vertical',
   },
   LoginModal: {
     component: LoginModal,
@@ -382,8 +382,7 @@ const screenConfigMap = {
     component: Tabs,
     stackAnimation: defaultAnimation,
     stackAnimationDuration: 1256,
-    stackSwipeGesture: 'horizontal',
-    stackSwipeLeftAndTopSize: '100%',
+    stackSwipeDetection: 'horizontal',
   },
   Home: {
     component: Home,

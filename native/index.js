@@ -45,9 +45,8 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * component: React.ComponentType<ScreenProps<any>>
  * stackAnimation: Animation
  * stackAnimationDuration: number
- * stackSwipeGesture?: 'horizontal' | 'vertical' | 'none'
- * stackSwipeLeftAndTopSize?: number | string
- * stackSwipeRightAndBottomSize?: number | string
+ * stackSwipeDetection?: 'horizontal' | 'vertical' | 'top' | 'right' | 'bottom' | 'left' | 'none'
+ * stackSwipeDetectionSize?: number | string
  * }} ScreenConfig
  */
 
@@ -321,28 +320,35 @@ const GouterNativeStack = memo(
       (event, { dx, dy, moveX, moveY }) => {
         event.preventDefault();
         event.stopPropagation();
-        const { stackSwipeGesture, stackSwipeLeftAndTopSize, stackSwipeRightAndBottomSize } =
-          screenConfigRef.current;
-        if (!stackSwipeGesture || stackSwipeGesture === 'none') {
+        const { stackSwipeDetection, stackSwipeDetectionSize } = screenConfigRef.current;
+        if (!stackSwipeDetection || stackSwipeDetection === 'none') {
           return false;
         }
-        const isHorizontal = stackSwipeGesture === 'horizontal';
-        const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
-        const startValue =
-          (typeof stackSwipeLeftAndTopSize === 'string'
-            ? 0.01 * parseFloat(stackSwipeLeftAndTopSize) * side
-            : stackSwipeLeftAndTopSize) || 0;
-        const endValue =
-          (typeof stackSwipeRightAndBottomSize === 'string'
-            ? 0.01 * parseFloat(stackSwipeRightAndBottomSize) * side
-            : stackSwipeRightAndBottomSize) || 0;
+        const isHorizontal =
+          stackSwipeDetection === 'horizontal' ||
+          stackSwipeDetection === 'left' ||
+          stackSwipeDetection === 'right';
         const locationValue = isHorizontal ? moveX : moveY;
-        const blocked =
-          locationValue < 0 ||
-          locationValue > side ||
-          (locationValue > startValue && locationValue < side - endValue);
-        if (blocked) {
+        const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
+        if (locationValue < 0 || locationValue > side) {
           return false;
+        }
+        if (stackSwipeDetectionSize !== undefined) {
+          const size =
+            typeof stackSwipeDetectionSize === 'string'
+              ? 0.01 * (parseFloat(stackSwipeDetectionSize) || 0) * side
+              : stackSwipeDetectionSize;
+          if (stackSwipeDetection === 'horizontal' || stackSwipeDetection === 'vertical') {
+            if (locationValue > size && locationValue < side - size) {
+              return false;
+            }
+          } else if (stackSwipeDetection === 'left' || stackSwipeDetection === 'top') {
+            if (locationValue > size) {
+              return false;
+            }
+          } else if (locationValue < side - size) {
+            return false;
+          }
         }
         const shouldSet =
           event.nativeEvent.touches.length === 1 &&
@@ -361,7 +367,11 @@ const GouterNativeStack = memo(
       (event, { dx, dy }) => {
         event.preventDefault();
         event.stopPropagation();
-        const isHorizontal = screenConfigRef.current.stackSwipeGesture === 'horizontal';
+        const { stackSwipeDetection } = screenConfigRef.current;
+        const isHorizontal =
+          stackSwipeDetection === 'horizontal' ||
+          stackSwipeDetection === 'left' ||
+          stackSwipeDetection === 'right';
         const delta = isHorizontal ? dx : dy;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
         const offset = delta / side || 0;
@@ -393,7 +403,11 @@ const GouterNativeStack = memo(
       (event, { dx, vx, dy, vy }) => {
         event.preventDefault();
         event.stopPropagation();
-        const isHorizontal = screenConfigRef.current.stackSwipeGesture === 'horizontal';
+        const { stackSwipeDetection } = screenConfigRef.current;
+        const isHorizontal =
+          stackSwipeDetection === 'horizontal' ||
+          stackSwipeDetection === 'left' ||
+          stackSwipeDetection === 'right';
         const delta = isHorizontal ? dx : dy;
         const velocity = isHorizontal ? vx : vy;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
