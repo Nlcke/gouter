@@ -573,7 +573,7 @@ class Gouter {
     };
 
     /**
-     * Go to state using `shouldGoTo` and `onGoTo` hooks.
+     * Go to state using current stack navigator.
      * @type {<N extends Name>(name: N, params: StateMap[N]['params'], stack?: State[]) => void}
      */
     this.goTo = (name, params, stack) => {
@@ -583,7 +583,7 @@ class Gouter {
     };
 
     /**
-     * Go back using `shouldGoBack` and `onGoBack` hooks.
+     * Go back using current stack navigator.
      * @type {() => void}
      */
     this.goBack = () => {
