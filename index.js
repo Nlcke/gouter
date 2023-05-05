@@ -44,71 +44,78 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
+ * `StateMap<T>` is used to get route name and params from route name.
+ * @template {Routes} T
+ * @typedef {{[N in keyof T]: {
+ * name: N
+ * params: {[K in keyof T[N] as
+ * T[N][K] extends PathSegment ?
+ * T[N][K][3] extends '' ? K : T[N][K][3] extends '+' ?
+ * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never : never]:
+ * T[N][K] extends PathSegment ? T[N][K][3] extends '+' ? string[] : string : string}
+ * & {[K in keyof T[N] as
+ * T[N][K] extends PathSegment ?
+ * T[N][K][3] extends '?' ? K : T[N][K][3] extends '*' ?
+ * K : never : T[N][K] extends Serializable<any> ?
+ * K : never]?: T[N][K] extends PathSegment ?
+ * T[N][K][3] extends '?' ? string : T[N][K][3] extends '*' ?
+ * string[] : never : T[N][K] extends Serializable<any> ?
+ * ReturnType<T[N][K]['decode']> : never}
+ * }}} StateMap
+ */
+
+/**
+ * `State<T>` is Gouter unit with required name, params, optional stack of states and optional
+ * index of focused state in state stack to create complex navigation.
+ * @template {Routes} T
+ * @typedef {StateMap<T>[keyof T] & {stack?: State<T>[], index?: number}} State
+ */
+
+/**
+ * `Navigators` is used to define `Navigator` for each route where you need it.
+ * @template {Routes} T
+ * @typedef {{[N in keyof T]?: Navigator<T, N>}} Navigators
+ */
+
+/**
+ * `Navigator` is a function called when you attempt to change current state using `go`,
+ * `goTo` or `goBack`.
+ * @template {Routes} T
+ * @template {keyof T} N
+ * @typedef {(stateOrNull: State<T> | null, parent: StateMap<T>[N] & State<T>, ...parents: State<T>[])
+ * => State<T> | null} Navigator
+ */
+
+/**
+ * `Builder` is a function called to modify state when a state without stack is added to current state
+ * @template {Routes} T
+ * @template {keyof T} N
+ * @typedef {(state: StateMap<T>[N] & State<T>, ...parents: State<T>[]) => State<T>} Builder
+ */
+
+/**
+ * `Listener` function is called with current state when it changes.
+ * @template {Routes} T
+ * @typedef {(state: State<T>) => void} Listener
+ */
+
+/**
+ * `Builders` is used to define stack builder for each route where you need it.
+ * @template {Routes} T
+ * @typedef {{[N in keyof T]?: Builder<T, N>}} Builders
+ */
+
+/**
+ * @typedef {Gouter<any>} GouterInstance
+ */
+
+/**
  * Creates `Gouter` instance with available routes. It's methods are used to modify navigation
  * state and then notify listeners about it.
  * @template {Routes} T
  * @param {T} routes map of routes
  */
 class Gouter {
-  /**
-   * @typedef {keyof T & string} Name
-   */
-
-  /**
-   * `StateMap` is used to get route name and params from route name.
-   * @typedef {{[N in Name]: {
-   * name: N
-   * params: {[K in keyof T[N] as
-   * T[N][K] extends PathSegment ?
-   * T[N][K][3] extends '' ? K : T[N][K][3] extends '+' ?
-   * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never : never]:
-   * T[N][K] extends PathSegment ? T[N][K][3] extends '+' ? string[] : string : string}
-   * & {[K in keyof T[N] as
-   * T[N][K] extends PathSegment ?
-   * T[N][K][3] extends '?' ? K : T[N][K][3] extends '*' ?
-   * K : never : T[N][K] extends Serializable<any> ?
-   * K : never]?: T[N][K] extends PathSegment ?
-   * T[N][K][3] extends '?' ? string : T[N][K][3] extends '*' ?
-   * string[] : never : T[N][K] extends Serializable<any> ?
-   * ReturnType<T[N][K]['decode']> : never}
-   * }}} StateMap
-   */
-
-  /**
-   * `State` is Gouter unit with required name, params, optional stack of states and optional
-   * index of focused state in state stack to create complex navigation.
-   * @typedef {StateMap[keyof StateMap] & {stack?: State[], index?: number}} State
-   */
-
-  /**
-   * `Navigator` is a function called when you attempt to change current state using `go`,
-   * `goTo` or `goBack`.
-   * @template {Name} N
-   * @typedef {(stateOrNull: State | null, parent: StateMap[N] & State, ...parents: State[])
-   * => State | null} Navigator
-   */
-
-  /**
-   * `Builder` is a function called to modify state when a state without stack is added to current state
-   * @template {Name} N
-   * @typedef {(state: StateMap[N] & State, ...parents: State[]) => State} Builder
-   */
-
-  /**
-   * `Listener` function is called with current state when it changes.
-   * @typedef {(state: State) => void} Listener
-   */
-
-  /**
-   * `Navigators` is used to define `Navigator` for each route where you need it.
-   * @typedef {{[K in Name]?: Navigator<K>}} Navigators
-   */
-
-  /**
-   * `Builders` is used to define `stackBuilder` for each route where you need it.
-   * @typedef {{[K in Name]?: Builder<K>}} Builders
-   */
-
   /** @param {T} routes map of routes  */
   constructor(routes) {
     /**
@@ -119,12 +126,12 @@ class Gouter {
     this.routeMap = routes;
 
     /**
-     * @type {Navigator<Name>}
+     * @type {Navigator<T, keyof T>}
      */
     this.navigator = (_, parent) => parent;
 
     /**
-     * @type {Builder<Name>}
+     * @type {Builder<T, keyof T>}
      */
     this.builder = (state) => state;
 
@@ -132,7 +139,7 @@ class Gouter {
      * `getNotFoundStateFromUrl` stores callback to create not-found state from url to use on web.
      * @protected
      * @web
-     * @type {(url: string) => State}
+     * @type {(url: string) => State<T>}
      */
     this.getNotFoundStateFromUrl = (url) => ({
       name: '',
@@ -142,7 +149,7 @@ class Gouter {
 
     /**
      * `state` stores current router state. Initially it set to `notFoundState`.
-     * @type {State}
+     * @type {State<T>}
      */
     this.state = { name: '', params: /** @type {any} */ ({}), stack: [] };
 
@@ -150,7 +157,7 @@ class Gouter {
      * `navigators` stores current navigators customized for each route where you need it.
      * You may set it using `setNavigators` and get it using `getNavigators`.
      * @protected
-     * @type {Navigators}
+     * @type {Navigators<T>}
      */
     this.navigators = {};
 
@@ -158,7 +165,7 @@ class Gouter {
      * `builders` stores current builders customized for each route where you need it.
      * You may set it using `setBuilders` and get it using `getBuilders`.
      * @protected
-     * @type {Builders}
+     * @type {Builders<T>}
      */
     this.builders = {};
 
@@ -181,7 +188,7 @@ class Gouter {
      * `regexpFunctionCache` stores Regexp function cache used for `getRegexpFunction` to decode
      * urls into states.
      * @protected
-     * @type {Object<string, RegExp['exec']>}
+     * @type {Partial<Record<keyof T, RegExp['exec']>>}
      */
     this.regexpFunctionCache = {};
 
@@ -189,21 +196,21 @@ class Gouter {
      * `pathFunctionCache` stores PathFunction cache used to encode states into urls' paths at
      * `encodePath`.
      * @protected
-     * @type {Object<string, import('path-to-regexp').PathFunction<object>>}
+     * @type {Partial<Record<keyof T, import('path-to-regexp').PathFunction<object>>>}
      */
     this.pathFunctionCache = {};
 
     /**
      * `pathCacheByName` stores path cache for each route name to speed up `encodePath`.
      * @protected
-     * @type {Record<string, WeakMap<object, string>>}
+     * @type {Partial<Record<keyof T, WeakMap<object, string>>>}
      */
     this.pathCacheByName = {};
 
     /**
      * `listeners` stores list of listeners called when current state changes.
      * @protected
-     * @type {Listener[]}
+     * @type {Listener<T>[]}
      */
     this.listeners = [];
 
@@ -242,7 +249,7 @@ class Gouter {
 
     /**
      * Creates url path string from state name and params.
-     * @type {(state: State) => string}
+     * @type {(state: State<T>) => string}
      */
     this.encodePath = (state) => {
       const {
@@ -278,7 +285,7 @@ class Gouter {
 
     /**
      * Create url query string from state name and params.
-     * @type {(state: State) => string}
+     * @type {(state: State<T>) => string}
      */
     this.encodeQuery = (state) => {
       const { routeMap } = this;
@@ -315,7 +322,7 @@ class Gouter {
 
     /**
      * Create url from state name and params.
-     * @type {(state: State) => string}
+     * @type {(state: State<T>) => string}
      */
     this.encodeUrl = (state) => {
       const { encodePath, encodeQuery } = this;
@@ -328,7 +335,7 @@ class Gouter {
     /**
      * Get regexp function from route name. It is used for `decodePath`.
      * @protected
-     * @type {(name: Name) => RegExp['exec']}
+     * @type {(name: keyof T) => RegExp['exec']}
      */
     this.getRegexpFunction = (name) => {
       const { regexpFunctionCache, routeMap, pathToRegexpOptions, getTokensFromParamsDef } = this;
@@ -347,18 +354,18 @@ class Gouter {
 
     /**
      * Get required state params from path or null if path is not matched.
-     * @type {<N extends Name>(name: N, path: string) => StateMap[N]['params'] | null}
+     * @type {<N extends keyof T>(name: N, path: string) => StateMap<T>[N]['params'] | null}
      */
     this.decodePath = (name, path) => {
       const { getRegexpFunction, routeMap } = this;
       const regexpFunction = getRegexpFunction(name);
       const match = regexpFunction(path);
       if (match) {
-        const params = /** @type {StateMap[typeof name]['params']} */ ({});
+        const params = /** @type {StateMap<T>[typeof name]['params']} */ ({});
         const paramsDef = routeMap[name];
         let index = 0;
         for (const key in paramsDef) {
-          const paramsKey = /** @type {keyof StateMap[typeof name]['params']} */ (
+          const paramsKey = /** @type {keyof StateMap<T>[typeof name]['params']} */ (
             /** @type {unknown} */ (key)
           );
           const segment = paramsDef[key];
@@ -385,11 +392,11 @@ class Gouter {
 
     /**
      * Generates optional route parameters from url query string and route name.
-     * @type {<N extends Name>(name: N, queryStr: string) => StateMap[N]['params']}
+     * @type {<N extends keyof T>(name: N, queryStr: string) => StateMap<T>[N]['params']}
      */
     this.decodeQuery = (name, queryStr) => {
       const { routeMap } = this;
-      const params = /** @type {StateMap[typeof name]['params']} */ ({});
+      const params = /** @type {StateMap<T>[typeof name]['params']} */ ({});
       const paramsDef = routeMap[name];
       for (const keyValueStr of queryStr.split('&')) {
         const splitIndex = keyValueStr.indexOf('=');
@@ -411,7 +418,7 @@ class Gouter {
             /* empty */
           }
           const value = decode(valueEncoded);
-          params[/** @type {keyof StateMap[typeof name]['params']} */ (key)] = value;
+          params[/** @type {keyof StateMap<T>[typeof name]['params']} */ (key)] = value;
         }
       }
       return params;
@@ -419,7 +426,7 @@ class Gouter {
 
     /**
      * Generates router state from url. If route not found then notFoundState returned.
-     * @type {(url: string) => State | null}
+     * @type {(url: string) => State<T> | null}
      */
     this.decodeUrl = (url) => {
       const { decodePath, routeMap, decodeQuery } = this;
@@ -434,7 +441,7 @@ class Gouter {
               params[key] = query[key];
             }
           }
-          const state = /** @type {State & {name: typeof name}} */ ({ name, params });
+          const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params });
           return state;
         }
       }
@@ -444,7 +451,7 @@ class Gouter {
     /**
      * Recursively creates flat list of every child state inside current state.
      * @protected
-     * @type {(state: State) => State[]}
+     * @type {(state: State<T>) => State<T>[]}
      */
     this.stateToStack = (state) => {
       const { stateToStack } = this;
@@ -464,7 +471,7 @@ class Gouter {
 
     /**
      * Builds new state from a state
-     * @type {(state: State, parents: State[]) => State}
+     * @type {(state: State<T>, parents: State<T>[]) => State<T>}
      */
     this.buildState = (state, parents) => {
       const { builders, buildState } = this;
@@ -490,7 +497,7 @@ class Gouter {
 
     /**
      * Get current router state
-     * @type {() => State}
+     * @type {() => State<T>}
      */
     this.getState = () => {
       const { state } = this;
@@ -499,7 +506,7 @@ class Gouter {
 
     /**
      * Set current router state and call listeners with it if any.
-     * @type {(state: State) => void}
+     * @type {(state: State<T>) => void}
      */
     this.setState = (state) => {
       const { buildState, listeners } = this;
@@ -513,7 +520,7 @@ class Gouter {
     /**
      * Get list of focused states from top to root.
      * @protected
-     * @type {(state: State) => State[]}
+     * @type {(state: State<T>) => State<T>[]}
      */
     this.getFocusedStates = (state) => {
       const focusedStates = [state];
@@ -532,9 +539,9 @@ class Gouter {
     };
 
     /**
-     * Go through the chain of actions where `State` is used for `goTo` and `null` is used
+     * Go through the chain of actions where `State<T>` is used for `goTo` and `null` is used
      * for `goBack`.
-     * @type {(...statesOrNulls: (State | null)[]) => void}
+     * @type {(...statesOrNulls: (State<T> | null)[]) => void}
      */
     this.go = (...statesOrNulls) => {
       const { state: currentState, navigators, getFocusedStates, listeners, buildState } = this;
@@ -545,7 +552,7 @@ class Gouter {
           const focusedState = focusedStates[index];
           const navigator = navigators[focusedState.name];
           if (navigator) {
-            const parents = /** @type {[StateMap[Name] & State, ...State[]]} */ (
+            const parents = /** @type {[StateMap<T>[keyof T] & State<T>, ...State<T>[]]} */ (
               focusedStates.slice(index)
             );
             const builtState = state ? buildState(state, parents) : null;
@@ -574,11 +581,11 @@ class Gouter {
 
     /**
      * Go to state using current stack navigator.
-     * @type {<N extends Name>(name: N, params: StateMap[N]['params'], stack?: State[]) => void}
+     * @type {<N extends keyof T>(name: N, params: StateMap<T>[N]['params'], stack?: State<T>[]) => void}
      */
     this.goTo = (name, params, stack) => {
       const { go } = this;
-      const state = /** @type {State & {name: typeof name}} */ ({ name, params, stack });
+      const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params, stack });
       go(state);
     };
 
@@ -593,7 +600,7 @@ class Gouter {
 
     /**
      * Find state parents to use in `replace`.
-     * @type {(state: State, parents?: State[]) => State[]}
+     * @type {(state: State<T>, parents?: State<T>[]) => State<T>[]}
      */
     this.findParents = (state, parents = [this.state]) => {
       const parent = parents[parents.length - 1];
@@ -614,7 +621,7 @@ class Gouter {
     /**
      * Finds `searchState` and replaces it by `replaceState`. Return `true` if state was replaced,
      * `false` otherwise. It compares states using strict equality (===).
-     * @type {(searchState: State, replaceState: State) => boolean}
+     * @type {(searchState: State<T>, replaceState: State<T>) => boolean}
      */
     this.replace = (searchState, replaceState) => {
       const { state, setState, findParents } = this;
@@ -644,7 +651,7 @@ class Gouter {
 
     /**
      * Adds new listener of router state changes to listeners and returns `unlisten` callback.
-     * @type {(listener: Listener) => () => void}
+     * @type {(listener: Listener<T>) => () => void}
      */
     this.listen = (listener) => {
       const { listeners } = this;
@@ -657,7 +664,7 @@ class Gouter {
 
     /**
      * Get navigators map.
-     * @type {() => Navigators}
+     * @type {() => Navigators<T>}
      */
     this.getNavigators = () => {
       const { navigators } = this;
@@ -666,7 +673,7 @@ class Gouter {
 
     /**
      * Set navigators map.
-     * @type {(navigators: Navigators) => void}
+     * @type {(navigators: Navigators<T>) => void}
      */
     this.setNavigators = (navigators) => {
       this.navigators = navigators;
@@ -674,7 +681,7 @@ class Gouter {
 
     /**
      * Get builders map.
-     * @type {() => Builders}
+     * @type {() => Builders<T>}
      */
     this.getBuilders = () => {
       const { builders } = this;
@@ -683,7 +690,7 @@ class Gouter {
 
     /**
      * Set builders map.
-     * @type {(builders: Builders) => void}
+     * @type {(builders: Builders<T>) => void}
      */
     this.setBuilders = (builders) => {
       this.builders = builders;
@@ -693,7 +700,7 @@ class Gouter {
      * Updates browser/memory history and url from state.
      * @protected
      * @web
-     * @type {Listener}
+     * @type {Listener<T>}
      */
     this.updateHistory = (state) => {
       const { history, getNotFoundStateFromUrl } = this;
@@ -726,7 +733,7 @@ class Gouter {
     /**
      * Enables `history` package for web browser support.
      * @web
-     * @type {(history: import('history').History, getNotFoundStateFromUrl: (url: string)=> State)
+     * @type {(history: import('history').History, getNotFoundStateFromUrl: (url: string)=> State<T>)
      * => void}
      */
     this.enableHistory = (history, getNotFoundStateFromUrl) => {

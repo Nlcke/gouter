@@ -1,6 +1,8 @@
-/** @typedef {import('..').default<any>} GouterInstance */
-
-/** @type {<G extends GouterInstance>(gouter: G, options: {names: G['state']['name'][]}) => G['navigator']} */
+/**
+ * @type {<G extends import("..").GouterInstance>(gouter: G, options: {
+ * names: G['state']['name'][]
+ * }) => import("..").Navigator<any, any>}
+ */
 export const newStackNavigator =
   ({ encodePath }, { names }) =>
   (state, parent) => {
@@ -23,7 +25,11 @@ export const newStackNavigator =
     return null;
   };
 
-/** @type {<G extends GouterInstance>(gouter: G, options: {names: G['state']['name'][]}) => G['navigator']} */
+/**
+ * @type {<G extends import("..").GouterInstance>(gouter: G, options: {
+ * names: G['state']['name'][]
+ * }) => import("..").Navigator<any, any>}
+ */
 export const newTabNavigator =
   ({ encodePath }, { names }) =>
   (state, parent) => {
