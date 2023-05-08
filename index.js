@@ -470,29 +470,79 @@ class Gouter {
     };
 
     /**
-     * Builds new state from a state
-     * @type {(state: State<T>, parents: State<T>[]) => State<T>}
+     * Builds new state from a `state` by passing it and `parents`to
+     * appropriate state builder if any.
+     *
+     * Note: `builtPaths` should not be passed cause it is created automatically.
+     * @type {(state: State<T>, parents: State<T>[], builtPaths?: Set<string>) => State<T>}
      */
-    this.buildState = (state, parents) => {
-      const { builders, buildState } = this;
-      const { stack } = state;
-      if (stack && stack.length === 0) {
+    this.buildState = (state, parents, builtPaths = new Set()) => {
+      const { builders, buildState, encodePath } = this;
+      const path = encodePath(state);
+      if (builtPaths.has(path)) {
         return state;
       }
+      builtPaths.add(path);
       const builder = builders[state.name];
-      const builtState = builder && !stack ? builder(state, ...parents) : state;
-      const stackStateParents = [builtState, ...parents];
-      const builtStack = (builtState.stack || []).map((stackState) =>
-        buildState(stackState, stackStateParents),
-      );
-      if (
-        state.stack &&
-        state.stack.every((stackState, index) => stackState === builtStack[index])
-      ) {
-        return state;
+      const builtState = builder ? builder(state, ...parents) : state;
+      const { stack } = builtState;
+      if (stack && stack.length > 0) {
+        const stackStateParents = [builtState, ...parents];
+        const builtStack = stack.map((stackState) =>
+          buildState(stackState, stackStateParents, builtPaths),
+        );
+        const builtStateExt = { ...builtState, stack: builtStack };
+        return builtStateExt;
       }
-      const builtStateWithStack = { ...builtState, stack: builtStack };
-      return builtStateWithStack;
+      return builtState;
+    };
+
+    /**
+     * Get true if states are equal, false otherwise.
+     * @type {(stateA: State<T>, stateB: State<T>) => boolean}
+     */
+    this.getAreStatesEqual = (stateA, stateB) => {
+      const { getAreStatesEqual } = this;
+      if (stateA.name !== stateB.name || stateA.index !== stateB.index) {
+        return false;
+      }
+      const paramsA = stateA.params;
+      const paramsB = stateB.params;
+      if (paramsA !== paramsB) {
+        for (const key in paramsA) {
+          if (
+            paramsA[/** @type {keyof paramsA} */ (key)] !==
+            paramsB[/** @type {keyof paramsB} */ (key)]
+          ) {
+            return false;
+          }
+        }
+        for (const key in paramsB) {
+          if (
+            paramsA[/** @type {keyof paramsA} */ (key)] !==
+            paramsB[/** @type {keyof paramsB} */ (key)]
+          ) {
+            return false;
+          }
+        }
+      }
+      const stackA = stateA.stack;
+      const stackB = stateB.stack;
+      if (stackA !== stackB) {
+        if (stackA && stackB) {
+          if (stackA.length !== stackB.length) {
+            return false;
+          }
+          for (let i = 0; i < stackA.length; i += 1) {
+            if (!getAreStatesEqual(stackA[i], stackB[i])) {
+              return false;
+            }
+          }
+        } else {
+          return false;
+        }
+      }
+      return true;
     };
 
     /**
@@ -505,15 +555,17 @@ class Gouter {
     };
 
     /**
-     * Set current router state and call listeners with it if any.
+     * Set current router state and call listeners with it but only if state is changed.
      * @type {(state: State<T>) => void}
      */
     this.setState = (state) => {
-      const { buildState, listeners } = this;
-      const builtState = buildState(state, []);
-      this.state = builtState;
+      const { state: currentState, getAreStatesEqual, listeners } = this;
+      if (getAreStatesEqual(currentState, state)) {
+        return;
+      }
+      this.state = state;
       for (const listener of listeners) {
-        listener(builtState);
+        listener(state);
       }
     };
 
@@ -539,14 +591,41 @@ class Gouter {
     };
 
     /**
-     * Go through the chain of actions where `State<T>` is used for `goTo` and `null` is used
-     * for `goBack`.
-     * @type {(...statesOrNulls: (State<T> | null)[]) => void}
+     * Get merged state where params are merged and index and stack (if any) are replaced by nextState ones.
+     * @type {(prevState: State<T>, nextState: State<T>) => State<T>}
      */
-    this.go = (...statesOrNulls) => {
-      const { state: currentState, navigators, getFocusedStates, listeners, buildState } = this;
+    this.getMergedState = (prevState, nextState) => {
+      /** @type {State<T>} */
+      const mergedState = {
+        ...prevState,
+        ...nextState,
+        params: { ...prevState.params, ...nextState.params },
+      };
+      return mergedState;
+    };
+
+    /**
+     * Go through the chain of actions to get next state.
+     * @type {(...statesOrNulls: (State<T> | null)[]) => State<T>}
+     */
+    this.getNextState = (...statesOrNulls) => {
+      const {
+        state: currentState,
+        navigators,
+        getFocusedStates,
+        buildState,
+        encodePath,
+        findParents,
+      } = this;
       let nextState = currentState;
-      for (const state of statesOrNulls) {
+      /** @type {Set<State<T>>} */
+      const builtStatesSet = new Set();
+      for (
+        let stateOrNullIndex = 0;
+        stateOrNullIndex < statesOrNulls.length;
+        stateOrNullIndex += 1
+      ) {
+        const stateOrNull = statesOrNulls[stateOrNullIndex];
         const focusedStates = getFocusedStates(nextState);
         for (let index = 0; index < focusedStates.length; index += 1) {
           const focusedState = focusedStates[index];
@@ -555,38 +634,72 @@ class Gouter {
             const parents = /** @type {[StateMap<T>[keyof T] & State<T>, ...State<T>[]]} */ (
               focusedStates.slice(index)
             );
-            const builtState = state ? buildState(state, parents) : null;
-            const subState = navigator(builtState, ...parents);
+            const builtStateOrNull =
+              stateOrNull && !builtStatesSet.has(stateOrNull)
+                ? buildState(stateOrNull, parents)
+                : stateOrNull;
+            /** @type {State<T>[] | null} */
+            const redirectedParents =
+              stateOrNull &&
+              builtStateOrNull &&
+              encodePath(stateOrNull) !== encodePath(builtStateOrNull)
+                ? findParents(stateOrNull, [builtStateOrNull], encodePath).map((parent) => ({
+                    name: parent.name,
+                    params: parent.params,
+                  }))
+                : null;
+            const builtStateOrNullExt = redirectedParents ? redirectedParents[0] : builtStateOrNull;
+            const subState = navigator(builtStateOrNullExt, ...parents);
             if (subState) {
               let childState = subState;
               for (const parent of parents.slice(1)) {
                 const maybeStack = parent.stack;
                 const stack = maybeStack && maybeStack.length > 1 ? [...maybeStack] : [childState];
-                const parentIndex = parent.index !== undefined ? parent.index : stack.length - 1;
-                const childStateIndex = Math.min(Math.max(0, parentIndex), stack.length - 1);
+                const maxIndex = stack.length - 1;
+                const parentIndex = parent.index !== undefined ? parent.index : maxIndex;
+                const childStateIndex = Math.min(Math.max(0, parentIndex), maxIndex);
                 stack[childStateIndex] = childState;
                 childState = { ...parent, stack };
               }
               nextState = childState;
+              if (redirectedParents && stateOrNull) {
+                builtStatesSet.add(stateOrNull);
+                statesOrNulls.splice(
+                  stateOrNullIndex,
+                  0,
+                  ...redirectedParents.slice(1),
+                  stateOrNull,
+                );
+              }
               break;
             }
           }
         }
       }
-      this.state = nextState;
-      for (const listener of listeners) {
-        listener(nextState);
-      }
+      return nextState;
+    };
+
+    /**
+     * Go through the chain of actions where `State<T>` is used for `goTo`
+     * and `null` is used for `goBack`.
+     * @type {(...statesOrNulls: (State<T> | null)[]) => void}
+     */
+    this.go = (...statesOrNulls) => {
+      const { getNextState, setState } = this;
+      const nextState = getNextState(...statesOrNulls);
+      setState(nextState);
     };
 
     /**
      * Go to state using current stack navigator.
-     * @type {<N extends keyof T>(name: N, params: StateMap<T>[N]['params'], stack?: State<T>[]) => void}
+     * @type {<N extends keyof T>
+     * (name: N, params: StateMap<T>[N]['params'], stack?: State<T>[], index?: number) => void}
      */
-    this.goTo = (name, params, stack) => {
-      const { go } = this;
-      const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params, stack });
-      go(state);
+    this.goTo = (name, params, stack, index) => {
+      const { getNextState, setState } = this;
+      const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params, stack, index });
+      const nextState = getNextState(state);
+      setState(nextState);
     };
 
     /**
@@ -594,22 +707,24 @@ class Gouter {
      * @type {() => void}
      */
     this.goBack = () => {
-      const { go } = this;
-      go(null);
+      const { getNextState, setState } = this;
+      const nextState = getNextState(null);
+      setState(nextState);
     };
 
     /**
      * Find state parents to use in `replace`.
-     * @type {(state: State<T>, parents?: State<T>[]) => State<T>[]}
+     * @type {(state: State<T>, parents: State<T>[], encoder?: (state: State<T>) => string) => State<T>[]}
      */
-    this.findParents = (state, parents = [this.state]) => {
+    this.findParents = (state, parents, encoder) => {
+      const { findParents } = this;
       const parent = parents[parents.length - 1];
       if (parent) {
-        if (parent === state) {
+        if (encoder ? encoder(parent) === encoder(state) : parent === state) {
           return parents.slice(0, -1);
         }
         for (const parentState of parent.stack || []) {
-          const nextParents = this.findParents(state, [...parents, parentState]);
+          const nextParents = findParents(state, [...parents, parentState], encoder);
           if (nextParents.length > 0) {
             return nextParents;
           }
@@ -619,17 +734,17 @@ class Gouter {
     };
 
     /**
-     * Finds `searchState` and replaces it by `replaceState`. Return `true` if state was replaced,
-     * `false` otherwise. It compares states using strict equality (===).
-     * @type {(searchState: State<T>, replaceState: State<T>) => boolean}
+     * Finds `searchState` and replaces it by `replaceState`. Returns `true` if state was replaced,
+     * `false` otherwise. It compares states using strict equality (===) if `encoder` is not defined.
+     * @type {(searchState: State<T>, replaceState: State<T>, encoder?: (state: State<T>) => string) => boolean}
      */
-    this.replace = (searchState, replaceState) => {
+    this.replace = (searchState, replaceState, encoder) => {
       const { state, setState, findParents } = this;
       if (searchState === state) {
         setState(replaceState);
         return true;
       }
-      const parents = findParents(searchState);
+      const parents = findParents(searchState, [state], encoder);
       if (parents.length > 0) {
         const nextState = { ...state };
         let subState = nextState;
