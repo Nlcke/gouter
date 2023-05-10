@@ -632,7 +632,8 @@ class Gouter {
             const parents = /** @type {[StateMap<T>[keyof T] & State<T>, ...State<T>[]]} */ (
               focusedStates.slice(index)
             );
-            const subState = navigator(stateOrNull, ...parents);
+            const builtStateOrNull = stateOrNull ? buildState(stateOrNull, parents) : stateOrNull;
+            const subState = navigator(builtStateOrNull, ...parents);
             if (subState) {
               let childState = subState;
               for (const parent of parents.slice(1)) {
@@ -644,7 +645,7 @@ class Gouter {
                 stack[childStateIndex] = childState;
                 childState = { ...parent, stack };
               }
-              nextState = buildState(childState, []);
+              nextState = childState;
               break;
             }
           }

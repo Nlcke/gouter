@@ -5,8 +5,8 @@ const gouter = new Gouter({
   App: {
     _: '/',
   },
-  LoginWithModal: {
-    _: '/login-with-modal',
+  LoginStack: {
+    _: '/login-stack',
   },
   Login: {
     _: '/login',
@@ -15,9 +15,15 @@ const gouter = new Gouter({
   LoginModal: {
     _: '/login/modal',
   },
+  LoginConfirmationStack: {
+    _: '/login-confirmation-stack',
+  },
   LoginConfirmation: {
     _: '/login-confirmation',
     phone: ['/', /\d+/],
+  },
+  LoginDrawer: {
+    _: '/login/drawer',
   },
   Tabs: {
     _: '/tabs',
@@ -37,18 +43,30 @@ const {
   setState,
   setBuilders,
   setNavigators,
+  setRedirections,
   goTo,
   goBack,
+  replace,
   getState,
   listen,
-  replace,
   encodePath,
 } = gouter;
 
+setRedirections({
+  Login: () => [{name: 'LoginStack', params: {}}],
+  LoginConfirmation: () => [{name: 'LoginConfirmationStack', params: {}}],
+});
+
 setBuilders({
-  App: state => ({...state, stack: [{name: 'LoginWithModal', params: {}}]}),
-  LoginWithModal: state => ({...state, stack: [{name: 'Login', params: {}}]}),
-  Login: state => ({name: 'Login', params: {name: 'user', ...state.params}}),
+  App: state => ({
+    ...state,
+    stack: [{name: 'LoginStack', params: {}}],
+  }),
+  LoginStack: state => ({
+    ...state,
+    stack: [{name: 'Login', params: {}}],
+  }),
+  Login: state => ({...state, params: {name: 'user'}}),
   Tabs: state => ({
     ...state,
     stack: [
@@ -61,13 +79,16 @@ setBuilders({
 
 setNavigators({
   App: newStackNavigator(gouter, {
-    names: ['LoginWithModal', 'LoginConfirmation', 'Tabs'],
-  }),
-  LoginWithModal: newStackNavigator(gouter, {
-    names: ['Login', 'LoginModal'],
+    names: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
   }),
   Tabs: newTabNavigator(gouter, {
     names: ['Home', 'Post', 'Profile'],
+  }),
+  LoginStack: newStackNavigator(gouter, {
+    names: ['Login', 'LoginModal'],
+  }),
+  LoginConfirmationStack: newStackNavigator(gouter, {
+    names: ['LoginConfirmation', 'LoginDrawer'],
   }),
 });
 

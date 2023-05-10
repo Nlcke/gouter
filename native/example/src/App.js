@@ -76,8 +76,13 @@ const App = ({children}) => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginWithModal']} */
-const LoginWithModal = ({children}) => {
+/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginStack']} */
+const LoginStack = ({children}) => {
+  return <View style={styles.container}>{children}</View>;
+};
+
+/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginConfirmationStack']} */
+const LoginConfirmationStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
@@ -97,19 +102,23 @@ const Login = ({state}) => {
       <Text>Login</Text>
       <Text>Name: {state.params.name}</Text>
       <Button
-        title="go to Login Confirmation"
+        title="go to LoginConfirmation"
         onPress={() => goTo('LoginConfirmation', {phone: '2398723987'})}
       />
       <Text>{'login '.repeat(100)}</Text>
       <Button
         title="change name"
         onPress={() =>
-          replace(state, {
-            name: 'Login',
-            params: {
-              name: state.params.name === 'user' ? 'guest' : 'user',
-            },
-          })
+          replace(loginState =>
+            loginState.name === 'Login'
+              ? {
+                  ...loginState,
+                  params: {
+                    name: loginState.params.name === 'user' ? 'guest' : 'user',
+                  },
+                }
+              : loginState,
+          )
         }
       />
       <Button title="show modal" onPress={() => goTo('LoginModal', {})} />
@@ -137,6 +146,16 @@ const LoginConfirmation = ({state, animationProps: {index}}) => {
     [index],
   );
 
+  const [appState, setAppState] = useState(getState);
+  useEffect(() => listen(setAppState), []);
+  const stack = getState().stack || [];
+  const hasLogin = !!stack.find(
+    ({name, stack}) =>
+      name === 'LoginStack' &&
+      stack &&
+      stack.find(({name: subName}) => subName === 'Login'),
+  );
+
   return (
     <View style={styles.container}>
       <Animated.View style={animatedTextStyle}>
@@ -144,39 +163,47 @@ const LoginConfirmation = ({state, animationProps: {index}}) => {
       </Animated.View>
       <Text>Phone: {state.params.phone}</Text>
       <Button title="go to Tabs" onPress={() => goTo('Tabs', {})} />
+      <Button title="go to App" onPress={() => goTo('App', {})} />
       <Text>{'confirmation '.repeat(100)}</Text>
       <Button title="go back" onPress={goBack} />
       <Button
-        title="add LoginWithModal"
+        title={hasLogin ? 'remove LoginStack' : 'add LoginStack'}
         onPress={() => {
-          const appState = getState();
-          setState({
-            ...appState,
-            stack: [
-              {name: 'LoginWithModal', params: {}},
-              ...(appState.stack || []).filter(
-                ({name}) => name !== 'LoginWithModal',
-              ),
-            ],
-          });
+          setState(
+            hasLogin
+              ? {
+                  ...appState,
+                  stack: stack.filter(({name}) => name !== 'LoginStack'),
+                }
+              : {
+                  ...appState,
+                  stack: [
+                    {
+                      name: 'LoginStack',
+                      params: {},
+                      stack: [
+                        {
+                          name: 'Login',
+                          params: {},
+                        },
+                      ],
+                    },
+                    ...stack,
+                  ],
+                },
+          );
         }}
       />
       <Button
-        title="remove LoginWithModal"
+        title="goTo Login"
         onPress={() => {
-          const appState = getState();
-          setState({
-            ...appState,
-            stack: (appState.stack || []).filter(
-              ({name}) => name !== 'LoginWithModal',
-            ),
-          });
+          goTo('Login', {});
         }}
       />
       <Button
-        title="goTo LoginWithModal"
+        title="goTo LoginDrawer"
         onPress={() => {
-          goTo('LoginWithModal', {});
+          goTo('LoginDrawer', {});
         }}
       />
     </View>
@@ -184,10 +211,32 @@ const LoginConfirmation = ({state, animationProps: {index}}) => {
 };
 
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['Tabs']} */
-const Tabs = ({state, children}) => {
-  const stack = state.stack || [];
+export const LoginDrawer = () => {
+  return (
+    <View style={{flexDirection: 'row', flex: 1}}>
+      <TouchableOpacity
+        style={{flex: 0.2}}
+        activeOpacity={1}
+        onPress={goBack}
+      />
+      <View
+        style={{
+          backgroundColor: 'gray',
+          flex: 0.8,
+        }}>
+        <View>
+          <Text>Settings</Text>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+/** @type {import('gouter/native').ScreenMap<import('./router').State>['Tabs']} */
+const Tabs = ({state: tabsState, children}) => {
+  const stack = tabsState.stack || [];
   const currentIndex =
-    state.index !== undefined ? state.index : stack.length - 1;
+    tabsState.index !== undefined ? tabsState.index : stack.length - 1;
   return (
     <View style={styles.container}>
       <View style={styles.container}>{children}</View>
@@ -224,11 +273,15 @@ const Tabs = ({state, children}) => {
           key="reverse"
           title="Reverse"
           onPress={() =>
-            replace(state, {
-              ...state,
-              stack: [...(state.stack || [])].reverse(),
-              index: (state.stack || []).length - 1 - currentIndex,
-            })
+            replace(state =>
+              state === tabsState
+                ? {
+                    ...state,
+                    stack: [...(state.stack || [])].reverse(),
+                    index: (state.stack || []).length - 1 - currentIndex,
+                  }
+                : state,
+            )
           }
         />
       </View>
@@ -323,6 +376,30 @@ const iOSAnimation = ({index, width}) => [
 ];
 
 /** @type {import('gouter/native').Animation} */
+const drawerAnimation = ({index, width}) => [
+  {
+    backgroundColor: 'black',
+    opacity: index.interpolate({
+      inputRange: [-1, 0, 1],
+      outputRange: [0.2, 0, 0],
+    }),
+  },
+  {
+    transform: [
+      {
+        translateX: Animated.multiply(
+          width,
+          index.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [0, 0, 1],
+          }),
+        ),
+      },
+    ],
+  },
+];
+
+/** @type {import('gouter/native').Animation} */
 const modalAnimation = ({index, height}) => [
   {
     backgroundColor: 'black',
@@ -346,58 +423,75 @@ const modalAnimation = ({index, height}) => [
   },
 ];
 
-const stackAnimationDuration = 256;
+const animationDuration = 256;
+
+/** @type {import('gouter/native').StackSettings} */
+const defaultSettings = {
+  animation: iOSAnimation,
+  animationDuration,
+  swipeDetection: 'left',
+  swipeDetectionSize: 40,
+};
+
+/** @type {import('gouter/native').StackSettings} */
+const modalSettings = {
+  animation: modalAnimation,
+  animationDuration,
+  swipeDetection: 'vertical',
+};
+
+/** @type {import('gouter/native').StackSettings} */
+const tabsSettings = {
+  animation: defaultAnimation,
+  animationDuration: 1256,
+  swipeDetection: 'horizontal',
+};
+
+/** @type {import('gouter/native').StackSettings} */
+const drawerSettings = {
+  animation: drawerAnimation,
+  animationDuration,
+  swipeDetection: 'horizontal',
+};
 
 /** @type {import('gouter/native').ScreenConfigMap<import('./router').State>} */
 const screenConfigMap = {
   App: {
     component: App,
-    stackAnimation: iOSAnimation,
-    stackAnimationDuration,
-    stackSwipeDetection: 'left',
-    stackSwipeDetectionSize: 40,
+    stack: defaultSettings,
   },
-  LoginWithModal: {
-    component: LoginWithModal,
-    stackAnimation: modalAnimation,
-    stackAnimationDuration: 256,
-    stackSwipeDetection: 'vertical',
+  LoginStack: {
+    component: LoginStack,
+    stack: modalSettings,
   },
   LoginModal: {
     component: LoginModal,
-    stackAnimation: defaultAnimation,
-    stackAnimationDuration,
   },
   Login: {
     component: Login,
-    stackAnimation: defaultAnimation,
-    stackAnimationDuration,
+  },
+  LoginConfirmationStack: {
+    component: LoginConfirmationStack,
+    stack: drawerSettings,
   },
   LoginConfirmation: {
     component: LoginConfirmation,
-    stackAnimation: defaultAnimation,
-    stackAnimationDuration,
+  },
+  LoginDrawer: {
+    component: LoginDrawer,
   },
   Tabs: {
     component: Tabs,
-    stackAnimation: defaultAnimation,
-    stackAnimationDuration: 1256,
-    stackSwipeDetection: 'horizontal',
+    stack: tabsSettings,
   },
   Home: {
     component: Home,
-    stackAnimation: defaultAnimation,
-    stackAnimationDuration,
   },
   Post: {
     component: Post,
-    stackAnimation: defaultAnimation,
-    stackAnimationDuration,
   },
   Profile: {
     component: Profile,
-    stackAnimation: defaultAnimation,
-    stackAnimationDuration,
   },
 };
 
@@ -406,6 +500,14 @@ const AppWrapper = () => {
 
   useEffect(() => listen(setAppState), []);
   useEffect(() => listen(Keyboard.dismiss), []);
+
+  useEffect(
+    () =>
+      listen(state => {
+        console.log(JSON.stringify(state, null, 4));
+      }),
+    [],
+  );
 
   useEffect(() => {
     const onHardwareBackPress = () => {
