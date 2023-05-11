@@ -165,6 +165,8 @@ const useEnhancedAnimatedValue = (initialValue) => {
   return animatedValueRef.current;
 };
 
+let panRespondersBlocked = false;
+
 /**
  * @type {React.FC<{
  * state: State
@@ -329,7 +331,10 @@ const GouterNativeStack = memo(
     const onMoveShouldSetPanResponder = useCallback(
       (event, { dx, dy, moveX, moveY }) => {
         event.preventDefault();
-        event.stopPropagation();
+        if (panRespondersBlocked) {
+          event.stopPropagation();
+          return false;
+        }
         const { swipeDetection, swipeDetectionSize } = stackSettingsRef.current;
         if (!swipeDetection || swipeDetection === 'none') {
           return false;
@@ -365,6 +370,8 @@ const GouterNativeStack = memo(
           Math.abs(isHorizontal ? dx : dy) > swipeStartThreshold &&
           Math.abs(isHorizontal ? dy : dx) < swipeCancelThreshold;
         if (shouldSet) {
+          panRespondersBlocked = true;
+          event.stopPropagation();
           valueRef.current = animatedFocusedIndex.value;
         }
         return shouldSet;
@@ -411,6 +418,7 @@ const GouterNativeStack = memo(
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
     const onPanResponderReleaseOrTerminate = useCallback(
       (event, { dx, vx, dy, vy }) => {
+        panRespondersBlocked = false;
         event.preventDefault();
         event.stopPropagation();
         const { swipeDetection } = stackSettingsRef.current;

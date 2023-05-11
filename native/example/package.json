@@ -8,7 +8,8 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "postinstall": "node ./postinstall"
+    "watch": "node postinstall && syncdir ../.. ./node_modules/gouter -w -si --exclude example node_modules .git .vscode",
+    "postinstall": "node postinstall"
   },
   "dependencies": {
     "react": "18.2.0",
@@ -29,6 +30,7 @@
     "metro-react-native-babel-preset": "0.73.5",
     "prettier": "^2.4.1",
     "react-test-renderer": "18.2.0",
+    "sync-directory": "^6.0.4",
     "typescript": "4.8.4"
   },
   "jest": {

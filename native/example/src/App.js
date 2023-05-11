@@ -150,10 +150,10 @@ const LoginConfirmation = ({state, animationProps: {index}}) => {
   useEffect(() => listen(setAppState), []);
   const stack = getState().stack || [];
   const hasLogin = !!stack.find(
-    ({name, stack}) =>
+    ({name, stack: stackOfLoginStack}) =>
       name === 'LoginStack' &&
-      stack &&
-      stack.find(({name: subName}) => subName === 'Login'),
+      stackOfLoginStack &&
+      stackOfLoginStack.find(({name: subName}) => subName === 'Login'),
   );
 
   return (
@@ -451,7 +451,8 @@ const tabsSettings = {
 const drawerSettings = {
   animation: drawerAnimation,
   animationDuration,
-  swipeDetection: 'horizontal',
+  swipeDetection: 'right',
+  swipeDetectionSize: '80%',
 };
 
 /** @type {import('gouter/native').ScreenConfigMap<import('./router').State>} */
@@ -500,14 +501,6 @@ const AppWrapper = () => {
 
   useEffect(() => listen(setAppState), []);
   useEffect(() => listen(Keyboard.dismiss), []);
-
-  useEffect(
-    () =>
-      listen(state => {
-        console.log(JSON.stringify(state, null, 4));
-      }),
-    [],
-  );
 
   useEffect(() => {
     const onHardwareBackPress = () => {
