@@ -3,7 +3,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /** @typedef {import('..').default<any>} Gouter */
 
-/** @typedef {Gouter['state']} State */
+/** @typedef {Gouter['rootState']} State */
 
 /**
  * @typedef {{

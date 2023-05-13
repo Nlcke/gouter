@@ -40,14 +40,14 @@ const gouter = new Gouter({
 });
 
 const {
-  setState,
+  setRootState,
   setBuilders,
   setNavigators,
   setRedirections,
   goTo,
   goBack,
   replace,
-  getState,
+  getRootState,
   listen,
   encodePath,
 } = gouter;
@@ -92,8 +92,8 @@ setNavigators({
   }),
 });
 
-setState({name: 'App', params: {}});
+setRootState({name: 'App', params: {}});
 
-/** @typedef {gouter['state']} State */
+/** @typedef {gouter['rootState']} State */
 
-export {goTo, goBack, replace, getState, setState, listen, encodePath};
+export {goTo, goBack, replace, getRootState, setRootState, listen, encodePath};

@@ -1,6 +1,6 @@
 /**
  * @type {<G extends import("..").GouterInstance>(gouter: G, options: {
- * names: G['state']['name'][]
+ * names: G['rootState']['name'][]
  * }) => import("..").Navigator<any, any>}
  */
 export const newStackNavigator =
@@ -27,7 +27,7 @@ export const newStackNavigator =
 
 /**
  * @type {<G extends import("..").GouterInstance>(gouter: G, options: {
- * names: G['state']['name'][]
+ * names: G['rootState']['name'][]
  * }) => import("..").Navigator<any, any>}
  */
 export const newTabNavigator =

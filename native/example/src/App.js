@@ -11,13 +11,13 @@ import {
   ScrollView,
 } from 'react-native';
 import {
-  getState,
+  getRootState,
   goBack,
   goTo,
   listen,
   replace,
   encodePath,
-  setState,
+  setRootState,
 } from './router';
 
 const styles = StyleSheet.create({
@@ -146,9 +146,9 @@ const LoginConfirmation = ({state, animationProps: {index}}) => {
     [index],
   );
 
-  const [appState, setAppState] = useState(getState);
+  const [appState, setAppState] = useState(getRootState);
   useEffect(() => listen(setAppState), []);
-  const stack = getState().stack || [];
+  const stack = getRootState().stack || [];
   const hasLogin = !!stack.find(
     ({name, stack: stackOfLoginStack}) =>
       name === 'LoginStack' &&
@@ -169,7 +169,7 @@ const LoginConfirmation = ({state, animationProps: {index}}) => {
       <Button
         title={hasLogin ? 'remove LoginStack' : 'add LoginStack'}
         onPress={() => {
-          setState(
+          setRootState(
             hasLogin
               ? {
                   ...appState,
@@ -253,7 +253,7 @@ const Tabs = ({state: tabsState, children}) => {
           key="remove"
           title="- Post"
           onPress={() => {
-            const appState = getState();
+            const appState = getRootState();
             const nextStack = (appState.stack || []).map(subState =>
               subState.name === 'Tabs'
                 ? {
@@ -265,7 +265,7 @@ const Tabs = ({state: tabsState, children}) => {
                   }
                 : subState,
             );
-            setState({...appState, stack: nextStack});
+            setRootState({...appState, stack: nextStack});
           }}
         />
         <Button key="add" title="+ Post" onPress={() => goTo('Post', {})} />
@@ -497,9 +497,10 @@ const screenConfigMap = {
 };
 
 const AppWrapper = () => {
-  const [appState, setAppState] = useState(getState);
+  const [state, setState] = useState(getRootState);
 
-  useEffect(() => listen(setAppState), []);
+  useEffect(() => listen(setState), []);
+
   useEffect(() => listen(Keyboard.dismiss), []);
 
   useEffect(() => {
@@ -515,7 +516,7 @@ const AppWrapper = () => {
 
   return (
     <GouterNative
-      state={appState}
+      state={state}
       screenConfigMap={screenConfigMap}
       encodePath={encodePath}
       goTo={goTo}

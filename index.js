@@ -156,10 +156,11 @@ class Gouter {
     });
 
     /**
-     * `state` stores current router state. Initially it set to `notFoundState`.
+     * `rootState` stores current router root state. Initially it set to not-found state so you need
+     * to use `setRootState` method before navigation.
      * @type {State<T>}
      */
-    this.state = { name: '', params: /** @type {any} */ ({}), stack: [] };
+    this.rootState = { name: '', params: /** @type {any} */ ({}), stack: [] };
 
     /**
      * `navigators` stores current navigators customized for each route where you need it.
@@ -564,23 +565,23 @@ class Gouter {
      * Get current router state
      * @type {() => State<T>}
      */
-    this.getState = () => {
-      const { state } = this;
-      return state;
+    this.getRootState = () => {
+      const { rootState } = this;
+      return rootState;
     };
 
     /**
-     * Set current router state and call listeners with it but only if state is changed.
+     * Build and set current router root state and call listeners with it but only if state is changed.
      * You may disable builders by using `disableBuilders` option.
      * @type {(state: State<T>, disableBuilders?: boolean) => void}
      */
-    this.setState = (state, disableBuilders) => {
-      const { state: currentState, getAreStatesEqual, buildState, listeners } = this;
+    this.setRootState = (state, disableBuilders) => {
+      const { rootState, getAreStatesEqual, buildState, listeners } = this;
       const builtState = disableBuilders ? state : buildState(state, []);
-      if (getAreStatesEqual(currentState, builtState)) {
+      if (getAreStatesEqual(rootState, builtState)) {
         return;
       }
-      this.state = builtState;
+      this.rootState = builtState;
       for (const listener of listeners) {
         listener(builtState);
       }
@@ -627,8 +628,8 @@ class Gouter {
      * @type {(...statesOrNulls: (State<T> | null)[]) => State<T>}
      */
     this.getNextState = (...statesOrNulls) => {
-      const { state: currentState, navigators, getFocusedStates, buildState } = this;
-      let nextState = currentState;
+      const { rootState, navigators, getFocusedStates, buildState } = this;
+      let nextState = rootState;
       for (const stateOrNull of statesOrNulls) {
         const focusedStates = getFocusedStates(nextState);
         for (let index = 0; index < focusedStates.length; index += 1) {
@@ -666,7 +667,7 @@ class Gouter {
      * @type {(...statesOrNulls: (State<T> | null)[]) => void}
      */
     this.go = (...statesOrNulls) => {
-      const { getNextState, setState, redirections } = this;
+      const { getNextState, setRootState, redirections } = this;
       const statesOrNullsExt = statesOrNulls
         .map((stateOrNull) => {
           if (!stateOrNull) {
@@ -682,7 +683,7 @@ class Gouter {
         })
         .flat();
       const nextState = getNextState(...statesOrNullsExt);
-      setState(nextState, true);
+      setRootState(nextState, true);
     };
 
     /**
@@ -701,9 +702,9 @@ class Gouter {
      * @type {() => void}
      */
     this.goBack = () => {
-      const { getNextState, setState } = this;
+      const { getNextState, setRootState } = this;
       const nextState = getNextState(null);
-      setState(nextState, true);
+      setRootState(nextState, true);
     };
 
     /**
@@ -735,7 +736,7 @@ class Gouter {
      * Note: `parents` should not be passed cause it is created automatically for recursion purposes.
      * @type {(replacer: (state: State<T>, ...parents: State<T>[]) => State<T> | null, parents?: State<T>[]) => State<T>}
      */
-    this.getReplacedState = (replacer, parents = [this.state]) => {
+    this.getReplacedState = (replacer, parents = [this.rootState]) => {
       const { getReplacedState, buildState } = this;
       const [state] = parents;
       const stack = state && state.stack;
@@ -783,9 +784,9 @@ class Gouter {
      * @type {(replacer: (state: State<T>, ...parents: State<T>[]) => State<T> | null) => void}
      */
     this.replace = (replacer) => {
-      const { getReplacedState, setState } = this;
+      const { getReplacedState, setRootState } = this;
       const replacedState = getReplacedState(replacer);
-      setState(replacedState, true);
+      setRootState(replacedState, true);
     };
 
     /**
