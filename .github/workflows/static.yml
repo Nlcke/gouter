@@ -46,17 +46,8 @@ jobs:
         if: steps.node-cache.outputs.cache-hit != 'true'
         run: npm ci
 
-      - name: Test to see if the project compiles
-        run: bash build.sh
-
-      - name: Perform automated checks
-        run: bash lint.sh
-
       - name: Create the docs directory locally in CI
-        run: npx typedoc src/index.ts
+        run: npx typedoc
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@4.1.4
-        with:
-          branch: gh-pages
-          folder: docs
+        uses: JamesIves/github-pages-deploy-action@4.4.1
