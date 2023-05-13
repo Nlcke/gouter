@@ -1,4 +1,4 @@
-# ![logo](logo.png) Gouter
+# ![icon](media/icon.png) Gouter
 
 Tiny navigation library for React Native with simple API and rich features.
 

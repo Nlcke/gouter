@@ -37,7 +37,8 @@
     "index.js",
     "native/index.js",
     "navigators/index.js",
-    "*.d.ts"
+    "*.d.ts",
+    "media/icon.png"
   ],
   "keywords": [
     "web",
