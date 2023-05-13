@@ -119,6 +119,10 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
+ * @typedef {import('path-to-regexp').ParseOptions & import('path-to-regexp').TokensToRegexpOptions} PathToRegexpOptions
+ */
+
+/**
  * @typedef {Gouter<any>} GouterInstance
  */
 
@@ -190,8 +194,9 @@ class Gouter {
 
     /**
      * `pathToRegexpOptions` are options used to encode states into urls' paths at `encodePath`.
-     * @type {import('path-to-regexp').ParseOptions
-     * & import('path-to-regexp').TokensToRegexpOptions}
+     * @protected
+     * @type {PathToRegexpOptions}
+     *
      */
     this.pathToRegexpOptions = {};
 
@@ -844,6 +849,23 @@ class Gouter {
      */
     this.setRedirections = (redirections) => {
       this.redirections = redirections;
+    };
+
+    /**
+     * Get path-to-regexp options.
+     * @type {() => PathToRegexpOptions}
+     */
+    this.getPathToRegexpOptions = () => {
+      const { pathToRegexpOptions } = this;
+      return pathToRegexpOptions;
+    };
+
+    /**
+     * Set path-to-regexp options.
+     * @type {(pathToRegexpOptions: PathToRegexpOptions) => void}
+     */
+    this.setPathToRegexpOptions = (pathToRegexpOptions) => {
+      this.pathToRegexpOptions = pathToRegexpOptions;
     };
 
     /**
