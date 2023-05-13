@@ -1,9 +1,15 @@
 {
   "name": "gouter",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "universal router",
   "main": "index.js",
   "type": "module",
+  "scripts": {
+    "prepack": "tsc",
+    "postpack": "rimraf index.d.ts native/index.d.ts navigators/index.d.ts",
+    "typedoc": "typedoc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "exports": {
     ".": "./index.js",
     "./native": "./native/index.js",
@@ -22,15 +28,10 @@
     "eslint-plugin-react": "^7.28.0",
     "eslint-plugin-react-hooks": "^4.3.0",
     "prettier": "^2.8.2",
-    "typedoc": "^0.23.24"
+    "typedoc": "^0.24.7"
   },
   "peerDependencies": {
     "history": "^5.3.0"
-  },
-  "scripts": {
-    "prepack": "tsc index.js native/index.js navigators/index.js --declaration --allowJs --emitDeclarationOnly --skipLibCheck",
-    "postpack": "rimraf index.d.ts native/index.d.ts navigators/index.d.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "files": [
     "index.js",

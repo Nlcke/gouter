@@ -77,6 +77,7 @@ const {
   setState,
   setBuilders,
   setNavigators,
+  setRedirections,
   goTo,
   goBack,
   getState,
@@ -143,6 +144,15 @@ const switchNavigator = (state, parent) => {
     return null;
   }
 };
+```
+
+#### Set redirections
+
+```js
+setRedirections({
+  Login: () => [{ name: 'LoginStack', params: {} }],
+  LoginConfirmation: () => [{ name: 'LoginConfirmationStack', params: {} }],
+});
 ```
 
 #### Set state

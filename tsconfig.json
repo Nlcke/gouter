@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["index.js", "navigators/index.js", "native/index.js"],
+  "typedocOptions": {
+    "entryPoints": ["index.js", "navigators/index.js", "native/index.js"],
+    "out": "docs"
+  }
+}

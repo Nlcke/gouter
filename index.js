@@ -72,18 +72,18 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
- * `Navigators` is used to define `Navigator` for each route where you need it.
- * @template {Routes} T
- * @typedef {{[N in keyof T]?: Navigator<T, N>}} Navigators
- */
-
-/**
  * `Navigator` is a function called when you attempt to change current state using `go`,
  * `goTo` or `goBack`.
  * @template {Routes} T
  * @template {keyof T} N
  * @typedef {(stateOrNull: State<T> | null, parent: StateMap<T>[N] & State<T>, ...parents: State<T>[])
  * => State<T> | null} Navigator
+ */
+
+/**
+ * `Navigators` is used to define `Navigator` for each route where you need it.
+ * @template {Routes} T
+ * @typedef {{[N in keyof T]?: Navigator<T, N>}} Navigators
  */
 
 /**
@@ -94,15 +94,32 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
+ * `Builders` is used to define stack builder for each route where you need it.
+ * @template {Routes} T
+ * @typedef {{[N in keyof T]?: Builder<T, N>}} Builders
+ */
+
+/**
+ * `Builder` is a function called to modify state when a state without stack is added to current state
+ * @template {Routes} T
+ * @template {keyof T} N
+ * @typedef {(state: StateMap<T>[N] & State<T>) => State<T>[]} Redirection
+ */
+
+/**
+ * `Builders` is used to define stack builder for each route where you need it.
+ * @template {Routes} T
+ * @typedef {{[N in keyof T]?: Redirection<T, N>}} Redirections
+ */
+
+/**
  * `Listener` function is called with current state when it changes.
  * @template {Routes} T
  * @typedef {(state: State<T>) => void} Listener
  */
 
 /**
- * `Builders` is used to define stack builder for each route where you need it.
- * @template {Routes} T
- * @typedef {{[N in keyof T]?: Builder<T, N>}} Builders
+ * @typedef {import('path-to-regexp').ParseOptions & import('path-to-regexp').TokensToRegexpOptions} PathToRegexpOptions
  */
 
 /**
@@ -112,7 +129,7 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
 /**
  * Creates `Gouter` instance with available routes. It's methods are used to modify navigation
  * state and then notify listeners about it.
- * @template {Routes} T
+ * @template {Routes & {_: {url: []}}} T
  * @param {T} routes map of routes
  */
 class Gouter {
@@ -121,37 +138,17 @@ class Gouter {
     /**
      * `routeMap` stores routes passed to Gouter. They are used to decode and encode states and
      * urls, and help with type suggestions for route parameters.
-     * @type {T}
+     * @readonly
+     * @type {Readonly<T>}
      */
     this.routeMap = routes;
 
     /**
-     * @type {Navigator<T, keyof T>}
-     */
-    this.navigator = (_, parent) => parent;
-
-    /**
-     * @type {Builder<T, keyof T>}
-     */
-    this.builder = (state) => state;
-
-    /**
-     * `getNotFoundStateFromUrl` stores callback to create not-found state from url to use on web.
-     * @protected
-     * @web
-     * @type {(url: string) => State<T>}
-     */
-    this.getNotFoundStateFromUrl = (url) => ({
-      name: '',
-      params: /** @type {any} */ ({ url }),
-      stack: [],
-    });
-
-    /**
-     * `state` stores current router state. Initially it set to `notFoundState`.
+     * `rootState` stores current router root state. Initially it set to not-found state so you need
+     * to use `setRootState` method before navigation.
      * @type {State<T>}
      */
-    this.state = { name: '', params: /** @type {any} */ ({}), stack: [] };
+    this.rootState = { name: '_', params: /** @type {any} */ ({ url: '' }), stack: [] };
 
     /**
      * `navigators` stores current navigators customized for each route where you need it.
@@ -170,6 +167,14 @@ class Gouter {
     this.builders = {};
 
     /**
+     * `redirections` stores current redirection functions customized for each route where you need it.
+     * You may set it using `setRedirections` and get it using `getRedirections`.
+     * @protected
+     * @type {Redirections<T>}
+     */
+    this.redirections = {};
+
+    /**
      * `history` stores `history` instance used for web navigation.
      * @protected
      * @web
@@ -179,8 +184,9 @@ class Gouter {
 
     /**
      * `pathToRegexpOptions` are options used to encode states into urls' paths at `encodePath`.
-     * @type {import('path-to-regexp').ParseOptions
-     * & import('path-to-regexp').TokensToRegexpOptions}
+     * @protected
+     * @type {PathToRegexpOptions}
+     *
      */
     this.pathToRegexpOptions = {};
 
@@ -263,6 +269,9 @@ class Gouter {
       const pathFunction = pathFunctionCache[name];
       if (pathFunction) {
         return pathFunction(params);
+      }
+      if (name === '_') {
+        return 'url' in params ? String(params.url) : '';
       }
       const paramsDef = routeMap[name];
       const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
@@ -426,7 +435,7 @@ class Gouter {
 
     /**
      * Generates router state from url. If route not found then notFoundState returned.
-     * @type {(url: string) => State<T> | null}
+     * @type {(url: string) => State<T>}
      */
     this.decodeUrl = (url) => {
       const { decodePath, routeMap, decodeQuery } = this;
@@ -445,7 +454,8 @@ class Gouter {
           return state;
         }
       }
-      return null;
+      const state = { name: '_', params: /** @type {any} */ ({ url }), stack: [] };
+      return state;
     };
 
     /**
@@ -470,48 +480,100 @@ class Gouter {
     };
 
     /**
-     * Builds new state from a state
-     * @type {(state: State<T>, parents: State<T>[]) => State<T>}
+     * Builds new state from a `state` by passing it and `parents`to
+     * appropriate state builder if any.
+     *
+     * Note: `builtPaths` should not be passed cause it is created automatically for recursion purposes.
+     * @type {(state: State<T>, parents: State<T>[], builtPaths?: Set<string>) => State<T>}
      */
-    this.buildState = (state, parents) => {
-      const { builders, buildState } = this;
-      const { stack } = state;
-      if (stack && stack.length === 0) {
-        return state;
-      }
+    this.buildState = (state, parents, builtPaths = new Set()) => {
+      const { builders, buildState, encodePath } = this;
+      const path = encodePath(state);
+      builtPaths.add(path);
       const builder = builders[state.name];
-      const builtState = builder && !stack ? builder(state, ...parents) : state;
-      const stackStateParents = [builtState, ...parents];
-      const builtStack = (builtState.stack || []).map((stackState) =>
-        buildState(stackState, stackStateParents),
-      );
-      if (
-        state.stack &&
-        state.stack.every((stackState, index) => stackState === builtStack[index])
-      ) {
-        return state;
+      const builtState = builder && !state.stack ? builder(state, ...parents) : state;
+      const { stack } = builtState;
+      if (stack && stack.length > 0) {
+        const stackStateParents = [builtState, ...parents];
+        const builtStack = stack.map((stackState) =>
+          buildState(stackState, stackStateParents, builtPaths),
+        );
+        const builtStateExt = { ...builtState, stack: builtStack };
+        return builtStateExt;
       }
-      const builtStateWithStack = { ...builtState, stack: builtStack };
-      return builtStateWithStack;
+      const builtStateExt = { ...builtState, stack: [] };
+      return builtStateExt;
+    };
+
+    /**
+     * Get true if states are equal, false otherwise.
+     * @type {(stateA: State<T>, stateB: State<T>) => boolean}
+     */
+    this.getAreStatesEqual = (stateA, stateB) => {
+      const { getAreStatesEqual } = this;
+      if (stateA.name !== stateB.name || stateA.index !== stateB.index) {
+        return false;
+      }
+      const paramsA = stateA.params;
+      const paramsB = stateB.params;
+      if (paramsA !== paramsB) {
+        for (const key in paramsA) {
+          if (
+            paramsA[/** @type {keyof paramsA} */ (key)] !==
+            paramsB[/** @type {keyof paramsB} */ (key)]
+          ) {
+            return false;
+          }
+        }
+        for (const key in paramsB) {
+          if (
+            paramsA[/** @type {keyof paramsA} */ (key)] !==
+            paramsB[/** @type {keyof paramsB} */ (key)]
+          ) {
+            return false;
+          }
+        }
+      }
+      const stackA = stateA.stack;
+      const stackB = stateB.stack;
+      if (stackA !== stackB) {
+        if (stackA && stackB) {
+          if (stackA.length !== stackB.length) {
+            return false;
+          }
+          for (let i = 0; i < stackA.length; i += 1) {
+            if (!getAreStatesEqual(stackA[i], stackB[i])) {
+              return false;
+            }
+          }
+        } else {
+          return false;
+        }
+      }
+      return true;
     };
 
     /**
      * Get current router state
      * @type {() => State<T>}
      */
-    this.getState = () => {
-      const { state } = this;
-      return state;
+    this.getRootState = () => {
+      const { rootState } = this;
+      return rootState;
     };
 
     /**
-     * Set current router state and call listeners with it if any.
-     * @type {(state: State<T>) => void}
+     * Build and set current router root state and call listeners with it but only if state is changed.
+     * You may disable builders by using `disableBuilders` option.
+     * @type {(state: State<T>, disableBuilders?: boolean) => void}
      */
-    this.setState = (state) => {
-      const { buildState, listeners } = this;
-      const builtState = buildState(state, []);
-      this.state = builtState;
+    this.setRootState = (state, disableBuilders) => {
+      const { rootState, getAreStatesEqual, buildState, listeners } = this;
+      const builtState = disableBuilders ? state : buildState(state, []);
+      if (getAreStatesEqual(rootState, builtState)) {
+        return;
+      }
+      this.rootState = builtState;
       for (const listener of listeners) {
         listener(builtState);
       }
@@ -539,14 +601,28 @@ class Gouter {
     };
 
     /**
-     * Go through the chain of actions where `State<T>` is used for `goTo` and `null` is used
-     * for `goBack`.
-     * @type {(...statesOrNulls: (State<T> | null)[]) => void}
+     * Get merged state where params are merged and index and stack (if any) are replaced by nextState ones.
+     * @type {(prevState: State<T>, nextState: State<T>) => State<T>}
      */
-    this.go = (...statesOrNulls) => {
-      const { state: currentState, navigators, getFocusedStates, listeners, buildState } = this;
-      let nextState = currentState;
-      for (const state of statesOrNulls) {
+    this.getMergedState = (prevState, nextState) => {
+      /** @type {State<T>} */
+      const mergedState = {
+        name: nextState.name,
+        params: { ...prevState.params, ...nextState.params },
+        stack: nextState.stack ? nextState.stack : prevState.stack,
+        index: nextState.index !== undefined ? nextState.index : prevState.index,
+      };
+      return mergedState;
+    };
+
+    /**
+     * Go through the chain of actions to get next state.
+     * @type {(...statesOrNulls: (State<T> | null)[]) => State<T>}
+     */
+    this.getNextState = (...statesOrNulls) => {
+      const { rootState, navigators, getFocusedStates, buildState } = this;
+      let nextState = rootState;
+      for (const stateOrNull of statesOrNulls) {
         const focusedStates = getFocusedStates(nextState);
         for (let index = 0; index < focusedStates.length; index += 1) {
           const focusedState = focusedStates[index];
@@ -555,15 +631,16 @@ class Gouter {
             const parents = /** @type {[StateMap<T>[keyof T] & State<T>, ...State<T>[]]} */ (
               focusedStates.slice(index)
             );
-            const builtState = state ? buildState(state, parents) : null;
-            const subState = navigator(builtState, ...parents);
+            const builtStateOrNull = stateOrNull ? buildState(stateOrNull, parents) : stateOrNull;
+            const subState = navigator(builtStateOrNull, ...parents);
             if (subState) {
               let childState = subState;
               for (const parent of parents.slice(1)) {
                 const maybeStack = parent.stack;
                 const stack = maybeStack && maybeStack.length > 1 ? [...maybeStack] : [childState];
-                const parentIndex = parent.index !== undefined ? parent.index : stack.length - 1;
-                const childStateIndex = Math.min(Math.max(0, parentIndex), stack.length - 1);
+                const maxIndex = stack.length - 1;
+                const parentIndex = parent.index !== undefined ? parent.index : maxIndex;
+                const childStateIndex = Math.min(Math.max(0, parentIndex), maxIndex);
                 stack[childStateIndex] = childState;
                 childState = { ...parent, stack };
               }
@@ -573,19 +650,42 @@ class Gouter {
           }
         }
       }
-      this.state = nextState;
-      for (const listener of listeners) {
-        listener(nextState);
-      }
+      return nextState;
+    };
+
+    /**
+     * Go through the chain of actions where `State<T>` is used for `goTo`
+     * and `null` is used for `goBack`.
+     * @type {(...statesOrNulls: (State<T> | null)[]) => void}
+     */
+    this.go = (...statesOrNulls) => {
+      const { getNextState, setRootState, redirections } = this;
+      const statesOrNullsExt = statesOrNulls
+        .map((stateOrNull) => {
+          if (!stateOrNull) {
+            return null;
+          }
+          const state = stateOrNull;
+          const redirection = redirections[state.name];
+          if (!redirection) {
+            return state;
+          }
+          const states = redirection(state);
+          return [...states, state];
+        })
+        .flat();
+      const nextState = getNextState(...statesOrNullsExt);
+      setRootState(nextState, true);
     };
 
     /**
      * Go to state using current stack navigator.
-     * @type {<N extends keyof T>(name: N, params: StateMap<T>[N]['params'], stack?: State<T>[]) => void}
+     * @type {<N extends keyof T>
+     * (name: N, params: StateMap<T>[N]['params'], stack?: State<T>[], index?: number) => void}
      */
-    this.goTo = (name, params, stack) => {
+    this.goTo = (name, params, stack, index) => {
       const { go } = this;
-      const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params, stack });
+      const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params, stack, index });
       go(state);
     };
 
@@ -594,22 +694,24 @@ class Gouter {
      * @type {() => void}
      */
     this.goBack = () => {
-      const { go } = this;
-      go(null);
+      const { getNextState, setRootState } = this;
+      const nextState = getNextState(null);
+      setRootState(nextState, true);
     };
 
     /**
      * Find state parents to use in `replace`.
-     * @type {(state: State<T>, parents?: State<T>[]) => State<T>[]}
+     * @type {(state: State<T>, parents: State<T>[], encoder?: (state: State<T>) => string) => State<T>[]}
      */
-    this.findParents = (state, parents = [this.state]) => {
+    this.findParents = (state, parents, encoder) => {
+      const { findParents } = this;
       const parent = parents[parents.length - 1];
       if (parent) {
-        if (parent === state) {
+        if (encoder ? encoder(parent) === encoder(state) : parent === state) {
           return parents.slice(0, -1);
         }
         for (const parentState of parent.stack || []) {
-          const nextParents = this.findParents(state, [...parents, parentState]);
+          const nextParents = findParents(state, [...parents, parentState], encoder);
           if (nextParents.length > 0) {
             return nextParents;
           }
@@ -619,34 +721,64 @@ class Gouter {
     };
 
     /**
-     * Finds `searchState` and replaces it by `replaceState`. Return `true` if state was replaced,
-     * `false` otherwise. It compares states using strict equality (===).
-     * @type {(searchState: State<T>, replaceState: State<T>) => boolean}
+     * Recursively iterates over inner states of current state and calls `replacer` for each state.
+     * The `replacer` accepts current `state` and `parents` and returns `null` if current state should be removed,
+     * modified state if current state should be modified or same state if current state should not be touched.
+     *
+     * Note: `parents` should not be passed cause it is created automatically for recursion purposes.
+     * @type {(replacer: (state: State<T>, ...parents: State<T>[]) => State<T> | null, parents?: State<T>[]) => State<T>}
      */
-    this.replace = (searchState, replaceState) => {
-      const { state, setState, findParents } = this;
-      if (searchState === state) {
-        setState(replaceState);
-        return true;
+    this.getReplacedState = (replacer, parents = [this.rootState]) => {
+      const { getReplacedState, buildState } = this;
+      const [state] = parents;
+      const stack = state && state.stack;
+      if (!stack) {
+        return state;
       }
-      const parents = findParents(searchState);
-      if (parents.length > 0) {
-        const nextState = { ...state };
-        let subState = nextState;
-        for (const parent of [...parents.slice(1), searchState]) {
-          if (!subState.stack) {
-            break;
+      /** @type {(State<T> | null)[]} */
+      const modifiedStack = [...stack];
+      let modified = false;
+      for (let i = 0; i < stack.length; i += 1) {
+        const subState = stack[i];
+        const replacedSubStateOrNull = replacer(subState, ...parents);
+        if (replacedSubStateOrNull === subState) {
+          if (subState.stack) {
+            const subStateModified = getReplacedState(replacer, [subState, ...parents]);
+            if (subStateModified !== subState) {
+              modified = true;
+              modifiedStack[i] = subStateModified;
+            }
           }
-          const index = subState.stack.indexOf(parent);
-          subState.stack = [...subState.stack];
-          const nextSubState = { ...parent };
-          subState.stack[index] = parent === searchState ? replaceState : nextSubState;
-          subState = nextSubState;
+        } else {
+          modified = true;
+          if (replacedSubStateOrNull) {
+            modifiedStack[i] = buildState(replacedSubStateOrNull, parents);
+          } else {
+            modifiedStack[i] = replacedSubStateOrNull;
+          }
         }
-        setState(nextState);
-        return true;
       }
-      return false;
+      if (modified) {
+        /** @type {State<T>} */
+        const modifiedState = {
+          ...state,
+          stack: /** @type {State<T>[]} */ (modifiedStack.filter(Boolean)),
+        };
+        return modifiedState;
+      }
+      return state;
+    };
+
+    /**
+     * Recursively iterates over inner states of current state applying `replacer` for each and after that sets next state.
+     * The `replacer` accepts current `state` and `parents` and returns `null` if current state should be removed,
+     * modified state if current state should be modified or same state if current state should be skipped.
+     * @type {(replacer: (state: State<T>, ...parents: State<T>[]) => State<T> | null) => void}
+     */
+    this.replace = (replacer) => {
+      const { getReplacedState, setRootState } = this;
+      const replacedState = getReplacedState(replacer);
+      setRootState(replacedState, true);
     };
 
     /**
@@ -697,14 +829,48 @@ class Gouter {
     };
 
     /**
+     * Get redirections map.
+     * @type {() => redirections<T>}
+     */
+    this.getRedirections = () => {
+      const { redirections } = this;
+      return redirections;
+    };
+
+    /**
+     * Set redirections map.
+     * @type {(redirections: Redirections<T>) => void}
+     */
+    this.setRedirections = (redirections) => {
+      this.redirections = redirections;
+    };
+
+    /**
+     * Get path-to-regexp options.
+     * @type {() => PathToRegexpOptions}
+     */
+    this.getPathToRegexpOptions = () => {
+      const { pathToRegexpOptions } = this;
+      return pathToRegexpOptions;
+    };
+
+    /**
+     * Set path-to-regexp options.
+     * @type {(pathToRegexpOptions: PathToRegexpOptions) => void}
+     */
+    this.setPathToRegexpOptions = (pathToRegexpOptions) => {
+      this.pathToRegexpOptions = pathToRegexpOptions;
+    };
+
+    /**
      * Updates browser/memory history and url from state.
      * @protected
      * @web
      * @type {Listener<T>}
      */
     this.updateHistory = (state) => {
-      const { history, getNotFoundStateFromUrl } = this;
-      if (history && state.name !== getNotFoundStateFromUrl('').name) {
+      const { history } = this;
+      if (history && state.name !== '_') {
         const url = this.encodeUrl(state);
         const { location } = history;
         const browserUrl = `${location.pathname}${location.search}`;
@@ -724,9 +890,9 @@ class Gouter {
      * @type {import('history').Listener}
      */
     this.goToLocation = ({ location }) => {
-      const { decodeUrl, go, getNotFoundStateFromUrl } = this;
+      const { decodeUrl, go } = this;
       const url = location.pathname + location.search;
-      const state = decodeUrl(url) || getNotFoundStateFromUrl(url);
+      const state = decodeUrl(url);
       go(state);
     };
 
@@ -736,10 +902,9 @@ class Gouter {
      * @type {(history: import('history').History, getNotFoundStateFromUrl: (url: string)=> State<T>)
      * => void}
      */
-    this.enableHistory = (history, getNotFoundStateFromUrl) => {
+    this.enableHistory = (history) => {
       const { listen, updateHistory, goToLocation } = this;
       this.history = history;
-      this.getNotFoundStateFromUrl = getNotFoundStateFromUrl;
       listen(updateHistory);
       history.listen(goToLocation);
       const action = /** @type {import('history').Action} */ ('PUSH');
