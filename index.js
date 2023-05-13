@@ -138,7 +138,8 @@ class Gouter {
     /**
      * `routeMap` stores routes passed to Gouter. They are used to decode and encode states and
      * urls, and help with type suggestions for route parameters.
-     * @type {T}
+     * @readonly
+     * @type {Readonly<T>}
      */
     this.routeMap = routes;
 
