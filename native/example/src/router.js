@@ -2,6 +2,9 @@ import Gouter from 'gouter';
 import {newStackNavigator, newTabNavigator} from 'gouter/navigators';
 
 const gouter = new Gouter({
+  _: {
+    url: [],
+  },
   App: {
     _: '/',
   },

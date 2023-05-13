@@ -129,7 +129,7 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
 /**
  * Creates `Gouter` instance with available routes. It's methods are used to modify navigation
  * state and then notify listeners about it.
- * @template {Routes} T
+ * @template {Routes & {_: {url: []}}} T
  * @param {T} routes map of routes
  */
 class Gouter {
@@ -144,23 +144,11 @@ class Gouter {
     this.routeMap = routes;
 
     /**
-     * `getNotFoundStateFromUrl` stores callback to create not-found state from url to use on web.
-     * @protected
-     * @web
-     * @type {(url: string) => State<T>}
-     */
-    this.getNotFoundStateFromUrl = (url) => ({
-      name: '',
-      params: /** @type {any} */ ({ url }),
-      stack: [],
-    });
-
-    /**
      * `rootState` stores current router root state. Initially it set to not-found state so you need
      * to use `setRootState` method before navigation.
      * @type {State<T>}
      */
-    this.rootState = { name: '', params: /** @type {any} */ ({}), stack: [] };
+    this.rootState = { name: '_', params: /** @type {any} */ ({ url: '' }), stack: [] };
 
     /**
      * `navigators` stores current navigators customized for each route where you need it.
@@ -281,6 +269,9 @@ class Gouter {
       const pathFunction = pathFunctionCache[name];
       if (pathFunction) {
         return pathFunction(params);
+      }
+      if (name === '_') {
+        return 'url' in params ? String(params.url) : '';
       }
       const paramsDef = routeMap[name];
       const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
@@ -444,7 +435,7 @@ class Gouter {
 
     /**
      * Generates router state from url. If route not found then notFoundState returned.
-     * @type {(url: string) => State<T> | null}
+     * @type {(url: string) => State<T>}
      */
     this.decodeUrl = (url) => {
       const { decodePath, routeMap, decodeQuery } = this;
@@ -463,7 +454,8 @@ class Gouter {
           return state;
         }
       }
-      return null;
+      const state = { name: '_', params: /** @type {any} */ ({ url }), stack: [] };
+      return state;
     };
 
     /**
@@ -877,8 +869,8 @@ class Gouter {
      * @type {Listener<T>}
      */
     this.updateHistory = (state) => {
-      const { history, getNotFoundStateFromUrl } = this;
-      if (history && state.name !== getNotFoundStateFromUrl('').name) {
+      const { history } = this;
+      if (history && state.name !== '_') {
         const url = this.encodeUrl(state);
         const { location } = history;
         const browserUrl = `${location.pathname}${location.search}`;
@@ -898,9 +890,9 @@ class Gouter {
      * @type {import('history').Listener}
      */
     this.goToLocation = ({ location }) => {
-      const { decodeUrl, go, getNotFoundStateFromUrl } = this;
+      const { decodeUrl, go } = this;
       const url = location.pathname + location.search;
-      const state = decodeUrl(url) || getNotFoundStateFromUrl(url);
+      const state = decodeUrl(url);
       go(state);
     };
 
@@ -910,10 +902,9 @@ class Gouter {
      * @type {(history: import('history').History, getNotFoundStateFromUrl: (url: string)=> State<T>)
      * => void}
      */
-    this.enableHistory = (history, getNotFoundStateFromUrl) => {
+    this.enableHistory = (history) => {
       const { listen, updateHistory, goToLocation } = this;
       this.history = history;
-      this.getNotFoundStateFromUrl = getNotFoundStateFromUrl;
       listen(updateHistory);
       history.listen(goToLocation);
       const action = /** @type {import('history').Action} */ ('PUSH');

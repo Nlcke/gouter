@@ -322,6 +322,17 @@ const Profile = () => {
   );
 };
 
+/** @type {import('gouter/native').ScreenMap<import('./router').State>['_']} */
+const NotFound = ({state}) => {
+  return (
+    <ScrollView style={styles.container}>
+      <Text>404</Text>
+      <Button title="go back" onPress={goBack} />
+      <Text>{state.params.url}</Text>
+    </ScrollView>
+  );
+};
+
 /** @type {import('gouter/native').Animation} */
 const defaultAnimation = ({index, width, focused, bounce}) => ({
   zIndex: focused,
@@ -457,6 +468,9 @@ const drawerSettings = {
 
 /** @type {import('gouter/native').ScreenConfigMap<import('./router').State>} */
 const screenConfigMap = {
+  _: {
+    component: NotFound,
+  },
   App: {
     component: App,
     stack: defaultSettings,
