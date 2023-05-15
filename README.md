@@ -328,8 +328,7 @@ settings as `stack`. Each screen may have custom config and also accepts functio
 import { ScreenConfigMap } from 'gouter/native';
 import { State } from './router';
 
-/** @type {import('gouter/native').ScreenConfigMap<import('./router').State>} */
-const screenConfigMap = {
+const screenConfigMap: ScreenConfigMap<State> = {
   _: {
     component: NotFound,
   },
