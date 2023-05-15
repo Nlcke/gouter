@@ -55,9 +55,19 @@ const {
   encodePath,
 } = gouter;
 
-setRedirections({
-  Login: () => [{name: 'LoginStack', params: {}}],
-  LoginConfirmation: () => [{name: 'LoginConfirmationStack', params: {}}],
+setNavigators({
+  App: newStackNavigator(gouter, {
+    names: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
+  }),
+  Tabs: newTabNavigator(gouter, {
+    names: ['Home', 'Post', 'Profile'],
+  }),
+  LoginStack: newStackNavigator(gouter, {
+    names: ['Login', 'LoginModal'],
+  }),
+  LoginConfirmationStack: newStackNavigator(gouter, {
+    names: ['LoginConfirmation', 'LoginDrawer'],
+  }),
 });
 
 setBuilders({
@@ -80,19 +90,9 @@ setBuilders({
   }),
 });
 
-setNavigators({
-  App: newStackNavigator(gouter, {
-    names: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
-  }),
-  Tabs: newTabNavigator(gouter, {
-    names: ['Home', 'Post', 'Profile'],
-  }),
-  LoginStack: newStackNavigator(gouter, {
-    names: ['Login', 'LoginModal'],
-  }),
-  LoginConfirmationStack: newStackNavigator(gouter, {
-    names: ['LoginConfirmation', 'LoginDrawer'],
-  }),
+setRedirections({
+  Login: () => [{name: 'LoginStack', params: {}}],
+  LoginConfirmation: () => [{name: 'LoginConfirmationStack', params: {}}],
 });
 
 setRootState({name: 'App', params: {}});
