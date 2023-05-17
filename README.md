@@ -43,7 +43,8 @@ definitions matters for encoding/decoding.
 - Objects with `encode` and `decode` methods are used for url query parameters and will be presented
   as state parameters (`{ decode: parseFloat, encode: String }`) with type of `decode` result. If
   you set `required` flag to true then query parameter will be mandatory. You may use
-  `QueryParamDef<T>` type to define them before creating Gouter instance.
+  `QueryParamDef<T>` and `RequiredQueryParamDef<T>` types to define them before creating Gouter
+  instance.
 
 ```js
 import Gouter from 'gouter';
