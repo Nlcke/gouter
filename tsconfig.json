@@ -4,7 +4,9 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["index.js", "navigators/index.js", "native/index.js"],
   "typedocOptions": {
