@@ -16,9 +16,9 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  */
 
 /**
- * @template State
+ * @template {State} ScreenState
  * @typedef {{
- * state: State
+ * state: ScreenState
  * isFocused: boolean
  * isStale: boolean
  * animationProps: AnimationProps
