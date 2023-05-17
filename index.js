@@ -1,8 +1,9 @@
 import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
 
 /**
- * `PathSegment` is used to define a parameter inside parameters definition at route map.
- * It converts segment of url path into named parameter as string or string array and vice versa.
+ * `PathParamDef` is url path parameter definition inside parameters definition at route map.
+ * It converts path parameter of url into named parameter as string or string array and vice versa.
+ * String arrays should have at least one element.
  * Modifier determines how url path should be treated:
  * - '' or undefined is required string
  * - '?' is optional string
@@ -10,56 +11,61 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  * - '*' is optional string array with non-zero length
  * @typedef {[
  * prefix?: string,
- * regexp?: RegExp | null,
+ * regexp?: RegExp,
  * suffix?: string,
  * modifier?: '' | '?' | '+' | '*'
- * ]} PathSegment
+ * ]} PathParamDef
  */
 
 /**
- * `Serializable` is used to define optional query parameter inside parameters definition at
- * route map. It converts part of url query into named parameter using `decode` and vice versa
- * using `encode`.
+ * `QueryParamDef` is url query parameter definition inside parameters definition at route map.
+ * It converts query parameter of url into named parameter using `decode` and vice versa
+ * using `encode`. If `required` is true then query parameter is required, otherwise it is optional.
  * @template T
  * @typedef {{
  * decode: (str: string) => T
  * encode: (val: T) => string
- * }} Serializable
+ * required?: boolean
+ * }} QueryParamDef
  */
 
 /**
- * `ParamValueDef` is used to define parts of url (`string`), required (`PathSegment`) and
- * optional (`Serializable`) parameters.
- * @typedef {string | PathSegment | Serializable<any>} ParamValueDef
+ * `Param` is required static (`string`), path (`PathParamDef`) or query (`QueryParamDef`) parameter definition.
+ * @typedef {string | PathParamDef | QueryParamDef<any>} ParamDef
  */
 
 /**
- * `ParamsDef` is used to define parameters of a route at route map.
- * @typedef {Record<string, ParamValueDef>} ParamsDef
+ * `Params` is parameter collection, where key is parameter name, used inside route map.
+ * @typedef {Record<string, ParamDef>} ParamDefs
  */
 
 /**
- * `Routes` is passed to Gouter to define route parameters for each route name
- * @typedef {Record<string, ParamsDef>} Routes
+ * `Routes` is route collection, where key is route name, used as Gouter parameter.
+ * @typedef {Record<string, ParamDefs>} Routes
  */
 
 /**
- * `StateMap<T>` is used to get route name and params from route name.
+ * `StateMap<T>` is state collection, where key is route name.
+ * It has only `name` and `params` inside each state and used to create full `State`s.
  * @template {Routes} T
  * @typedef {{[N in keyof T]: {
  * name: N
  * params: {[K in keyof T[N] as
- * T[N][K] extends PathSegment ?
+ * T[N][K] extends PathParamDef ?
  * T[N][K][3] extends '' ? K : T[N][K][3] extends '+' ?
- * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never : never]:
- * T[N][K] extends PathSegment ? T[N][K][3] extends '+' ? string[] : string : string}
+ * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never :
+ * T[N][K] extends QueryParamDef<any> ? T[N][K] extends {required: true} ?
+ * K : never : never]:
+ * T[N][K] extends QueryParamDef<any> ? ReturnType<T[N][K]['decode']> :
+ * T[N][K] extends PathParamDef ? T[N][K][3] extends '+' ? string[] : string : string}
  * & {[K in keyof T[N] as
- * T[N][K] extends PathSegment ?
+ * T[N][K] extends PathParamDef ?
  * T[N][K][3] extends '?' ? K : T[N][K][3] extends '*' ?
- * K : never : T[N][K] extends Serializable<any> ?
- * K : never]?: T[N][K] extends PathSegment ?
+ * K : never : T[N][K] extends QueryParamDef<any> ? T[N][K] extends {required: true} ?
+ * never : K : never]?:
+ * T[N][K] extends PathParamDef ?
  * T[N][K][3] extends '?' ? string : T[N][K][3] extends '*' ?
- * string[] : never : T[N][K] extends Serializable<any> ?
+ * string[] : never : T[N][K] extends QueryParamDef<any> ?
  * ReturnType<T[N][K]['decode']> : never}
  * }}} StateMap
  */
@@ -81,33 +87,33 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
- * `Navigators` is used to define `Navigator` for each route where you need it.
+ * `Navigators` is `Navigator` collection, where key is route name.
  * @template {Routes} T
  * @typedef {{[N in keyof T]?: Navigator<T, N>}} Navigators
  */
 
 /**
- * `Builder` is a function called to modify state when a state without stack is added to current state
+ * `Builder` is a function called to modify state when a state without stack is added to current state.
  * @template {Routes} T
  * @template {keyof T} N
  * @typedef {(state: StateMap<T>[N] & State<T>, ...parents: State<T>[]) => State<T>} Builder
  */
 
 /**
- * `Builders` is used to define stack builder for each route where you need it.
+ * `Builders` is `Builder` collection, where key is route name.
  * @template {Routes} T
  * @typedef {{[N in keyof T]?: Builder<T, N>}} Builders
  */
 
 /**
- * `Builder` is a function called to modify state when a state without stack is added to current state
+ * `Builder` is a function called to modify state when a state without stack is added to current state.
  * @template {Routes} T
  * @template {keyof T} N
  * @typedef {(state: StateMap<T>[N] & State<T>) => State<T>[]} Redirection
  */
 
 /**
- * `Builders` is used to define stack builder for each route where you need it.
+ * `Redirections` is `Redirection` collection, where key is route name.
  * @template {Routes} T
  * @typedef {{[N in keyof T]?: Redirection<T, N>}} Redirections
  */
@@ -119,7 +125,10 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
- * @typedef {import('path-to-regexp').ParseOptions & import('path-to-regexp').TokensToRegexpOptions} PathToRegexpOptions
+ * `PathToRegexpOptions` are used to customize url decoding/encoding.
+ * See https://www.npmjs.com/package/path-to-regexp
+ * @typedef {import('path-to-regexp').ParseOptions
+ * & import('path-to-regexp').TokensToRegexpOptions } PathToRegexpOptions
  */
 
 /**
@@ -198,6 +207,8 @@ class Gouter {
      */
     this.regexpFunctionCache = {};
 
+    Object.assign(this.regexpFunctionCache, { _: () => null });
+
     /**
      * `pathFunctionCache` stores PathFunction cache used to encode states into urls' paths at
      * `encodePath`.
@@ -205,6 +216,10 @@ class Gouter {
      * @type {Partial<Record<keyof T, import('path-to-regexp').PathFunction<object>>>}
      */
     this.pathFunctionCache = {};
+
+    Object.assign(this.pathFunctionCache, {
+      _: (/** @type {Record<String, any>} */ params) => ('url' in params ? String(params.url) : ''),
+    });
 
     /**
      * `pathCacheByName` stores path cache for each route name to speed up `encodePath`.
@@ -224,18 +239,18 @@ class Gouter {
      * Generates path-to-regexp tokens from parameters definition.
      * Generated tokens are used for `getRegexpFunction` and `encodePath`.
      * @protected
-     * @type {(paramsDef: ParamsDef, options: import('path-to-regexp').ParseOptions)
+     * @type {(paramDefs: ParamDefs, options: import('path-to-regexp').ParseOptions)
      * => (string | import('path-to-regexp').Key)[]}
      */
-    this.getTokensFromParamsDef = (paramsDef, options) => {
+    this.getTokensFromParamDefs = (paramDefs, options) => {
       /** @type {(string | import('path-to-regexp').Key)[]} */
       const tokens = [];
       const escapeRegexp = /([.+*?=^!:${}()[\]|/\\])/g;
       const defaultPattern = `[^${(options.delimiter || '/#?').replace(escapeRegexp, '\\$1')}]+?`;
-      for (const name in paramsDef) {
-        const segment = paramsDef[name];
-        if (Array.isArray(segment)) {
-          const [prefix = '/', regexp = null, suffix = '', modifier = ''] = segment;
+      for (const name in paramDefs) {
+        const paramDef = paramDefs[name];
+        if (Array.isArray(paramDef)) {
+          const [prefix = '/', regexp, suffix = '', modifier = ''] = paramDef;
           const pattern = regexp ? regexp.toString().slice(1, -1) : defaultPattern;
           /** @type {import('path-to-regexp').Key} */
           const key = {
@@ -246,8 +261,8 @@ class Gouter {
             modifier,
           };
           tokens[tokens.length] = key;
-        } else if (typeof segment === 'string') {
-          tokens[tokens.length] = segment;
+        } else if (typeof paramDef === 'string') {
+          tokens[tokens.length] = paramDef;
         }
       }
       return tokens;
@@ -262,7 +277,7 @@ class Gouter {
         routeMap,
         pathFunctionCache,
         pathToRegexpOptions,
-        getTokensFromParamsDef,
+        getTokensFromParamDefs,
         pathCacheByName,
       } = this;
       const { name, params } = state;
@@ -270,11 +285,8 @@ class Gouter {
       if (pathFunction) {
         return pathFunction(params);
       }
-      if (name === '_') {
-        return 'url' in params ? String(params.url) : '';
-      }
-      const paramsDef = routeMap[name];
-      const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
+      const paramDefs = routeMap[name];
+      const tokens = getTokensFromParamDefs(paramDefs, pathToRegexpOptions);
       const newPathFunction = tokensToFunction(tokens, pathToRegexpOptions);
       const pathCache = pathCacheByName[name] || new WeakMap();
       pathCacheByName[name] = pathCache;
@@ -300,10 +312,10 @@ class Gouter {
       const { routeMap } = this;
       const { name, params } = state;
       let queryStr = '';
-      const paramsDef = routeMap[name];
+      const paramDefs = routeMap[name];
       for (const key in params) {
-        const segment = paramsDef[key];
-        const encode = typeof segment === 'object' && !Array.isArray(segment) && segment.encode;
+        const paramDef = paramDefs[key];
+        const encode = typeof paramDef === 'object' && !Array.isArray(paramDef) && paramDef.encode;
         if (encode) {
           const value = params[/** @type {keyof params} */ (key)];
           /** @type {string} */
@@ -347,13 +359,13 @@ class Gouter {
      * @type {(name: keyof T) => RegExp['exec']}
      */
     this.getRegexpFunction = (name) => {
-      const { regexpFunctionCache, routeMap, pathToRegexpOptions, getTokensFromParamsDef } = this;
+      const { regexpFunctionCache, routeMap, pathToRegexpOptions, getTokensFromParamDefs } = this;
       const regexpFunction = regexpFunctionCache[name];
       if (regexpFunction) {
         return regexpFunction;
       }
-      const paramsDef = routeMap[name];
-      const tokens = getTokensFromParamsDef(paramsDef, pathToRegexpOptions);
+      const paramDefs = routeMap[name];
+      const tokens = getTokensFromParamDefs(paramDefs, pathToRegexpOptions);
       const regexp =
         tokens.length > 0 ? tokensToRegexp(tokens, undefined, pathToRegexpOptions) : /^$/;
       const newRegexpFunction = regexp.exec.bind(regexp);
@@ -371,20 +383,20 @@ class Gouter {
       const match = regexpFunction(path);
       if (match) {
         const params = /** @type {StateMap<T>[typeof name]['params']} */ ({});
-        const paramsDef = routeMap[name];
+        const paramDefs = routeMap[name];
         let index = 0;
-        for (const key in paramsDef) {
+        for (const key in paramDefs) {
           const paramsKey = /** @type {keyof StateMap<T>[typeof name]['params']} */ (
             /** @type {unknown} */ (key)
           );
-          const segment = paramsDef[key];
-          if (Array.isArray(segment)) {
+          const paramDef = paramDefs[key];
+          if (Array.isArray(paramDef)) {
             index += 1;
             const result = match[index];
-            const modifier = segment[3];
+            const modifier = paramDef[3];
             if (modifier === '+' || modifier === '*') {
-              const prefix = segment[0] || '';
-              const suffix = segment[2] || '';
+              const prefix = paramDef[0] || '';
+              const suffix = paramDef[2] || '';
               const divider = prefix + suffix;
               params[paramsKey] = /** @type {params[paramsKey]} */ (
                 divider ? result.split(divider) : [result]
@@ -400,13 +412,14 @@ class Gouter {
     };
 
     /**
-     * Generates optional route parameters from url query string and route name.
-     * @type {<N extends keyof T>(name: N, queryStr: string) => StateMap<T>[N]['params']}
+     * Creates optional route parameters from route name and url query string, if possible.
+     * If not then returns null.
+     * @type {<N extends keyof T>(name: N, queryStr: string) => StateMap<T>[N]['params'] | null}
      */
     this.decodeQuery = (name, queryStr) => {
       const { routeMap } = this;
       const params = /** @type {StateMap<T>[typeof name]['params']} */ ({});
-      const paramsDef = routeMap[name];
+      const paramDefs = routeMap[name];
       for (const keyValueStr of queryStr.split('&')) {
         const splitIndex = keyValueStr.indexOf('=');
         const keyEncoded = keyValueStr.slice(0, splitIndex);
@@ -416,8 +429,8 @@ class Gouter {
         } catch (e) {
           /* empty */
         }
-        const segment = paramsDef[key];
-        const decode = typeof segment === 'object' && !Array.isArray(segment) && segment.decode;
+        const paramDef = paramDefs[key];
+        const decode = typeof paramDef === 'object' && !Array.isArray(paramDef) && paramDef.decode;
         if (decode) {
           const valueStr = keyValueStr.slice(splitIndex + 1);
           let valueEncoded = valueStr;
@@ -428,6 +441,16 @@ class Gouter {
           }
           const value = decode(valueEncoded);
           params[/** @type {keyof StateMap<T>[typeof name]['params']} */ (key)] = value;
+        }
+      }
+      for (const key in paramDefs) {
+        if (!(key in params)) {
+          const paramValue = paramDefs[key];
+          const required =
+            typeof paramValue === 'object' && !Array.isArray(paramValue) && paramValue.required;
+          if (required) {
+            return null;
+          }
         }
       }
       return params;
@@ -444,11 +467,12 @@ class Gouter {
       for (const name in routeMap) {
         const params = decodePath(name, pathname);
         if (params) {
-          if (search) {
-            const query = decodeQuery(name, search);
-            for (const key in query) {
-              params[key] = query[key];
-            }
+          const query = decodeQuery(name, search);
+          if (!query) {
+            break;
+          }
+          for (const key in query) {
+            params[key] = query[key];
           }
           const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params });
           return state;
@@ -847,6 +871,8 @@ class Gouter {
 
     /**
      * Get path-to-regexp options.
+     * `PathToRegexpOptions` are used to customize url decoding/encoding.
+     * See https://www.npmjs.com/package/path-to-regexp
      * @type {() => PathToRegexpOptions}
      */
     this.getPathToRegexpOptions = () => {
@@ -856,6 +882,8 @@ class Gouter {
 
     /**
      * Set path-to-regexp options.
+     * `PathToRegexpOptions` are used to customize url decoding/encoding.
+     * See https://www.npmjs.com/package/path-to-regexp
      * @type {(pathToRegexpOptions: PathToRegexpOptions) => void}
      */
     this.setPathToRegexpOptions = (pathToRegexpOptions) => {

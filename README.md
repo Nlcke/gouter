@@ -32,16 +32,18 @@ url and decode it back. Parameters definitions are objects where keys are parame
 are strings, tuples or objects with decode/encode methods. Please, note: the order of that parameter
 definitions matters for encoding/decoding.
 
-- Strings are used only as required parts to encode/decode urls (`'/login'`, `'/tabs'`) and will not
+- Strings are used only as static parts to encode/decode urls (`'/login'`, `'/tabs'`) and will not
   be presented as state parameters, but used to convert states and urls. So you may use any keys for
   them (like `_` in examples).
-- Tuples are used for url path parameters and will be presented as required string parameters (`[]`,
-  `['/', /\d+/]`). They consist of all optional prefix, regexp, suffix and modifier
+- Tuples are used for url path parameters and will be presented as string or string array parameters
+  (`[]`, `['/', /\d+/]`). They consist of all optional prefix, regexp, suffix and modifier
   (`'' | '?' | '+' | '*'`). This structure is chosen due to compatibility with `path-to-regexp`
-  module which is Gouter dependency that helps to convert urls to states and back.
+  module which is Gouter dependency that helps to convert urls to states and back. You may customize
+  that conversion using `setPathToRegexpOptions` method.
 - Objects with `encode` and `decode` methods are used for url query parameters and will be presented
-  as optional state parameters (`{ decode: parseFloat, encode: String }`) with type of `decode`
-  result. You may use `Serializable<T>` type to define them before creating Gouter instance.
+  as state parameters (`{ decode: parseFloat, encode: String }`) with type of `decode` result. If
+  you set `required` flag to true then query parameter will be mandatory. You may use
+  `QueryParamDef<T>` type to define them before creating Gouter instance.
 
 ```js
 import Gouter from 'gouter';
