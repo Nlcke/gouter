@@ -30,11 +30,6 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
- * @template T
- * @typedef {QueryParamDef<T> & {required: true}} RequiredQueryParamDef
- */
-
-/**
  * `Param` is required static (`string`), path (`PathParamDef`) or query (`QueryParamDef`) parameter definition.
  * @typedef {string | PathParamDef | QueryParamDef<any>} ParamDef
  */
