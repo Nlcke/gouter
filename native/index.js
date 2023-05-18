@@ -33,12 +33,6 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 /** @typedef {(props: AnimationProps) => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation */
 
 /**
- * @template ScreenConfig
- * @template {State} ScreenState
- * @typedef {ScreenConfig | ((state: ScreenState) => ScreenConfig)} Flexible
- */
-
-/**
  * @typedef {{
  * animation: Animation
  * animationDuration: number
@@ -50,15 +44,13 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 /**
  * @typedef {{
  * component: React.ComponentType<ScreenProps<any>>
- * stack?: StackSettings
+ * stackSettings?: StackSettings
  * }} ScreenConfig
  */
 
 /**
  * @template {State} ScreenState
- * @typedef {{[Name in ScreenState['name']]: Flexible<
- * ScreenConfig, ScreenState & {name: Name}
- * >}} ScreenConfigMap
+ * @typedef {{[Name in ScreenState['name']]: ScreenConfig}} ScreenConfigMap
  */
 
 /**
@@ -291,13 +283,9 @@ const GouterNativeStack = memo(
     const prevFocusedFreshIndex = focusedFreshIndexRef.current;
     focusedFreshIndexRef.current = focusedFreshIndex;
 
-    const maybeScreenConfig = screenConfigMap[state.name];
-    const thisScreenConfig =
-      typeof maybeScreenConfig === 'function'
-        ? maybeScreenConfig(state)
-        : maybeScreenConfig || defaultScreenConfig;
+    const thisScreenConfig = screenConfigMap[state.name] || defaultScreenConfig;
 
-    const thisStackSettings = thisScreenConfig.stack || defaultStackSettings;
+    const thisStackSettings = thisScreenConfig.stackSettings || defaultStackSettings;
     const thisStackSettingsRef = useRef(thisStackSettings);
     thisStackSettingsRef.current = thisStackSettings;
 

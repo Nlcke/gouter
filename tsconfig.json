@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
+    "lib": ["ES2015"],
     "allowJs": true,
+    "checkJs": true,
     "declaration": true,
     "emitDeclarationOnly": true,
     "skipLibCheck": true,

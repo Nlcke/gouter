@@ -45,6 +45,10 @@ definitions matters for encoding/decoding.
   you set `required` flag to true then query parameter will be mandatory. You may use
   `QueryParamDef<T>` type to define them before creating Gouter instance.
 
+When you pass routes you should also define special required 'notFound' route with key `_` and `url`
+param. It is used to handle situations when state or url is broken and cannot be encoded/decoded
+normally. You may add 404 screen for it.
+
 ```js
 import Gouter from 'gouter';
 import { newStackNavigator, newTabNavigator } from 'gouter/navigators';
@@ -323,8 +327,8 @@ const defaultSettings: StackSettings = {
 #### Screen config map
 
 Import screens and put each of them into `screenConfigMap` as `component`. Then add required stack
-settings as `stack`. Each screen may have custom config and also accepts functions
-`(state) => config` for advanced use cases.
+settings as `stackSettings` for every screen with children. You may create shared stack settings by
+using `StackSettings` type from `gouter/native`.
 
 ```ts
 import { ScreenConfigMap } from 'gouter/native';
@@ -336,11 +340,11 @@ const screenConfigMap: ScreenConfigMap<State> = {
   },
   App: {
     component: App,
-    stack: defaultSettings,
+    stackSettings: defaultSettings,
   },
   LoginStack: {
     component: LoginStack,
-    stack: modalSettings,
+    stackSettings: modalSettings,
   },
   LoginModal: {
     component: LoginModal,
@@ -350,7 +354,7 @@ const screenConfigMap: ScreenConfigMap<State> = {
   },
   LoginConfirmationStack: {
     component: LoginConfirmationStack,
-    stack: drawerSettings,
+    stackSettings: drawerSettings,
   },
   LoginConfirmation: {
     component: LoginConfirmation,

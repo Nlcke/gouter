@@ -473,11 +473,11 @@ const screenConfigMap = {
   },
   App: {
     component: App,
-    stack: defaultSettings,
+    stackSettings: defaultSettings,
   },
   LoginStack: {
     component: LoginStack,
-    stack: modalSettings,
+    stackSettings: modalSettings,
   },
   LoginModal: {
     component: LoginModal,
@@ -487,7 +487,7 @@ const screenConfigMap = {
   },
   LoginConfirmationStack: {
     component: LoginConfirmationStack,
-    stack: drawerSettings,
+    stackSettings: drawerSettings,
   },
   LoginConfirmation: {
     component: LoginConfirmation,
@@ -497,7 +497,7 @@ const screenConfigMap = {
   },
   Tabs: {
     component: Tabs,
-    stack: tabsSettings,
+    stackSettings: tabsSettings,
   },
   Home: {
     component: Home,

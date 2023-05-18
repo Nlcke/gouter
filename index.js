@@ -684,20 +684,25 @@ class Gouter {
      */
     this.go = (...statesOrNulls) => {
       const { getNextState, setRootState, redirections } = this;
-      const statesOrNullsExt = statesOrNulls
-        .map((stateOrNull) => {
-          if (!stateOrNull) {
-            return null;
-          }
+      /** @type {(State<T> | null)[]} */
+      const statesOrNullsExt = [];
+      for (const stateOrNull of statesOrNulls) {
+        if (stateOrNull) {
           const state = stateOrNull;
           const redirection = redirections[state.name];
-          if (!redirection) {
-            return state;
+          if (redirection) {
+            const redirectionStates = redirection(state);
+            for (const redirectionState of redirectionStates) {
+              statesOrNullsExt[statesOrNullsExt.length] = redirectionState;
+            }
+            statesOrNullsExt[statesOrNullsExt.length] = state;
+          } else {
+            statesOrNullsExt[statesOrNullsExt.length] = state;
           }
-          const states = redirection(state);
-          return [...states, state];
-        })
-        .flat();
+        } else {
+          statesOrNullsExt[statesOrNullsExt.length] = null;
+        }
+      }
       const nextState = getNextState(...statesOrNullsExt);
       setRootState(nextState, true);
     };

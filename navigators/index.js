@@ -8,7 +8,7 @@ export const newStackNavigator =
   (stateOrNull, parent) => {
     if (stateOrNull) {
       const state = stateOrNull;
-      if (names.includes(state.name)) {
+      if (names.indexOf(state.name) >= 0) {
         const path = encodePath(state);
         const stack = parent.stack || [];
         const index = stack.findIndex((stackState) => encodePath(stackState) === path);
@@ -35,7 +35,7 @@ export const newTabNavigator =
   (stateOrNull, parent) => {
     if (stateOrNull) {
       const state = stateOrNull;
-      if (names.includes(state.name)) {
+      if (names.indexOf(state.name) >= 0) {
         const path = encodePath(state);
         const stack = parent.stack || [];
         const index = stack.findIndex((stackState) => encodePath(stackState) === path);
