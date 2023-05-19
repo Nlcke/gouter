@@ -236,17 +236,22 @@ class Gouter {
     this.listeners = [];
 
     /**
+     * `defaultPattern` stores default pattern string for current delimiter in pathToRegexpOptions.
+     * @protected
+     * @type {string}
+     */
+    this.defaultPattern = '[^\\/#\\?]+?';
+
+    /**
      * Generates path-to-regexp tokens from parameters definition.
      * Generated tokens are used for `getRegexpFunction` and `encodePath`.
      * @protected
-     * @type {(paramDefs: ParamDefs, options: import('path-to-regexp').ParseOptions)
-     * => (string | import('path-to-regexp').Key)[]}
+     * @type {(paramDefs: ParamDefs) => (string | import('path-to-regexp').Key)[]}
      */
-    this.getTokensFromParamDefs = (paramDefs, options) => {
+    this.getTokensFromParamDefs = (paramDefs) => {
+      const { defaultPattern } = this;
       /** @type {(string | import('path-to-regexp').Key)[]} */
       const tokens = [];
-      const escapeRegexp = /([.+*?=^!:${}()[\]|/\\])/g;
-      const defaultPattern = `[^${(options.delimiter || '/#?').replace(escapeRegexp, '\\$1')}]+?`;
       for (const name in paramDefs) {
         const paramDef = paramDefs[name];
         if (Array.isArray(paramDef)) {
@@ -286,7 +291,7 @@ class Gouter {
         return pathFunction(params);
       }
       const paramDefs = routeMap[name];
-      const tokens = getTokensFromParamDefs(paramDefs, pathToRegexpOptions);
+      const tokens = getTokensFromParamDefs(paramDefs);
       const newPathFunction = tokensToFunction(tokens, pathToRegexpOptions);
       const pathCache = pathCacheByName[name] || new WeakMap();
       pathCacheByName[name] = pathCache;
@@ -365,7 +370,7 @@ class Gouter {
         return regexpFunction;
       }
       const paramDefs = routeMap[name];
-      const tokens = getTokensFromParamDefs(paramDefs, pathToRegexpOptions);
+      const tokens = getTokensFromParamDefs(paramDefs);
       const regexp =
         tokens.length > 0 ? tokensToRegexp(tokens, undefined, pathToRegexpOptions) : /^$/;
       const newRegexpFunction = regexp.exec.bind(regexp);
@@ -893,6 +898,9 @@ class Gouter {
      */
     this.setPathToRegexpOptions = (pathToRegexpOptions) => {
       this.pathToRegexpOptions = pathToRegexpOptions;
+      const escapeRegexp = /([.+*?=^!:${}()[\]|/\\])/g;
+      const delimiter = pathToRegexpOptions.delimiter || '/#?';
+      this.defaultPattern = `[^${delimiter.replace(escapeRegexp, '\\$1')}]+?`;
     };
 
     /**
