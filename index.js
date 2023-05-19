@@ -896,17 +896,17 @@ class Gouter {
     };
 
     /**
-     * Updates browser/memory history and url from state.
+     * Syncs current browser location with state.
      * @protected
      * @web
      * @type {Listener<T>}
      */
-    this.updateHistory = (state) => {
+    this.syncLocationWithState = (state) => {
       const { history } = this;
       if (history && state.name !== '_') {
         const url = this.encodeUrl(state);
         const { location } = history;
-        const browserUrl = `${location.pathname}${location.search}`;
+        const browserUrl = location.pathname + location.search;
         if (browserUrl !== url) {
           history.push(url);
         }
@@ -914,34 +914,30 @@ class Gouter {
     };
 
     /**
-     * Goes to new router state from history location:
-     * * history location is transformed into url
-     * * url is transformed into new router state or not-found state
-     * * router goes to router state if it is different from previous one
+     * Syncs current state with browser location.
      * @protected
      * @web
      * @type {import('history').Listener}
      */
-    this.goToLocation = ({ location }) => {
+    this.syncStateWithLocation = ({ location }) => {
       const { decodeUrl, go } = this;
-      const url = location.pathname + location.search;
-      const state = decodeUrl(url);
+      const browserUrl = location.pathname + location.search;
+      const state = decodeUrl(browserUrl);
       go(state);
     };
 
     /**
      * Enables `history` package for web browser support.
      * @web
-     * @type {(history: import('history').History, getNotFoundStateFromUrl: (url: string)=> State<T>)
-     * => void}
+     * @type {(history: import('history').History) => void}
      */
     this.enableHistory = (history) => {
-      const { listen, updateHistory, goToLocation } = this;
+      const { listen, syncLocationWithState, syncStateWithLocation } = this;
       this.history = history;
-      listen(updateHistory);
-      history.listen(goToLocation);
+      listen(syncLocationWithState);
+      history.listen(syncStateWithLocation);
       const action = /** @type {import('history').Action} */ ('PUSH');
-      goToLocation({ location: history.location, action });
+      syncStateWithLocation({ location: history.location, action });
     };
   }
 }
