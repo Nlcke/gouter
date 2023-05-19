@@ -910,9 +910,10 @@ class Gouter {
      * @type {Listener<T>}
      */
     this.syncLocationWithState = (state) => {
-      const { history } = this;
-      if (history && state.name !== '_') {
-        const url = this.encodeUrl(state);
+      const { history, getFocusedStates } = this;
+      const [focusedState] = getFocusedStates(state);
+      if (history && focusedState.name !== '_') {
+        const url = this.encodeUrl(focusedState);
         const { location } = history;
         const browserUrl = location.pathname + location.search;
         if (browserUrl !== url) {
