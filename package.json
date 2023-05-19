@@ -1,6 +1,6 @@
 {
   "name": "gouter",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "universal router",
   "main": "index.js",
   "type": "module",
@@ -16,18 +16,13 @@
     "./navigators": "./navigators/index.js"
   },
   "dependencies": {
-    "path-to-regexp": "6.2.0"
+    "path-to-regexp": "6.2.1"
   },
   "devDependencies": {
-    "@react-native-community/eslint-config": "^3.0.0",
-    "eslint": "^8.2.0",
+    "eslint": "^8.40.0",
     "eslint-config-airbnb": "^19.0.4",
-    "eslint-config-prettier": "^8.6.0",
-    "eslint-plugin-import": "^2.25.3",
-    "eslint-plugin-jsx-a11y": "^6.5.1",
-    "eslint-plugin-react": "^7.28.0",
-    "eslint-plugin-react-hooks": "^4.3.0",
-    "prettier": "^2.8.2",
+    "eslint-config-prettier": "^8.8.0",
+    "prettier": "^2.8.8",
     "typedoc": "^0.24.7"
   },
   "peerDependencies": {
