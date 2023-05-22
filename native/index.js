@@ -7,11 +7,12 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /**
  * @typedef {{
- * index: Animated.AnimatedSubtraction<number>,
- * width: EnhancedAnimatedValue,
- * height: EnhancedAnimatedValue,
- * focused: EnhancedAnimatedValue,
+ * index: Animated.AnimatedSubtraction<number>
+ * width: EnhancedAnimatedValue
+ * height: EnhancedAnimatedValue
+ * focused: EnhancedAnimatedValue
  * bounce: EnhancedAnimatedValue
+ * parentIndexes: Animated.AnimatedSubtraction<number>[]
  * }} AnimationProps
  */
 
@@ -84,6 +85,9 @@ defaultAnimatedValue.addListener(({ value }) => {
 });
 
 const defaultStackRef = { current: /** @type {State[]} */ ([]) };
+
+/** @type {Animated.AnimatedSubtraction<number>[]} */
+const defaultAnimatedParentIndexes = [];
 
 /**
  * Joins previous and next stacks together
@@ -173,6 +177,7 @@ let panRespondersBlocked = false;
  * animatedFocusedIndex: EnhancedAnimatedValue
  * animatedWidth: EnhancedAnimatedValue
  * animatedHeight: EnhancedAnimatedValue
+ * animatedParentIndexes: Animated.AnimatedSubtraction<number>[]
  * }>}
  */
 const GouterNativeStack = memo(
@@ -189,6 +194,7 @@ const GouterNativeStack = memo(
     animatedFocusedIndex,
     animatedWidth,
     animatedHeight,
+    animatedParentIndexes,
   }) => {
     const [, updateState] = useState([]);
 
@@ -236,6 +242,7 @@ const GouterNativeStack = memo(
       }).start();
     }
 
+    /** @type {Animated.AnimatedSubtraction<number>} */
     const animatedIndex = useMemo(
       () => Animated.subtract(animatedRawIndex, animatedFocusedIndex),
       [animatedFocusedIndex, animatedRawIndex],
@@ -252,6 +259,12 @@ const GouterNativeStack = memo(
     }
     prevIsFocusedRef.current = isFocused;
 
+    const thisAnimatedParentIndexes = useMemo(
+      () => [animatedIndex, ...animatedParentIndexes],
+      [animatedIndex, animatedParentIndexes],
+    );
+
+    /** @type {AnimationProps} */
     const animationProps = useMemo(
       () => ({
         index: animatedIndex,
@@ -259,8 +272,16 @@ const GouterNativeStack = memo(
         height: animatedHeight,
         focused: animatedFocused,
         bounce: thisAnimatedBounce,
+        parentIndexes: animatedParentIndexes,
       }),
-      [animatedIndex, animatedWidth, animatedHeight, animatedFocused, thisAnimatedBounce],
+      [
+        animatedIndex,
+        animatedParentIndexes,
+        animatedWidth,
+        animatedHeight,
+        animatedFocused,
+        thisAnimatedBounce,
+      ],
     );
 
     const { animation } = stackSettingsRef.current;
@@ -504,6 +525,7 @@ const GouterNativeStack = memo(
             animatedWidth: thisAnimatedWidth,
             animatedHeight: thisAnimatedHeight,
             stackSettingsRef: thisStackSettingsRef,
+            animatedParentIndexes: thisAnimatedParentIndexes,
           }),
         ),
       [
@@ -517,6 +539,7 @@ const GouterNativeStack = memo(
         thisAnimatedHeight,
         thisAnimatedWidth,
         thisStackSettingsRef,
+        thisAnimatedParentIndexes,
       ],
     );
 
@@ -564,6 +587,7 @@ const GouterNative = memo((props) =>
     animatedFocusedIndex: useEnhancedAnimatedValue(0),
     animatedWidth: useEnhancedAnimatedValue(Dimensions.get('window').width),
     animatedHeight: useEnhancedAnimatedValue(Dimensions.get('window').height),
+    animatedParentIndexes: defaultAnimatedParentIndexes,
     ...props,
   }),
 );

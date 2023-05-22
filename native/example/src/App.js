@@ -127,23 +127,25 @@ const Login = ({state}) => {
 };
 
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginConfirmation']} */
-const LoginConfirmation = ({state, animationProps: {index}}) => {
+const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
+  const [parentIndex] = parentIndexes;
+
   const animatedTextStyle = useMemo(
     () => ({
-      opacity: index.interpolate({
+      opacity: parentIndex.interpolate({
         inputRange: [-1, 0, 1],
         outputRange: [0, 1, 0],
       }),
       transform: [
         {
-          translateY: index.interpolate({
+          translateY: parentIndex.interpolate({
             inputRange: [-1, 0, 1],
             outputRange: [-80, 0, -80],
           }),
         },
       ],
     }),
-    [index],
+    [parentIndex],
   );
 
   const [appState, setAppState] = useState(getRootState);
@@ -164,7 +166,7 @@ const LoginConfirmation = ({state, animationProps: {index}}) => {
       <Text>Phone: {state.params.phone}</Text>
       <Button title="go to Tabs" onPress={() => goTo('Tabs', {})} />
       <Button title="go to App" onPress={() => goTo('App', {})} />
-      <Text>{'confirmation '.repeat(100)}</Text>
+      <Text>{'confirmation '.repeat(50)}</Text>
       <Button title="go back" onPress={goBack} />
       <Button
         title={hasLogin ? 'remove LoginStack' : 'add LoginStack'}
