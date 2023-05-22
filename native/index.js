@@ -222,45 +222,45 @@ const GouterNativeStack = memo(
     const focusedIndex = stack.indexOf(nextStack[focusedFreshIndex]);
     const thisAnimatedFocusedIndex = useEnhancedAnimatedValue(focusedIndex);
 
-    const animatedIndex = useEnhancedAnimatedValue(index);
+    const animatedRawIndex = useEnhancedAnimatedValue(index);
 
     const indexRef = useRef(index);
     const prevIndex = indexRef.current;
     indexRef.current = index;
 
     if (index !== prevIndex) {
-      Animated.timing(animatedIndex, {
+      Animated.timing(animatedRawIndex, {
         toValue: index,
         useNativeDriver: true,
         duration: stackSettingsRef.current.animationDuration,
       }).start();
     }
 
-    const animatedValue = useMemo(
-      () => Animated.subtract(animatedIndex, animatedFocusedIndex),
-      [animatedFocusedIndex, animatedIndex],
+    const animatedIndex = useMemo(
+      () => Animated.subtract(animatedRawIndex, animatedFocusedIndex),
+      [animatedFocusedIndex, animatedRawIndex],
     );
 
     const thisAnimatedBounce = useEnhancedAnimatedValue(0);
     const thisAnimatedWidth = useEnhancedAnimatedValue(0);
     const thisAnimatedHeight = useEnhancedAnimatedValue(0);
-    const animatedIsFocused = useEnhancedAnimatedValue(isFocused ? 1 : 0);
+    const animatedFocused = useEnhancedAnimatedValue(isFocused ? 1 : 0);
 
     const prevIsFocusedRef = useRef(isFocused);
     if (isFocused !== prevIsFocusedRef.current) {
-      animatedIsFocused.setValue(isFocused ? 1 : 0);
+      animatedFocused.setValue(isFocused ? 1 : 0);
     }
     prevIsFocusedRef.current = isFocused;
 
     const animationProps = useMemo(
       () => ({
-        index: animatedValue,
+        index: animatedIndex,
         width: animatedWidth,
         height: animatedHeight,
-        focused: animatedIsFocused,
+        focused: animatedFocused,
         bounce: thisAnimatedBounce,
       }),
-      [animatedValue, animatedWidth, animatedHeight, animatedIsFocused, thisAnimatedBounce],
+      [animatedIndex, animatedWidth, animatedHeight, animatedFocused, thisAnimatedBounce],
     );
 
     const { animation } = stackSettingsRef.current;
