@@ -278,6 +278,7 @@ props are just `Animated.Value`'s:
 - `height` is current component layout height
 - `focused` is 1 if focused and 0 otherwise
 - `bounce` is to indicate first (bounce < 0) or last screen (bounce > 0) offset
+- `parentIndexes` is list of parent indexes (relative to their focused state index)
 
 Usage example:
 
