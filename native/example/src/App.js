@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import GouterNative from 'gouter/native';
 import {
   StyleSheet,
@@ -10,6 +10,7 @@ import {
   Keyboard,
   ScrollView,
 } from 'react-native';
+import Login from './screens/Login';
 import {
   getRootState,
   goBack,
@@ -19,6 +20,8 @@ import {
   encodePath,
   setRootState,
 } from './router';
+import LoginConfirmation from './screens/LoginConfirmation';
+import SimpleButton from './components/SimpleButton';
 
 const styles = StyleSheet.create({
   container: {
@@ -30,17 +33,6 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     justifyContent: 'center',
-  },
-  buttonContainer: {
-    borderWidth: 1,
-    borderColor: 'gray',
-    borderRadius: 16,
-    alignItems: 'center',
-    padding: 8,
-    marginVertical: 8,
-  },
-  buttonContainerSelected: {
-    backgroundColor: '#cccccc',
   },
   modalContainer: {
     flex: 1,
@@ -56,15 +48,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#EEEEEE',
   },
 });
-
-/** @type {React.FC<{title: string, onPress: () => void, selected?: boolean}>} */
-const Button = ({title, onPress, selected}) => (
-  <TouchableOpacity
-    style={[styles.buttonContainer, selected && styles.buttonContainerSelected]}
-    onPress={onPress}>
-    <Text>{title}</Text>
-  </TouchableOpacity>
-);
 
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['App']} */
 const App = ({children}) => {
@@ -86,128 +69,55 @@ const LoginConfirmationStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
+/** @type {(numOfWords: number) => string} */
+const getRandomString = numOfWords =>
+  [...Array(numOfWords)]
+    .map(() =>
+      Math.random()
+        .toString(36)
+        .replace(/(\d|\.)/g, ''),
+    )
+    .join(' ');
+
+const rulesText = getRandomString(300);
+
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginModal']} */
 const LoginModal = () => {
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  /** @type {import('react').RefObject<ScrollView>} */
+  const scrollViewRef = useRef(null);
+
+  const prevYRef = useRef(0);
+
   return (
     <View style={styles.modalContainer} renderToHardwareTextureAndroid>
-      <View style={styles.modalPlaceholder} renderToHardwareTextureAndroid />
-    </View>
-  );
-};
-
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['Login']} */
-const Login = ({state}) => {
-  return (
-    <View style={styles.container}>
-      <Text>Login</Text>
-      <Text>Name: {state.params.name}</Text>
-      <Button
-        title="go to LoginConfirmation"
-        onPress={() => goTo('LoginConfirmation', {phone: '2398723987'})}
-      />
-      <Text>{'login '.repeat(100)}</Text>
-      <Button
-        title="change name"
-        onPress={() =>
-          replace(loginState =>
-            loginState.name === 'Login'
-              ? {
-                  ...loginState,
-                  params: {
-                    name: loginState.params.name === 'user' ? 'guest' : 'user',
-                  },
-                }
-              : loginState,
-          )
-        }
-      />
-      <Button title="show modal" onPress={() => goTo('LoginModal', {})} />
-    </View>
-  );
-};
-
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginConfirmation']} */
-const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
-  const [parentIndex] = parentIndexes;
-
-  const animatedTextStyle = useMemo(
-    () => ({
-      opacity: parentIndex.interpolate({
-        inputRange: [-1, 0, 1],
-        outputRange: [0, 1, 0],
-      }),
-      transform: [
-        {
-          translateY: parentIndex.interpolate({
-            inputRange: [-1, 0, 1],
-            outputRange: [-80, 0, -80],
-          }),
-        },
-      ],
-    }),
-    [parentIndex],
-  );
-
-  const [appState, setAppState] = useState(getRootState);
-  useEffect(() => listen(setAppState), []);
-  const stack = getRootState().stack || [];
-  const hasLogin = !!stack.find(
-    ({name, stack: stackOfLoginStack}) =>
-      name === 'LoginStack' &&
-      stackOfLoginStack &&
-      stackOfLoginStack.find(({name: subName}) => subName === 'Login'),
-  );
-
-  return (
-    <View style={styles.container}>
-      <Animated.View style={animatedTextStyle}>
-        <Text>Login Confirmation</Text>
-      </Animated.View>
-      <Text>Phone: {state.params.phone}</Text>
-      <Button title="go to Tabs" onPress={() => goTo('Tabs', {})} />
-      <Button title="go to App" onPress={() => goTo('App', {})} />
-      <Text>{'confirmation '.repeat(50)}</Text>
-      <Button title="go back" onPress={goBack} />
-      <Button
-        title={hasLogin ? 'remove LoginStack' : 'add LoginStack'}
-        onPress={() => {
-          setRootState(
-            hasLogin
-              ? {
-                  ...appState,
-                  stack: stack.filter(({name}) => name !== 'LoginStack'),
-                }
-              : {
-                  ...appState,
-                  stack: [
-                    {
-                      name: 'LoginStack',
-                      params: {},
-                      stack: [
-                        {
-                          name: 'Login',
-                          params: {},
-                        },
-                      ],
-                    },
-                    ...stack,
-                  ],
-                },
-          );
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.modalPlaceholder}
+        contentContainerStyle={{padding: 16}}
+        scrollEnabled={scrollEnabled}
+        // onScroll={e => console.log(e.nativeEvent.contentOffset.y)}
+        onMoveShouldSetResponder={e => {
+          prevYRef.current = e.nativeEvent.pageY;
+          return true;
         }}
-      />
-      <Button
-        title="goTo Login"
-        onPress={() => {
-          goTo('Login', {});
+        onTouchMove={e => {
+          const prevY = prevYRef.current;
+          const nextY = e.nativeEvent.pageY;
+          prevYRef.current = nextY;
+          if (nextY >= prevY) {
+            console.log('>');
+          } else {
+            console.log('<');
+          }
         }}
-      />
-      <Button
-        title="goTo LoginDrawer"
-        onPress={() => {
-          goTo('LoginDrawer', {});
+        onTouchEnd={() => {
+          prevYRef.current = 0;
         }}
-      />
+        renderToHardwareTextureAndroid>
+        <Text>{rulesText}</Text>
+      </ScrollView>
     </View>
   );
 };
@@ -244,14 +154,14 @@ const Tabs = ({state: tabsState, children}) => {
       <View style={styles.container}>{children}</View>
       <View style={styles.tabBar}>
         {stack.map(({name}, index) => (
-          <Button
+          <SimpleButton
             key={name}
             title={name}
             onPress={() => goTo(name, {})}
             selected={index === currentIndex}
           />
         ))}
-        <Button
+        <SimpleButton
           key="remove"
           title="- Post"
           onPress={() => {
@@ -270,8 +180,12 @@ const Tabs = ({state: tabsState, children}) => {
             setRootState({...appState, stack: nextStack});
           }}
         />
-        <Button key="add" title="+ Post" onPress={() => goTo('Post', {})} />
-        <Button
+        <SimpleButton
+          key="add"
+          title="+ Post"
+          onPress={() => goTo('Post', {})}
+        />
+        <SimpleButton
           key="reverse"
           title="Reverse"
           onPress={() =>
@@ -296,7 +210,7 @@ const Home = () => {
   return (
     <View style={styles.container}>
       <Text>Home</Text>
-      <Button title="go back" onPress={goBack} />
+      <SimpleButton title="go back" onPress={goBack} />
       <Text>{'home '.repeat(100)}</Text>
     </View>
   );
@@ -307,7 +221,7 @@ const Post = () => {
   return (
     <View style={styles.container}>
       <Text>Post</Text>
-      <Button title="go back" onPress={goBack} />
+      <SimpleButton title="go back" onPress={goBack} />
       <Text>{'post '.repeat(100)}</Text>
     </View>
   );
@@ -318,7 +232,7 @@ const Profile = () => {
   return (
     <ScrollView style={styles.container}>
       <Text>Profile</Text>
-      <Button title="go back" onPress={goBack} />
+      <SimpleButton title="go back" onPress={goBack} />
       <Text>{'profile '.repeat(500)}</Text>
     </ScrollView>
   );
@@ -329,7 +243,7 @@ const NotFound = ({state}) => {
   return (
     <ScrollView style={styles.container}>
       <Text>404</Text>
-      <Button title="go back" onPress={goBack} />
+      <SimpleButton title="go back" onPress={goBack} />
       <Text>{state.params.url}</Text>
     </ScrollView>
   );
@@ -436,7 +350,7 @@ const modalAnimation = ({index, height}) => [
   },
 ];
 
-const animationDuration = 256;
+const animationDuration = 1256;
 
 /** @type {import('gouter/native').StackSettings} */
 const defaultSettings = {
@@ -449,7 +363,7 @@ const defaultSettings = {
 /** @type {import('gouter/native').StackSettings} */
 const modalSettings = {
   animation: modalAnimation,
-  animationDuration,
+  animationDuration: 256,
   swipeDetection: 'vertical',
 };
 

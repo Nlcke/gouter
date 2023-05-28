@@ -20,10 +20,11 @@ const gouter = new Gouter({
   },
   LoginConfirmationStack: {
     _: '/login-confirmation-stack',
+    username: [],
   },
   LoginConfirmation: {
     _: '/login-confirmation',
-    phone: ['/', /\d+/],
+    username: [],
   },
   LoginDrawer: {
     _: '/login/drawer',
@@ -92,11 +93,13 @@ setBuilders({
 
 setRedirections({
   Login: () => [{name: 'LoginStack', params: {}}],
-  LoginConfirmation: () => [{name: 'LoginConfirmationStack', params: {}}],
+  LoginConfirmation: ({params}) => [{name: 'LoginConfirmationStack', params}],
 });
 
 setRootState({name: 'App', params: {}});
 
 /** @typedef {gouter['rootState']} State */
+
+/** @typedef {import('gouter/native').ScreenMap<State>} Screen */
 
 export {goTo, goBack, replace, getRootState, setRootState, listen, encodePath};
