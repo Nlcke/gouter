@@ -397,7 +397,7 @@ class Gouter {
           const paramDef = paramDefs[key];
           if (Array.isArray(paramDef)) {
             index += 1;
-            const result = match[index];
+            const result = match[index] || '';
             const modifier = paramDef[3];
             if (modifier === '+' || modifier === '*') {
               const prefix = paramDef[0] || '';
