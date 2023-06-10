@@ -23,6 +23,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * isFocused: boolean
  * isStale: boolean
  * animationProps: AnimationProps
+ * scrollProps: import('react-native').ScrollViewProps
  * children: React.ReactNode
  * }} ScreenProps
  */
@@ -61,6 +62,9 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 const swipeStartThreshold = 5;
 const swipeCancelThreshold = 20;
+const minReleaseAnimationDuration = 100;
+const maxReleaseAnimationDuration = 500;
+const releaseVelocityMultiplier = 1;
 
 /** @type {StackSettings} */
 const defaultStackSettings = {
@@ -88,6 +92,20 @@ const defaultStackRef = { current: /** @type {State[]} */ ([]) };
 
 /** @type {Animated.AnimatedSubtraction<number>[]} */
 const defaultAnimatedParentIndexes = [];
+
+const horizontalSwipeSet = new Set(
+  /** @type {StackSettings['swipeDetection'][]} */ (['horizontal', 'left', 'right']),
+);
+
+const defaultPanHandlers = PanResponder.create({
+  onMoveShouldSetPanResponder: (e) => {
+    e.stopPropagation();
+    return false;
+  },
+  onPanResponderMove: (e) => e.stopPropagation(),
+  onPanResponderRelease: (e) => e.stopPropagation(),
+  onPanResponderReject: (e) => e.stopPropagation(),
+}).panHandlers;
 
 /**
  * Joins previous and next stacks together
@@ -339,7 +357,6 @@ const GouterNativeStack = memo(
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onMoveShouldSetPanResponder']>} */
     const onMoveShouldSetPanResponder = useCallback(
       (event, { dx, dy, moveX, moveY }) => {
-        event.preventDefault();
         if (panRespondersBlocked) {
           event.stopPropagation();
           return false;
@@ -348,10 +365,7 @@ const GouterNativeStack = memo(
         if (!swipeDetection || swipeDetection === 'none') {
           return false;
         }
-        const isHorizontal =
-          swipeDetection === 'horizontal' ||
-          swipeDetection === 'left' ||
-          swipeDetection === 'right';
+        const isHorizontal = horizontalSwipeSet.has(swipeDetection);
         const locationValue = isHorizontal ? moveX : moveY;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
         if (locationValue < 0 || locationValue > side) {
@@ -385,19 +399,15 @@ const GouterNativeStack = memo(
         }
         return shouldSet;
       },
-      [animatedFocusedIndex.value, animatedHeight, animatedWidth, stackSettingsRef],
+      [animatedFocusedIndex, animatedHeight, animatedWidth, stackSettingsRef],
     );
 
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderMove']>} */
     const onPanResponderMove = useCallback(
       (event, { dx, dy }) => {
-        event.preventDefault();
         event.stopPropagation();
         const { swipeDetection } = stackSettingsRef.current;
-        const isHorizontal =
-          swipeDetection === 'horizontal' ||
-          swipeDetection === 'left' ||
-          swipeDetection === 'right';
+        const isHorizontal = horizontalSwipeSet.has(swipeDetection);
         const delta = isHorizontal ? dx : dy;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
         const offset = delta / side || 0;
@@ -415,8 +425,8 @@ const GouterNativeStack = memo(
       },
       [
         animatedFocusedIndex,
-        animatedHeight.value,
-        animatedWidth.value,
+        animatedHeight,
+        animatedWidth,
         bounceAnimation,
         stackSettingsRef,
         stackRef,
@@ -426,28 +436,30 @@ const GouterNativeStack = memo(
 
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
     const onPanResponderReleaseOrTerminate = useCallback(
-      (event, { dx, vx, dy, vy }) => {
+      (event, { dx, dy, vx, vy }) => {
         panRespondersBlocked = false;
-        event.preventDefault();
         event.stopPropagation();
         const { swipeDetection } = stackSettingsRef.current;
-        const isHorizontal =
-          swipeDetection === 'horizontal' ||
-          swipeDetection === 'left' ||
-          swipeDetection === 'right';
+        const isHorizontal = horizontalSwipeSet.has(swipeDetection);
         const delta = isHorizontal ? dx : dy;
         const velocity = isHorizontal ? vx : vy;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
         const offset = delta / side || 0;
-        const velocityOffset = Math.max(Math.min(0.5, 0.5 * velocity), -0.5);
+        const velocityOffset = Math.max(
+          Math.min(0.5, 0.5 * releaseVelocityMultiplier * velocity),
+          -0.5,
+        );
         const valueRaw = valueRef.current - offset - velocityOffset;
         const maxIndex = stackRef.current.length - 1;
         const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
         const nextPossibleIndex = Math.round(value);
         const nextState = stackRef.current[nextPossibleIndex] || stateRef.current;
         const nextIndex = nextState === stateRef.current ? indexRef.current : nextPossibleIndex;
-        const diff = Math.abs(nextIndex - value);
-        const duration = Math.max(100, 500 * diff);
+        const indexDelta = Math.abs(nextIndex - value);
+        const duration = Math.max(
+          minReleaseAnimationDuration,
+          maxReleaseAnimationDuration * indexDelta,
+        );
         Animated.timing(animatedFocusedIndex, {
           toValue: nextIndex,
           useNativeDriver: true,
@@ -472,6 +484,128 @@ const GouterNativeStack = memo(
         }).panHandlers,
       [onMoveShouldSetPanResponder, onPanResponderMove, onPanResponderReleaseOrTerminate],
     );
+
+    /** @type {ScreenProps<any>['scrollProps']} */
+    const scrollProps = useMemo(() => {
+      /** @type {(e: import('react-native').GestureResponderEvent) => number} */
+      const getValue = (e) => {
+        const { swipeDetection } = stackSettingsRef.current;
+        const isHorizontal = horizontalSwipeSet.has(swipeDetection);
+        const { pageX, pageY } = e.nativeEvent;
+        return isHorizontal ? pageX : pageY;
+      };
+
+      const minPruneTime = 50;
+      const maxPruneTime = 1000;
+
+      let gestureBlocked = false;
+      let initialValue = 0;
+      let scrollEnabled = true;
+      let listenerId = '';
+
+      const moveQueue = /** @type {number[]} */ ([]);
+      const timeQueue = /** @type {number[]} */ ([]);
+
+      /** @type {(ms: number) => void} */
+      const pruneQueue = (ms) => {
+        const threshold = Date.now() - ms;
+        while (timeQueue.length && timeQueue[0] < threshold) {
+          moveQueue.shift();
+          timeQueue.shift();
+        }
+      };
+
+      return {
+        ...defaultPanHandlers,
+        pointerEvents: 'box-only',
+        onTouchStart: (event) => {
+          initialValue = getValue(event);
+
+          moveQueue.push(0);
+          timeQueue.push(Date.now());
+
+          panRespondersBlocked = true;
+          valueRef.current = animatedFocusedIndex.value;
+        },
+        onTouchMove: (event) => {
+          const value = getValue(event);
+          const delta = value - initialValue;
+
+          pruneQueue(minPruneTime);
+          moveQueue.push(delta);
+          timeQueue.push(Date.now());
+
+          if (gestureBlocked) {
+            initialValue = value;
+            valueRef.current = animatedFocusedIndex.value;
+          } else {
+            onPanResponderMove(
+              event,
+              /** @type {import('react-native').PanResponderGestureState} */ ({
+                dx: delta,
+                dy: delta,
+              }),
+            );
+          }
+        },
+        onTouchEnd: (event) => {
+          if (animatedFocusedIndex.value < 1 && listenerId) {
+            pruneQueue(maxPruneTime);
+            const value = getValue(event);
+            const delta = value - initialValue;
+
+            moveQueue.push(delta);
+            timeQueue.push(Date.now());
+            const m = timeQueue.length - 1;
+            const dist = moveQueue[m] - moveQueue[0];
+            const time = timeQueue[m] - timeQueue[0];
+            const velocity = m <= 1 ? 0 : dist / time;
+
+            moveQueue.length = 0;
+            timeQueue.length = 0;
+
+            onPanResponderReleaseOrTerminate(
+              event,
+              /** @type {import('react-native').PanResponderGestureState} */ ({
+                dx: delta,
+                dy: delta,
+                vx: velocity,
+                vy: velocity,
+              }),
+            );
+          }
+        },
+        onScroll: (event) => {
+          const { swipeDetection } = stackSettingsRef.current;
+          const isHorizontal = horizontalSwipeSet.has(swipeDetection);
+          const offset = isHorizontal
+            ? event.nativeEvent.contentOffset.x
+            : event.nativeEvent.contentOffset.y;
+          gestureBlocked = offset > 0;
+        },
+        /** @type {(scrollView: import('react-native').ScrollView?) => void} */
+        ref: (scrollView) => {
+          if (listenerId) {
+            animatedFocusedIndex.removeListener(listenerId);
+          }
+          if (!scrollView) {
+            return;
+          }
+          listenerId = animatedFocusedIndex.addListener(({ value }) => {
+            const prevScrollEnabled = scrollEnabled;
+            scrollEnabled = value >= 1;
+            if (prevScrollEnabled !== scrollEnabled) {
+              scrollView.setNativeProps({ scrollEnabled });
+            }
+          });
+        },
+      };
+    }, [
+      animatedFocusedIndex,
+      onPanResponderMove,
+      onPanResponderReleaseOrTerminate,
+      stackSettingsRef,
+    ]);
 
     const layoutChild = useMemo(
       () =>
@@ -560,6 +694,7 @@ const GouterNativeStack = memo(
               isFocused,
               isStale,
               animationProps,
+              scrollProps,
               children: extendedChildren,
             })
           : null,
