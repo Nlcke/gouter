@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import GouterNative from 'gouter/native';
 import {
   StyleSheet,
@@ -79,43 +79,16 @@ const getRandomString = numOfWords =>
     )
     .join(' ');
 
-const rulesText = getRandomString(300);
+const rulesText = getRandomString(1000);
 
 /** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginModal']} */
-const LoginModal = () => {
-  const [scrollEnabled, setScrollEnabled] = useState(true);
-
-  /** @type {import('react').RefObject<ScrollView>} */
-  const scrollViewRef = useRef(null);
-
-  const prevYRef = useRef(0);
-
+const LoginModal = ({scrollProps}) => {
   return (
-    <View style={styles.modalContainer} renderToHardwareTextureAndroid>
+    <View style={styles.modalContainer}>
       <ScrollView
-        ref={scrollViewRef}
         style={styles.modalPlaceholder}
         contentContainerStyle={{padding: 16}}
-        scrollEnabled={scrollEnabled}
-        // onScroll={e => console.log(e.nativeEvent.contentOffset.y)}
-        onMoveShouldSetResponder={e => {
-          prevYRef.current = e.nativeEvent.pageY;
-          return true;
-        }}
-        onTouchMove={e => {
-          const prevY = prevYRef.current;
-          const nextY = e.nativeEvent.pageY;
-          prevYRef.current = nextY;
-          if (nextY >= prevY) {
-            console.log('>');
-          } else {
-            console.log('<');
-          }
-        }}
-        onTouchEnd={() => {
-          prevYRef.current = 0;
-        }}
-        renderToHardwareTextureAndroid>
+        {...scrollProps}>
         <Text>{rulesText}</Text>
       </ScrollView>
     </View>
