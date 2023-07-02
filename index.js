@@ -1,41 +1,23 @@
-import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
-
 /**
- * `PathParamDef` is url path parameter definition inside parameters definition at route map.
- * It converts path parameter of url into named parameter as string or string array and vice versa.
- * String arrays should have at least one element.
- * Modifier determines how url path should be treated:
- * - '' or undefined is required string
- * - '?' is optional string
- * - '+' is required string array with non-zero length
- * - '*' is optional string array with non-zero length
- * @typedef {[
- * prefix?: string,
- * regexp?: RegExp,
- * suffix?: string,
- * modifier?: '' | '?' | '+' | '*'
- * ]} PathParamDef
+ * `ParamDef` is parameter definition. It could be a string or object. In case of string it is
+ * static path parameter. Object with `path` key set to true is path parameter, otherwise it is
+ * query parameter. The `list` defines a parameter as array of values and `req` makes a parameter
+ * required in state params. The transformation could be adjusted using `decode` and `encode`
+ * fields, where `decode` creates a value from string, and `encode` converts value back to string.
+ * By default `String` function is used for `decode` and `encode` if they are not defined.
+ * @template [T=any]
+ * @typedef {string | {
+ * path?: boolean
+ * req?: boolean
+ * list?: boolean
+ * decode?: (str: string) => T
+ * encode?: (val: T) => string
+ * }} ParamDef
  */
 
 /**
- * `QueryParamDef` is url query parameter definition inside parameters definition at route map.
- * It converts query parameter of url into named parameter using `decode` and vice versa
- * using `encode`. If `required` is true then query parameter is required, otherwise it is optional.
- * @template T
- * @typedef {{
- * decode: (str: string) => T
- * encode: (val: T) => string
- * required?: boolean
- * }} QueryParamDef
- */
-
-/**
- * `Param` is required static (`string`), path (`PathParamDef`) or query (`QueryParamDef`) parameter definition.
- * @typedef {string | PathParamDef | QueryParamDef<any>} ParamDef
- */
-
-/**
- * `Params` is parameter collection, where key is parameter name, used inside route map.
+ * `Params` is parameter collection used inside route map,
+ * where key is name and value is definition.
  * @typedef {Record<string, ParamDef>} ParamDefs
  */
 
@@ -50,23 +32,12 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  * @template {Routes} T
  * @typedef {{[N in keyof T]: {
  * name: N
- * params: {[K in keyof T[N] as
- * T[N][K] extends PathParamDef ?
- * T[N][K][3] extends '' ? K : T[N][K][3] extends '+' ?
- * K : T[N][K]['length'] extends 0 | 1 | 2 | 3 ? K : never :
- * T[N][K] extends QueryParamDef<any> ? T[N][K] extends {required: true} ?
- * K : never : never]:
- * T[N][K] extends QueryParamDef<any> ? ReturnType<T[N][K]['decode']> :
- * T[N][K] extends PathParamDef ? T[N][K][3] extends '+' ? string[] : string : string}
- * & {[K in keyof T[N] as
- * T[N][K] extends PathParamDef ?
- * T[N][K][3] extends '?' ? K : T[N][K][3] extends '*' ?
- * K : never : T[N][K] extends QueryParamDef<any> ? T[N][K] extends {required: true} ?
- * never : K : never]?:
- * T[N][K] extends PathParamDef ?
- * T[N][K][3] extends '?' ? string : T[N][K][3] extends '*' ?
- * string[] : never : T[N][K] extends QueryParamDef<any> ?
- * ReturnType<T[N][K]['decode']> : never}
+ * params: {[K in keyof T[N] as T[N][K] extends {req: true} ? K : never]:
+ * T[N][K] extends {list: true} ? T[N][K] extends {decode: (str: string) => infer R} ? R[]
+ * : string[] : T[N][K] extends {decode: (str: string) => infer R} ? R : string} &
+ * {[K in keyof T[N] as T[N][K] extends {req: true} ? never : T[N][K] extends string ? never : K]?:
+ * T[N][K] extends {list: true} ? T[N][K] extends {decode: (str: string) => infer R} ? R[]
+ * : string[] : T[N][K] extends {decode: (str: string) => infer R} ? R : string}
  * }}} StateMap
  */
 
@@ -93,7 +64,8 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
- * `Builder` is a function called to modify state when a state without stack is added to current state.
+ * `Builder` is a function called to modify state when a state without stack is added to current
+ * state.
  * @template {Routes} T
  * @template {keyof T} N
  * @typedef {(state: StateMap<T>[N] & State<T>, ...parents: State<T>[]) => State<T>} Builder
@@ -106,7 +78,8 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
- * `Builder` is a function called to modify state when a state without stack is added to current state.
+ * `Builder` is a function called to modify state when a state without stack is added to current
+ * state.
  * @template {Routes} T
  * @template {keyof T} N
  * @typedef {(state: StateMap<T>[N] & State<T>) => State<T>[]} Redirection
@@ -125,10 +98,9 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
  */
 
 /**
- * `PathToRegexpOptions` are used to customize url decoding/encoding.
- * See https://www.npmjs.com/package/path-to-regexp
- * @typedef {import('path-to-regexp').ParseOptions
- * & import('path-to-regexp').TokensToRegexpOptions } PathToRegexpOptions
+ * @typedef {{
+ * $: { path: true, req: true, list: true },
+ * }} NotFoundParamDefs
  */
 
 /**
@@ -138,7 +110,7 @@ import { tokensToFunction, tokensToRegexp } from 'path-to-regexp';
 /**
  * Creates `Gouter` instance with available routes. It's methods are used to modify navigation
  * state and then notify listeners about it.
- * @template {Routes & {_: {url: []}}} T
+ * @template {Routes & {_: NotFoundParamDefs}} T
  * @param {T} routes map of routes
  */
 class Gouter {
@@ -153,11 +125,11 @@ class Gouter {
     this.routeMap = routes;
 
     /**
-     * `rootState` stores current router root state. Initially it set to not-found state so you need
-     * to use `setRootState` method before navigation.
+     * `rootState` stores current router root state. Initially it set to not-found state so you
+     * need to use `setRootState` method before navigation.
      * @type {State<T>}
      */
-    this.rootState = { name: '_', params: /** @type {any} */ ({ url: '' }), stack: [] };
+    this.rootState = { name: '_', params: /** @type {any} */ ({ $: [] }), stack: [] };
 
     /**
      * `navigators` stores current navigators customized for each route where you need it.
@@ -176,8 +148,8 @@ class Gouter {
     this.builders = {};
 
     /**
-     * `redirections` stores current redirection functions customized for each route where you need it.
-     * You may set it using `setRedirections` and get it using `getRedirections`.
+     * `redirections` stores current redirection functions customized for each route where you
+     * need it. You may set it using `setRedirections` and get it using `getRedirections`.
      * @protected
      * @type {Redirections<T>}
      */
@@ -192,34 +164,11 @@ class Gouter {
     this.history = null;
 
     /**
-     * `pathToRegexpOptions` are options used to encode states into urls' paths at `encodePath`.
+     * `listeners` stores list of listeners called when current state changes.
      * @protected
-     * @type {PathToRegexpOptions}
-     *
+     * @type {Listener<T>[]}
      */
-    this.pathToRegexpOptions = {};
-
-    /**
-     * `regexpFunctionCache` stores Regexp function cache used for `getRegexpFunction` to decode
-     * urls into states.
-     * @protected
-     * @type {Partial<Record<keyof T, RegExp['exec']>>}
-     */
-    this.regexpFunctionCache = {};
-
-    Object.assign(this.regexpFunctionCache, { _: () => null });
-
-    /**
-     * `pathFunctionCache` stores PathFunction cache used to encode states into urls' paths at
-     * `encodePath`.
-     * @protected
-     * @type {Partial<Record<keyof T, import('path-to-regexp').PathFunction<object>>>}
-     */
-    this.pathFunctionCache = {};
-
-    Object.assign(this.pathFunctionCache, {
-      _: (/** @type {Record<String, any>} */ params) => ('url' in params ? String(params.url) : ''),
-    });
+    this.listeners = [];
 
     /**
      * `pathCacheByName` stores path cache for each route name to speed up `encodePath`.
@@ -229,48 +178,38 @@ class Gouter {
     this.pathCacheByName = {};
 
     /**
-     * `listeners` stores list of listeners called when current state changes.
+     * `regexpByName` stores path regexp for each route name to speed up `decodePath`.
      * @protected
-     * @type {Listener<T>[]}
+     * @type {WeakMap<T[keyof T], RegExp>}
      */
-    this.listeners = [];
+    this.regexpByParams = new WeakMap();
 
     /**
-     * `defaultPattern` stores default pattern string for current delimiter in pathToRegexpOptions.
+     * Safely gets the unencoded version of an encoded component of a Uniform Resource
+     * Identifier (URI).
      * @protected
-     * @type {string}
+     * @type {(encodedURIComponent: string) => string}
      */
-    this.defaultPattern = '[^\\/#\\?]+?';
-
-    /**
-     * Generates path-to-regexp tokens from parameters definition.
-     * Generated tokens are used for `getRegexpFunction` and `encodePath`.
-     * @protected
-     * @type {(paramDefs: ParamDefs) => (string | import('path-to-regexp').Key)[]}
-     */
-    this.getTokensFromParamDefs = (paramDefs) => {
-      const { defaultPattern } = this;
-      /** @type {(string | import('path-to-regexp').Key)[]} */
-      const tokens = [];
-      for (const name in paramDefs) {
-        const paramDef = paramDefs[name];
-        if (Array.isArray(paramDef)) {
-          const [prefix = '/', regexp, suffix = '', modifier = ''] = paramDef;
-          const pattern = regexp ? regexp.toString().slice(1, -1) : defaultPattern;
-          /** @type {import('path-to-regexp').Key} */
-          const key = {
-            name,
-            prefix,
-            suffix,
-            pattern,
-            modifier,
-          };
-          tokens[tokens.length] = key;
-        } else if (typeof paramDef === 'string') {
-          tokens[tokens.length] = paramDef;
-        }
+    this.safeDecodeURIComponent = (encodedURIComponent) => {
+      try {
+        return decodeURIComponent(encodedURIComponent);
+      } catch (e) {
+        return encodedURIComponent;
       }
-      return tokens;
+    };
+
+    /**
+     * Safely encodes a text string as a valid component of a Uniform Resource
+     * Identifier (URI).
+     * @protected
+     * @type {(uriComponent: string) => string}
+     */
+    this.safeEncodeURIComponent = (uriComponent) => {
+      try {
+        return encodeURIComponent(uriComponent);
+      } catch (e) {
+        return uriComponent;
+      }
     };
 
     /**
@@ -278,71 +217,113 @@ class Gouter {
      * @type {(state: State<T>) => string}
      */
     this.encodePath = (state) => {
-      const {
-        routeMap,
-        pathFunctionCache,
-        pathToRegexpOptions,
-        getTokensFromParamDefs,
-        pathCacheByName,
-      } = this;
+      const { routeMap, safeEncodeURIComponent, pathCacheByName } = this;
       const { name, params } = state;
-      const pathFunction = pathFunctionCache[name];
-      if (pathFunction) {
-        return pathFunction(params);
-      }
-      const paramDefs = routeMap[name];
-      const tokens = getTokensFromParamDefs(paramDefs);
-      const newPathFunction = tokensToFunction(tokens, pathToRegexpOptions);
       const pathCache = pathCacheByName[name] || new WeakMap();
       pathCacheByName[name] = pathCache;
-      /** @type {import('path-to-regexp').PathFunction<object>} */
-      const newPathFunctionWithCache = (parameters = {}) => {
-        const path = pathCache.get(parameters);
-        if (path !== undefined) {
-          return path;
+      const cachedPathStr = pathCache.get(params);
+      if (cachedPathStr !== undefined) {
+        return cachedPathStr;
+      }
+      const paramDefs = routeMap[state.name];
+      let pathStr = '';
+      let staticParamPos = 0;
+      let undefinedParamLength = 0;
+      for (const key in paramDefs) {
+        const paramDef = paramDefs[key];
+        if (typeof paramDef === 'object') {
+          if (paramDef.path) {
+            const { encode = String } = paramDef;
+            const value = /** @type {any} */ (params)[key];
+            if (value !== undefined || paramDef.req) {
+              if (paramDef.list) {
+                if (Array.isArray(value)) {
+                  if (value.length > 0) {
+                    const valueEncoded = value.map(encode).map(safeEncodeURIComponent).join('/');
+                    pathStr += `/${valueEncoded}`;
+                    pathStr += '/$';
+                    undefinedParamLength = 2;
+                  } else if (!paramDef.req) {
+                    pathStr += '/$$';
+                    undefinedParamLength = 0;
+                  } else {
+                    pathStr += '/$';
+                    undefinedParamLength += 2;
+                  }
+                }
+              } else {
+                const valueStr = encode(value);
+                const valueEncoded = safeEncodeURIComponent(valueStr);
+                pathStr += `/${valueEncoded}`;
+                undefinedParamLength = 0;
+              }
+            } else {
+              pathStr += '/$';
+              undefinedParamLength += 2;
+            }
+          }
+        } else {
+          const valueEncoded = safeEncodeURIComponent(paramDef);
+          const firstPart = pathStr.slice(0, staticParamPos);
+          const lastPart = `${pathStr.slice(
+            staticParamPos,
+            undefinedParamLength ? -undefinedParamLength : undefined,
+          )}/`
+            .split(`/${valueEncoded}/`)
+            .join(`/$${valueEncoded}/`);
+          pathStr = `${firstPart}${lastPart}${valueEncoded}`;
+          staticParamPos = pathStr.length;
+          undefinedParamLength = 0;
         }
-        const newPath = newPathFunction(parameters);
-        pathCache.set(parameters, newPath);
-        return newPath;
-      };
-      pathFunctionCache[name] = newPathFunctionWithCache;
-      return newPathFunctionWithCache(params);
+      }
+      if (undefinedParamLength) {
+        pathStr = pathStr.slice(0, undefinedParamLength ? -undefinedParamLength : undefined);
+      }
+      pathCache.set(params, pathStr);
+      return pathStr;
     };
 
     /**
-     * Create url query string from state name and params.
+     * Creates url query string from state name and params.
      * @type {(state: State<T>) => string}
      */
     this.encodeQuery = (state) => {
-      const { routeMap } = this;
+      const { routeMap, safeEncodeURIComponent } = this;
       const { name, params } = state;
       let queryStr = '';
       const paramDefs = routeMap[name];
-      for (const key in params) {
+      for (const key in paramDefs) {
         const paramDef = paramDefs[key];
-        const encode = typeof paramDef === 'object' && !Array.isArray(paramDef) && paramDef.encode;
-        if (encode) {
-          const value = params[/** @type {keyof params} */ (key)];
-          /** @type {string} */
-          let keyEncoded = key;
-          try {
-            keyEncoded = encodeURIComponent(key);
-          } catch (e) {
-            /* empty */
+        if (typeof paramDef === 'object') {
+          if (!paramDef.path) {
+            const value = /** @type {any} */ (params)[key];
+            if (value !== undefined || paramDef.req) {
+              const keyEncoded = safeEncodeURIComponent(key);
+              const { encode = String } = paramDef;
+              if (paramDef.list) {
+                if (Array.isArray(value)) {
+                  if (value.length > 0) {
+                    const valueEncoded = value
+                      .map(encode)
+                      .map(safeEncodeURIComponent)
+                      .join(`&${keyEncoded}=`);
+                    queryStr += `&${keyEncoded}=${valueEncoded}`;
+                  } else if (!paramDef.req) {
+                    queryStr += `&${keyEncoded}=$$`;
+                  }
+                }
+              } else {
+                const valueStr = encode(value);
+                if (valueStr !== '' || !paramDef.req) {
+                  const valueEncoded = safeEncodeURIComponent(valueStr);
+                  queryStr += `&${keyEncoded}=${valueEncoded}`;
+                }
+              }
+            }
           }
-          const valueStr = encode(value);
-          let valueEncoded = encodeURIComponent(valueStr);
-          try {
-            valueEncoded = encodeURIComponent(valueStr);
-          } catch (e) {
-            /* empty */
-          }
-          queryStr += `&${keyEncoded}=${valueEncoded}`;
         }
       }
-      if (queryStr) {
-        queryStr = `?${queryStr.slice(1)}`;
-      }
+      queryStr = queryStr.slice(1);
       return queryStr;
     };
 
@@ -354,107 +335,157 @@ class Gouter {
       const { encodePath, encodeQuery } = this;
       const pathStr = encodePath(state);
       const queryStr = encodeQuery(state);
-      const url = pathStr + queryStr;
+      const url = pathStr + (queryStr ? `?${queryStr}` : '');
       return url;
     };
 
     /**
-     * Get regexp function from route name. It is used for `decodePath`.
-     * @protected
-     * @type {(name: keyof T) => RegExp['exec']}
-     */
-    this.getRegexpFunction = (name) => {
-      const { regexpFunctionCache, routeMap, pathToRegexpOptions, getTokensFromParamDefs } = this;
-      const regexpFunction = regexpFunctionCache[name];
-      if (regexpFunction) {
-        return regexpFunction;
-      }
-      const paramDefs = routeMap[name];
-      const tokens = getTokensFromParamDefs(paramDefs);
-      const regexp =
-        tokens.length > 0 ? tokensToRegexp(tokens, undefined, pathToRegexpOptions) : /^$/;
-      const newRegexpFunction = regexp.exec.bind(regexp);
-      regexpFunctionCache[name] = newRegexpFunction;
-      return newRegexpFunction;
-    };
-
-    /**
      * Get required state params from path or null if path is not matched.
-     * @type {<N extends keyof T>(name: N, path: string) => StateMap<T>[N]['params'] | null}
+     * @type {<N extends keyof T>(name: N, pathStr: string) => StateMap<T>[N]['params'] | null}
      */
-    this.decodePath = (name, path) => {
-      const { getRegexpFunction, routeMap } = this;
-      const regexpFunction = getRegexpFunction(name);
-      const match = regexpFunction(path);
-      if (match) {
-        const params = /** @type {StateMap<T>[typeof name]['params']} */ ({});
-        const paramDefs = routeMap[name];
-        let index = 0;
+    this.decodePath = (name, pathStr) => {
+      const { routeMap, safeEncodeURIComponent, safeDecodeURIComponent, regexpByParams } = this;
+      const segmentStr = '(?:/[^/]*)';
+      const paramDefs = routeMap[name];
+      if (!regexpByParams.has(paramDefs)) {
+        let minRepeats = 0;
+        let maxRepeats = 0;
+        let regexpStr = '';
         for (const key in paramDefs) {
-          const paramsKey = /** @type {keyof StateMap<T>[typeof name]['params']} */ (
-            /** @type {unknown} */ (key)
-          );
           const paramDef = paramDefs[key];
-          if (Array.isArray(paramDef)) {
-            index += 1;
-            const result = match[index] || '';
-            const modifier = paramDef[3];
-            if (modifier === '+' || modifier === '*') {
-              const prefix = paramDef[0] || '';
-              const suffix = paramDef[2] || '';
-              const divider = prefix + suffix;
-              params[paramsKey] = /** @type {params[paramsKey]} */ (
-                divider ? result.split(divider) : [result]
-              );
+          if (typeof paramDef === 'object') {
+            if (paramDef.path) {
+              if (paramDef.list) {
+                maxRepeats = Infinity;
+              } else if (paramDef.req) {
+                minRepeats += 1;
+                maxRepeats += 1;
+              } else {
+                maxRepeats += 1;
+              }
+            }
+          } else {
+            if (minRepeats > 0 || maxRepeats > 0) {
+              regexpStr += `(${segmentStr}{${minRepeats},${
+                maxRepeats === Infinity ? '' : maxRepeats
+              }})`;
+              minRepeats = 0;
+              maxRepeats = 0;
+            }
+            const valueEncoded = safeEncodeURIComponent(paramDef);
+            regexpStr += `/${valueEncoded}`;
+          }
+        }
+        if (minRepeats > 0 || maxRepeats > 0) {
+          regexpStr += `(${segmentStr}{${minRepeats},${
+            maxRepeats === Infinity ? '' : maxRepeats
+          }})`;
+        }
+        const regexp = RegExp(`^${regexpStr}$`);
+        regexpByParams.set(paramDefs, regexp);
+      }
+      const regexp = /** @type {RegExp} */ (regexpByParams.get(paramDefs));
+      const match = pathStr.match(regexp);
+      if (!match) {
+        return null;
+      }
+      const groups = match.slice(1).map((str) => (str ? str.slice(1).split('/') : []));
+      let groupIndex = 0;
+      let sectionIndex = 0;
+      let isPrevDynamic = false;
+      const params = /** @type {any} */ ({});
+      for (const key in paramDefs) {
+        const paramDef = paramDefs[key];
+        if (typeof paramDef === 'object') {
+          if (paramDef.path) {
+            isPrevDynamic = true;
+            const group = groups[groupIndex];
+            const { decode } = paramDef;
+            if (paramDef.list) {
+              if (
+                !paramDef.req &&
+                (group[sectionIndex] === '$' || group[sectionIndex] === undefined)
+              ) {
+                sectionIndex += 1;
+              } else {
+                params[key] = [];
+                while (sectionIndex < group.length) {
+                  const valueStr = group[sectionIndex];
+                  sectionIndex += 1;
+                  if (valueStr === '$') {
+                    break;
+                  } else if (valueStr === '$$') {
+                    params[key] = params[key] || [];
+                    break;
+                  }
+                  const valueStrUnescaped = valueStr[0] === '$' ? valueStr.slice(1) : valueStr;
+                  const valueEncoded = safeDecodeURIComponent(valueStrUnescaped);
+                  const value = decode ? decode(valueEncoded) : valueEncoded;
+                  params[key].push(value);
+                }
+              }
             } else {
-              params[paramsKey] = /** @type {params[paramsKey]} */ (result);
+              const valueStr = group[sectionIndex];
+              if (valueStr !== undefined && valueStr !== '$') {
+                const valueStrUnescaped = valueStr[0] === '$' ? valueStr.slice(1) : valueStr;
+                const valueEncoded = safeDecodeURIComponent(valueStrUnescaped);
+                const value = decode ? decode(valueEncoded) : valueEncoded;
+                params[key] = value;
+              }
+              sectionIndex += 1;
             }
           }
+        } else if (isPrevDynamic) {
+          groupIndex += 1;
+          sectionIndex = 0;
+          isPrevDynamic = false;
         }
-        return params;
       }
-      return null;
+      return params;
     };
 
     /**
-     * Creates optional route parameters from route name and url query string, if possible.
-     * If not then returns null.
-     * @type {<N extends keyof T>(name: N, queryStr: string) => StateMap<T>[N]['params'] | null}
+     * Creates query parameters from route name and url query string.
+     * @type {<N extends keyof T>(name: N, queryStr: string) => StateMap<T>[N]['params']}
      */
     this.decodeQuery = (name, queryStr) => {
-      const { routeMap } = this;
-      const params = /** @type {StateMap<T>[typeof name]['params']} */ ({});
+      const { routeMap, safeDecodeURIComponent } = this;
       const paramDefs = routeMap[name];
+      const params = /** @type {any} */ ({});
       for (const keyValueStr of queryStr.split('&')) {
         const splitIndex = keyValueStr.indexOf('=');
-        const keyEncoded = keyValueStr.slice(0, splitIndex);
-        let key = keyEncoded;
-        try {
-          key = decodeURIComponent(keyEncoded);
-        } catch (e) {
-          /* empty */
-        }
+        const keyEncoded = keyValueStr.slice(0, splitIndex === -1 ? undefined : splitIndex);
+        const key = safeDecodeURIComponent(keyEncoded);
         const paramDef = paramDefs[key];
-        const decode = typeof paramDef === 'object' && !Array.isArray(paramDef) && paramDef.decode;
-        if (decode) {
-          const valueStr = keyValueStr.slice(splitIndex + 1);
-          let valueEncoded = valueStr;
-          try {
-            valueEncoded = decodeURIComponent(valueStr);
-          } catch (e) {
-            /* empty */
+        if (typeof paramDef === 'object') {
+          if (!paramDef.path) {
+            const { decode } = paramDef;
+            const valueStr = splitIndex === -1 ? '' : keyValueStr.slice(splitIndex + 1);
+            const valueEncoded = safeDecodeURIComponent(valueStr);
+            const value = decode ? decode(valueEncoded) : valueEncoded;
+            if (paramDef.list) {
+              if (valueStr === '$$') {
+                params[key] = params[key] || [];
+              } else if (params[key]) {
+                params[key].push(value);
+              } else {
+                params[key] = [value];
+              }
+            } else {
+              params[key] = value;
+            }
           }
-          const value = decode(valueEncoded);
-          params[/** @type {keyof StateMap<T>[typeof name]['params']} */ (key)] = value;
         }
       }
       for (const key in paramDefs) {
         if (!(key in params)) {
-          const paramValue = paramDefs[key];
-          const required =
-            typeof paramValue === 'object' && !Array.isArray(paramValue) && paramValue.required;
-          if (required) {
-            return null;
+          const paramDef = paramDefs[key];
+          if (typeof paramDef === 'object' && !paramDef.path && paramDef.req) {
+            if (paramDef.list) {
+              params[key] = [];
+            } else {
+              params[key] = paramDef.decode ? paramDef.decode('') : '';
+            }
           }
         }
       }
@@ -468,51 +499,35 @@ class Gouter {
     this.decodeUrl = (url) => {
       const { decodePath, routeMap, decodeQuery } = this;
       const [urlWithoutHash] = url.split('#');
-      const [pathname, search = ''] = urlWithoutHash.split('?');
+      const [pathStr, queryStr = ''] = urlWithoutHash.split('?');
       for (const name in routeMap) {
-        const params = decodePath(name, pathname);
-        if (params) {
-          const query = decodeQuery(name, search);
-          if (!query) {
-            break;
+        if (name !== '_') {
+          const params = decodePath(name, pathStr);
+          if (params) {
+            const query = decodeQuery(name, queryStr);
+            Object.assign(params, query);
+            const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params });
+            return state;
           }
-          for (const key in query) {
-            params[key] = query[key];
-          }
-          const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params });
-          return state;
         }
       }
-      const state = { name: '_', params: /** @type {any} */ ({ url }), stack: [] };
+      const state = /** @type {State<T> & {name: '_'}} */ ({
+        name: '_',
+        params: {
+          ...decodePath('_', pathStr),
+          ...decodeQuery('_', queryStr),
+        },
+        stack: [],
+      });
       return state;
-    };
-
-    /**
-     * Recursively creates flat list of every child state inside current state.
-     * @protected
-     * @type {(state: State<T>) => State<T>[]}
-     */
-    this.stateToStack = (state) => {
-      const { stateToStack } = this;
-      const stateList = [state];
-      const stack = state.stack || [];
-      for (const subState of stack) {
-        stateList[stateList.length] = subState;
-        if (subState.stack && subState.stack.length > 0) {
-          const subStateStack = stateToStack(subState);
-          for (const subStateStackState of subStateStack) {
-            stateList[stateList.length] = subStateStackState;
-          }
-        }
-      }
-      return stateList;
     };
 
     /**
      * Builds new state from a `state` by passing it and `parents`to
      * appropriate state builder if any.
      *
-     * Note: `builtPaths` should not be passed cause it is created automatically for recursion purposes.
+     * Note: `builtPaths` should not be passed cause it is created automatically for recursion
+     * purposes.
      * @type {(state: State<T>, parents: State<T>[], builtPaths?: Set<string>) => State<T>}
      */
     this.buildState = (state, parents, builtPaths = new Set()) => {
@@ -592,8 +607,8 @@ class Gouter {
     };
 
     /**
-     * Build and set current router root state and call listeners with it but only if state is changed.
-     * You may disable builders by using `disableBuilders` option.
+     * Build and set current router root state and call listeners with it but only if state is
+     * changed. You may disable builders by using `disableBuilders` option.
      * @type {(state: State<T>, disableBuilders?: boolean) => void}
      */
     this.setRootState = (state, disableBuilders) => {
@@ -630,17 +645,17 @@ class Gouter {
     };
 
     /**
-     * Get merged state where params are merged and index and stack (if any) are replaced by nextState ones.
+     * Get merged state where params are merged and index and stack (if any) are replaced by
+     * next state params.
      * @type {(prevState: State<T>, nextState: State<T>) => State<T>}
      */
     this.getMergedState = (prevState, nextState) => {
-      /** @type {State<T>} */
-      const mergedState = {
+      const mergedState = /** @type {State<T>} */ ({
         name: nextState.name,
         params: { ...prevState.params, ...nextState.params },
         stack: nextState.stack ? nextState.stack : prevState.stack,
         index: nextState.index !== undefined ? nextState.index : prevState.index,
-      };
+      });
       return mergedState;
     };
 
@@ -756,10 +771,12 @@ class Gouter {
 
     /**
      * Recursively iterates over inner states of current state and calls `replacer` for each state.
-     * The `replacer` accepts current `state` and `parents` and returns `null` if current state should be removed,
-     * modified state if current state should be modified or same state if current state should not be touched.
+     * The `replacer` accepts current `state` and `parents` and returns `null` if current state
+     * should be removed, modified state if current state should be modified or same state if
+     * current state should not be touched.
      *
-     * Note: `parents` should not be passed cause it is created automatically for recursion purposes.
+     * Note: `parents` should not be passed cause it is created automatically for recursion
+     * purposes.
      * @type {(replacer: (state: State<T>, ...parents: State<T>[]) => State<T> | null, parents?: State<T>[]) => State<T>}
      */
     this.getReplacedState = (replacer, parents = [this.rootState]) => {
@@ -804,9 +821,10 @@ class Gouter {
     };
 
     /**
-     * Recursively iterates over inner states of current state applying `replacer` for each and after that sets next state.
-     * The `replacer` accepts current `state` and `parents` and returns `null` if current state should be removed,
-     * modified state if current state should be modified or same state if current state should be skipped.
+     * Recursively iterates over inner states of current state applying `replacer` for each and
+     * after that sets next state. The `replacer` accepts current `state` and `parents` and returns
+     * `null` if current state should be removed, modified state if current state should be
+     * modified or same state if current state should be skipped.
      * @type {(replacer: (state: State<T>, ...parents: State<T>[]) => State<T> | null) => void}
      */
     this.replace = (replacer) => {
@@ -820,8 +838,7 @@ class Gouter {
      * @type {(listener: Listener<T>) => () => void}
      */
     this.listen = (listener) => {
-      const { listeners } = this;
-      this.listeners = [...listeners, listener];
+      this.listeners = [...this.listeners, listener];
       const unlisten = () => {
         this.listeners = this.listeners.filter((prevListener) => prevListener !== listener);
       };
@@ -880,40 +897,16 @@ class Gouter {
     };
 
     /**
-     * Get path-to-regexp options.
-     * `PathToRegexpOptions` are used to customize url decoding/encoding.
-     * See https://www.npmjs.com/package/path-to-regexp
-     * @type {() => PathToRegexpOptions}
-     */
-    this.getPathToRegexpOptions = () => {
-      const { pathToRegexpOptions } = this;
-      return pathToRegexpOptions;
-    };
-
-    /**
-     * Set path-to-regexp options.
-     * `PathToRegexpOptions` are used to customize url decoding/encoding.
-     * See https://www.npmjs.com/package/path-to-regexp
-     * @type {(pathToRegexpOptions: PathToRegexpOptions) => void}
-     */
-    this.setPathToRegexpOptions = (pathToRegexpOptions) => {
-      this.pathToRegexpOptions = pathToRegexpOptions;
-      const escapeRegexp = /([.+*?=^!:${}()[\]|/\\])/g;
-      const delimiter = pathToRegexpOptions.delimiter || '/#?';
-      this.defaultPattern = `[^${delimiter.replace(escapeRegexp, '\\$1')}]+?`;
-    };
-
-    /**
      * Syncs current browser location with state.
      * @protected
      * @web
      * @type {Listener<T>}
      */
     this.syncLocationWithState = (state) => {
-      const { history, getFocusedStates } = this;
+      const { history, getFocusedStates, encodeUrl } = this;
       const [focusedState] = getFocusedStates(state);
       if (history && focusedState.name !== '_') {
-        const url = this.encodeUrl(focusedState);
+        const url = encodeUrl(focusedState);
         const { location } = history;
         const browserUrl = location.pathname + location.search;
         if (browserUrl !== url) {
