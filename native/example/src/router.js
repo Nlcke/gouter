@@ -3,7 +3,7 @@ import {newStackNavigator, newTabNavigator} from 'gouter/navigators';
 
 const gouter = new Gouter({
   _: {
-    url: [],
+    $: {path: true, req: true, list: true},
   },
   App: {
     _: '/',
@@ -13,7 +13,7 @@ const gouter = new Gouter({
   },
   Login: {
     _: '/login',
-    name: {decode: str => str, encode: str => str},
+    name: {path: true},
   },
   LoginModal: {
     _: '/login/modal',
@@ -23,7 +23,7 @@ const gouter = new Gouter({
   },
   LoginConfirmation: {
     _: '/login-confirmation',
-    phone: ['/', /\d+/],
+    phone: {path: true},
   },
   LoginDrawer: {
     _: '/login/drawer',

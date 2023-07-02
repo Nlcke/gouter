@@ -5,7 +5,7 @@ const path = require('path');
 const normalize = filename => path.normalize(`${__dirname}/${filename}`);
 
 /** @type {(src: string, dest: string, exclude: string[]) => void} */
-const copyDir = function (src, dest, exclude) {
+const copyDir = (src, dest, exclude) => {
   if (exclude.includes(src)) {
     return;
   }
@@ -37,10 +37,4 @@ copyDir(
     '../../node_modules',
     '../node_modules',
   ].map(normalize),
-);
-
-copyDir(
-  normalize('../../node_modules/path-to-regexp'),
-  normalize('./node_modules/path-to-regexp'),
-  [],
 );

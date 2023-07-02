@@ -330,7 +330,7 @@ const NotFound = ({state}) => {
     <ScrollView style={styles.container}>
       <Text>404</Text>
       <Button title="go back" onPress={goBack} />
-      <Text>{state.params.url}</Text>
+      <Text>{state.params.$.join('/')}</Text>
     </ScrollView>
   );
 };
