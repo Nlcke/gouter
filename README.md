@@ -29,25 +29,32 @@ Here you will define available routes, rules for navigation and export router me
 Import Gouter and pass your routes to it as object where keys are route names and values are
 parameters definitions. Routes not only help with type suggestions but define how to encode state to
 url and decode it back. Parameters definitions are objects where keys are parameter names and values
-are strings, tuples or objects with decode/encode methods. Please, note: the order of that parameter
-definitions matters for encoding/decoding.
+are strings or objects with optional methods and flags. Please, note: the order of that parameter
+definitions (except query parameters) matters for encoding/decoding.
 
-- Strings are used only as static parts to encode/decode urls (`'/login'`, `'/tabs'`) and will not
-  be presented as state parameters, but used to convert states and urls. So you may use any keys for
-  them (like `_` in examples).
-- Tuples are used for url path parameters and will be presented as string or string array parameters
-  (`[]`, `['/', /\d+/]`). They consist of all optional prefix, regexp, suffix and modifier
-  (`'' | '?' | '+' | '*'`). This structure is chosen due to compatibility with `path-to-regexp`
-  module which is Gouter dependency that helps to convert urls to states and back. You may customize
-  that conversion using `setPathToRegexpOptions` method.
-- Objects with `encode` and `decode` methods are used for url query parameters and will be presented
-  as state parameters (`{ decode: parseFloat, encode: String }`) with type of `decode` result. If
-  you set `required` flag to true then query parameter will be mandatory. You may use
-  `QueryParamDef<T>` type to define them before creating Gouter instance.
+Strings are used only as static path parameters to encode/decode urls (like `'login'`, `'tabs'`) and
+will not be presented as state parameters, but used to convert states and urls. You may use any keys
+for them, however it is recommended to prefer keys consisting of `_`, like in examples.
 
-When you pass routes you should also define special required 'notFound' route with key `_` and `url`
-param. It is used to handle situations when state or url is broken and cannot be encoded/decoded
-normally. You may add 404 screen for it.
+Objects are used for dynamic path and query parameters and will be presented as state `params` with
+type of `decode` result (if any) or `string` by default. Each object may have following optional
+properties: `path`, `req`, `list`, `encode`, `decode`. The `path` affects how state parameter is
+encoded into url and how that url is decoded. If `path` is true then it will be path parameter (like
+`123` in `profile/123`), otherwise it will be query parameter (like `hello` in `?search=hello`). The
+`path` is also very important for React Native navigation because it is used to form unique key
+which is used to distinguish similar states (like `profile/user1` and `profile/user2`). The `req`
+makes state parameter type required if true, so `undefined` will not be allowed for it anymore and
+you will need to always pass this param, but instead you will skip additional checks. The `list`
+allows to pass any number of same parameters as an array (empty lists are allowed too). For path
+params lists are encoded as `item1/item2/...` and for query params they look like
+`param=item1&param=item2&param=...`. The `decode` and `encode` properties are optional functions
+which define the type of state parameter (using `decode` return type) and the way how it is encoded
+into an url (`encode`) and decoded back to a state (`decode`). You may use `ParamDef<T>` type to
+define them before creating Gouter instance.
+
+When you pass routes you should also define special required 'notFound' route with key `_` and `$`
+param. It is used to handle situations when a state or an url is broken and cannot be
+encoded/decoded normally. You may add 404 screen for it.
 
 ```js
 import Gouter from 'gouter';
@@ -55,7 +62,7 @@ import { newStackNavigator, newTabNavigator } from 'gouter/navigators';
 
 const gouter = new Gouter({
   _: {
-    url: [],
+    $: { path: true, req: true, list: true },
   },
   App: {
     _: '/',
@@ -65,7 +72,7 @@ const gouter = new Gouter({
   },
   Login: {
     _: '/login',
-    name: { decode: (str) => str, encode: (str) => str },
+    name: { path: true },
   },
   LoginModal: {
     _: '/login/modal',
@@ -75,7 +82,7 @@ const gouter = new Gouter({
   },
   LoginConfirmation: {
     _: '/login-confirmation',
-    phone: ['/', /\d+/],
+    phone: { path: true },
   },
   LoginDrawer: {
     _: '/login/drawer',
