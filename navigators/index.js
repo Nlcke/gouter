@@ -9,9 +9,11 @@ export const newStackNavigator =
     if (stateOrNull) {
       const state = stateOrNull;
       if (names.indexOf(state.name) >= 0) {
-        const path = encodePath(state);
+        const path = encodePath(state.name, state.params);
         const stack = parent.stack || [];
-        const index = stack.findIndex((stackState) => encodePath(stackState) === path);
+        const index = stack.findIndex(
+          (stackState) => encodePath(stackState.name, stackState.params) === path,
+        );
         const prevState = stack[index];
         const nextState = prevState ? getMergedState(prevState, state) : state;
         const nextStack = [...stack.slice(0, index >= 0 ? index : undefined), nextState];
@@ -36,9 +38,11 @@ export const newTabNavigator =
     if (stateOrNull) {
       const state = stateOrNull;
       if (names.indexOf(state.name) >= 0) {
-        const path = encodePath(state);
+        const path = encodePath(state.name, state.params);
         const stack = parent.stack || [];
-        const index = stack.findIndex((stackState) => encodePath(stackState) === path);
+        const index = stack.findIndex(
+          (stackState) => encodePath(stackState.name, stackState.params) === path,
+        );
         const nextIndex = index >= 0 ? index : stack.length;
         const prevState = stack[index];
         const nextState = prevState ? getMergedState(prevState, state) : state;

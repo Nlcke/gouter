@@ -94,7 +94,7 @@ const defaultAnimatedParentIndexes = [];
  * @type {(
  * prevStack: State[],
  * nextStack: State[],
- * encodePath: (state: State) => string
+ * encodePath: (name: any, params: Record<string, any>) => string
  * )=> State[]}
  */
 const getJoinedStack = (prevStack, nextStack, encodePath) => {
@@ -102,8 +102,8 @@ const getJoinedStack = (prevStack, nextStack, encodePath) => {
     return nextStack;
   }
 
-  const prevPaths = prevStack.map(encodePath);
-  const nextPaths = nextStack.map(encodePath);
+  const prevPaths = prevStack.map((state) => encodePath(state.name, state.params));
+  const nextPaths = nextStack.map((state) => encodePath(state.name, state.params));
 
   let lastPath = null;
 
@@ -512,7 +512,7 @@ const GouterNativeStack = memo(
       () =>
         stack.map((subState, subIndex) =>
           createElement(GouterNativeStack, {
-            key: encodePath(subState),
+            key: encodePath(subState.name, subState.params),
             state: subState,
             encodePath,
             goTo,
@@ -549,13 +549,13 @@ const GouterNativeStack = memo(
     );
 
     return createElement(Animated.View, {
-      key: encodePath(state),
+      key: encodePath(state.name, state.params),
       ...panHandlers,
       style,
       children: [
         Screen
           ? createElement(Screen, {
-              key: encodePath(state),
+              key: encodePath(state.name, state.params),
               state,
               isFocused,
               isStale,
@@ -573,7 +573,7 @@ const GouterNativeStack = memo(
  * @type {React.FC<{
  * state: State
  * screenConfigMap: ScreenConfigMap<any>
- * encodePath: (state: {name: any, params: Record<string, any>}) => string
+ * encodePath: (name: any, params: Record<string, any>) => string
  * goTo: (name: any, params: Record<string, any>, stack?: any) => void
  * }>}
  */

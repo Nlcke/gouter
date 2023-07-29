@@ -6,13 +6,19 @@
  * fields, where `decode` creates a value from string, and `encode` converts value back to string.
  * By default `String` function is used for `decode` and `encode` if they are not defined.
  * @template [T=any]
+ * @template [L=boolean]
  * @typedef {string | {
  * path?: boolean
- * req?: boolean
  * list?: boolean
  * decode?: (str: string) => T
  * encode?: (val: T) => string
  * }} ParamDef
+ */
+
+/**
+ * @template {ParamDef} T
+ * @typedef {T extends {list: true} ? T extends {decode: (str: string) => infer R} ? R[]
+ * : string[] : T extends {decode: (str: string) => infer R} ? R : string} ParamDefType
  */
 
 /**
@@ -32,12 +38,8 @@
  * @template {Routes} T
  * @typedef {{[N in keyof T]: {
  * name: N
- * params: {[K in keyof T[N] as T[N][K] extends {req: true} ? K : never]:
- * T[N][K] extends {list: true} ? T[N][K] extends {decode: (str: string) => infer R} ? R[]
- * : string[] : T[N][K] extends {decode: (str: string) => infer R} ? R : string} &
- * {[K in keyof T[N] as T[N][K] extends {req: true} ? never : T[N][K] extends string ? never : K]?:
- * T[N][K] extends {list: true} ? T[N][K] extends {decode: (str: string) => infer R} ? R[]
- * : string[] : T[N][K] extends {decode: (str: string) => infer R} ? R : string}
+ * params: {[K in keyof T[N] as T[N][K] extends string ? never : T[N][K] extends {path: true} ? K : never]: ParamDefType<T[N][K]>} &
+ *  {[K in keyof T[N] as T[N][K] extends string ? never : T[N][K] extends {path: true} ? never : K]?: ParamDefType<T[N][K]>}
  * }}} StateMap
  */
 
@@ -78,7 +80,7 @@
  */
 
 /**
- * `Builder` is a function called to modify state when a state without stack is added to current
+ * `Redirection` is a function called to modify state when a state without stack is added to current
  * state.
  * @template {Routes} T
  * @template {keyof T} N
@@ -171,18 +173,57 @@ class Gouter {
     this.listeners = [];
 
     /**
-     * `pathCacheByName` stores path cache for each route name to speed up `encodePath`.
+     * `regexpByParamDefs` stores path regexp for each route name to speed up `decodePath`.
      * @protected
-     * @type {Partial<Record<keyof T, WeakMap<object, string>>>}
+     * @type {Partial<Record<keyof T, RegExp>>}
      */
-    this.pathCacheByName = {};
+    this.regexpByParamDefs = {};
 
     /**
-     * `regexpByName` stores path regexp for each route name to speed up `decodePath`.
-     * @protected
-     * @type {WeakMap<T[keyof T], RegExp>}
+     * Get path regexp from cache using route name.
+     * @type {<N extends keyof T>(name: N) => RegExp}
      */
-    this.regexpByParams = new WeakMap();
+    this.getPathRegexp = (name) => {
+      const { routeMap, safeEncodeURIComponent, regexpByParamDefs } = this;
+      const segmentStr = '(?:/[^/]*)';
+      const paramDefs = routeMap[name];
+      const pathRegexp = regexpByParamDefs[name];
+      if (pathRegexp) {
+        return pathRegexp;
+      }
+      let minRepeats = 0;
+      let maxRepeats = 0;
+      let regexpStr = '';
+      for (const key in paramDefs) {
+        const paramDef = paramDefs[key];
+        if (typeof paramDef === 'object') {
+          if (paramDef.path) {
+            if (paramDef.list) {
+              maxRepeats = Infinity;
+            } else {
+              minRepeats += 1;
+              maxRepeats += 1;
+            }
+          }
+        } else {
+          if (minRepeats > 0 || maxRepeats > 0) {
+            regexpStr += `(${segmentStr}{${minRepeats},${
+              maxRepeats === Infinity ? '' : maxRepeats
+            }})`;
+            minRepeats = 0;
+            maxRepeats = 0;
+          }
+          const valueEncoded = safeEncodeURIComponent(paramDef);
+          regexpStr += `/${valueEncoded}`;
+        }
+      }
+      if (minRepeats > 0 || maxRepeats > 0) {
+        regexpStr += `(${segmentStr}{${minRepeats},${maxRepeats === Infinity ? '' : maxRepeats}})`;
+      }
+      const newPathRegexp = RegExp(`^${regexpStr}$`);
+      regexpByParamDefs[name] = newPathRegexp;
+      return newPathRegexp;
+    };
 
     /**
      * Safely gets the unencoded version of an encoded component of a Uniform Resource
@@ -214,18 +255,11 @@ class Gouter {
 
     /**
      * Creates url path string from state name and params.
-     * @type {(state: State<T>) => string}
+     * @type {<N extends keyof T>(name: N, params: StateMap<T>[N]['params']) => string}
      */
-    this.encodePath = (state) => {
-      const { routeMap, safeEncodeURIComponent, pathCacheByName } = this;
-      const { name, params } = state;
-      const pathCache = pathCacheByName[name] || new WeakMap();
-      pathCacheByName[name] = pathCache;
-      const cachedPathStr = pathCache.get(params);
-      if (cachedPathStr !== undefined) {
-        return cachedPathStr;
-      }
-      const paramDefs = routeMap[state.name];
+    this.encodePath = (name, params) => {
+      const { routeMap, safeEncodeURIComponent } = this;
+      const paramDefs = routeMap[name];
       let pathStr = '';
       let staticParamPos = 0;
       let undefinedParamLength = 0;
@@ -235,32 +269,27 @@ class Gouter {
           if (paramDef.path) {
             const { encode = String } = paramDef;
             const value = /** @type {any} */ (params)[key];
-            if (value !== undefined || paramDef.req) {
-              if (paramDef.list) {
-                if (Array.isArray(value)) {
-                  if (value.length > 0) {
-                    const valueEncoded = value.map(encode).map(safeEncodeURIComponent).join('/');
-                    pathStr += `/${valueEncoded}`;
-                    pathStr += '/$';
-                    undefinedParamLength = 2;
-                  } else if (!paramDef.req) {
-                    pathStr += '/$$';
-                    undefinedParamLength = 0;
-                  } else {
-                    pathStr += '/$';
-                    undefinedParamLength += 2;
-                  }
+            if (paramDef.list) {
+              if (Array.isArray(value)) {
+                if (value.length > 0) {
+                  const valueEncoded = value.map(encode).map(safeEncodeURIComponent).join('/');
+                  pathStr += `/${valueEncoded}`;
+                  pathStr += '/$';
+                  undefinedParamLength = 2;
+                } else {
+                  pathStr += '/$';
+                  undefinedParamLength += 2;
                 }
-              } else {
-                const valueStr = encode(value);
-                const valueEncoded = safeEncodeURIComponent(valueStr);
-                pathStr += `/${valueEncoded}`;
-                undefinedParamLength = 0;
               }
             } else {
-              pathStr += '/$';
-              undefinedParamLength += 2;
+              const valueStr = encode(value);
+              const valueEncoded = safeEncodeURIComponent(valueStr);
+              pathStr += `/${valueEncoded}`;
+              undefinedParamLength = 0;
             }
+          } else {
+            pathStr += '/$';
+            undefinedParamLength += 2;
           }
         } else {
           const valueEncoded = safeEncodeURIComponent(paramDef);
@@ -279,45 +308,41 @@ class Gouter {
       if (undefinedParamLength) {
         pathStr = pathStr.slice(0, undefinedParamLength ? -undefinedParamLength : undefined);
       }
-      pathCache.set(params, pathStr);
       return pathStr;
     };
 
     /**
      * Creates url query string from state name and params.
-     * @type {(state: State<T>) => string}
+     * @type {<N extends keyof T>(name: N, params: StateMap<T>[N]['params']) => string}
      */
-    this.encodeQuery = (state) => {
+    this.encodeQuery = (name, params) => {
       const { routeMap, safeEncodeURIComponent } = this;
-      const { name, params } = state;
       let queryStr = '';
       const paramDefs = routeMap[name];
       for (const key in paramDefs) {
         const paramDef = paramDefs[key];
-        if (typeof paramDef === 'object') {
-          if (!paramDef.path) {
-            const value = /** @type {any} */ (params)[key];
-            if (value !== undefined || paramDef.req) {
-              const keyEncoded = safeEncodeURIComponent(key);
-              const { encode = String } = paramDef;
-              if (paramDef.list) {
-                if (Array.isArray(value)) {
-                  if (value.length > 0) {
-                    const valueEncoded = value
-                      .map(encode)
-                      .map(safeEncodeURIComponent)
-                      .join(`&${keyEncoded}=`);
-                    queryStr += `&${keyEncoded}=${valueEncoded}`;
-                  } else if (!paramDef.req) {
-                    queryStr += `&${keyEncoded}=$$`;
-                  }
-                }
-              } else {
-                const valueStr = encode(value);
-                if (valueStr !== '' || !paramDef.req) {
-                  const valueEncoded = safeEncodeURIComponent(valueStr);
+        if (typeof paramDef === 'object' && !paramDef.path) {
+          const value = /** @type {any} */ (params)[key];
+          if (value !== undefined) {
+            const keyEncoded = safeEncodeURIComponent(key);
+            const { encode = String } = paramDef;
+            if (paramDef.list) {
+              if (Array.isArray(value)) {
+                if (value.length > 0) {
+                  const valueEncoded = value
+                    .map(encode)
+                    .map(safeEncodeURIComponent)
+                    .join(`&${keyEncoded}=`);
                   queryStr += `&${keyEncoded}=${valueEncoded}`;
+                } else {
+                  queryStr += `&${keyEncoded}=$`;
                 }
+              }
+            } else {
+              const valueStr = encode(value);
+              if (valueStr !== '') {
+                const valueEncoded = safeEncodeURIComponent(valueStr);
+                queryStr += `&${keyEncoded}=${valueEncoded}`;
               }
             }
           }
@@ -333,8 +358,9 @@ class Gouter {
      */
     this.encodeUrl = (state) => {
       const { encodePath, encodeQuery } = this;
-      const pathStr = encodePath(state);
-      const queryStr = encodeQuery(state);
+      const { name, params } = state;
+      const pathStr = encodePath(name, params);
+      const queryStr = encodeQuery(name, params);
       const url = pathStr + (queryStr ? `?${queryStr}` : '');
       return url;
     };
@@ -344,47 +370,9 @@ class Gouter {
      * @type {<N extends keyof T>(name: N, pathStr: string) => StateMap<T>[N]['params'] | null}
      */
     this.decodePath = (name, pathStr) => {
-      const { routeMap, safeEncodeURIComponent, safeDecodeURIComponent, regexpByParams } = this;
-      const segmentStr = '(?:/[^/]*)';
+      const { routeMap, safeDecodeURIComponent, getPathRegexp } = this;
       const paramDefs = routeMap[name];
-      if (!regexpByParams.has(paramDefs)) {
-        let minRepeats = 0;
-        let maxRepeats = 0;
-        let regexpStr = '';
-        for (const key in paramDefs) {
-          const paramDef = paramDefs[key];
-          if (typeof paramDef === 'object') {
-            if (paramDef.path) {
-              if (paramDef.list) {
-                maxRepeats = Infinity;
-              } else if (paramDef.req) {
-                minRepeats += 1;
-                maxRepeats += 1;
-              } else {
-                maxRepeats += 1;
-              }
-            }
-          } else {
-            if (minRepeats > 0 || maxRepeats > 0) {
-              regexpStr += `(${segmentStr}{${minRepeats},${
-                maxRepeats === Infinity ? '' : maxRepeats
-              }})`;
-              minRepeats = 0;
-              maxRepeats = 0;
-            }
-            const valueEncoded = safeEncodeURIComponent(paramDef);
-            regexpStr += `/${valueEncoded}`;
-          }
-        }
-        if (minRepeats > 0 || maxRepeats > 0) {
-          regexpStr += `(${segmentStr}{${minRepeats},${
-            maxRepeats === Infinity ? '' : maxRepeats
-          }})`;
-        }
-        const regexp = RegExp(`^${regexpStr}$`);
-        regexpByParams.set(paramDefs, regexp);
-      }
-      const regexp = /** @type {RegExp} */ (regexpByParams.get(paramDefs));
+      const regexp = getPathRegexp(name);
       const match = pathStr.match(regexp);
       if (!match) {
         return null;
@@ -402,10 +390,7 @@ class Gouter {
             const group = groups[groupIndex];
             const { decode } = paramDef;
             if (paramDef.list) {
-              if (
-                !paramDef.req &&
-                (group[sectionIndex] === '$' || group[sectionIndex] === undefined)
-              ) {
+              if (group[sectionIndex] === '$' || group[sectionIndex] === undefined) {
                 sectionIndex += 1;
               } else {
                 params[key] = [];
@@ -413,9 +398,6 @@ class Gouter {
                   const valueStr = group[sectionIndex];
                   sectionIndex += 1;
                   if (valueStr === '$') {
-                    break;
-                  } else if (valueStr === '$$') {
-                    params[key] = params[key] || [];
                     break;
                   }
                   const valueStrUnescaped = valueStr[0] === '$' ? valueStr.slice(1) : valueStr;
@@ -464,7 +446,7 @@ class Gouter {
             const valueEncoded = safeDecodeURIComponent(valueStr);
             const value = decode ? decode(valueEncoded) : valueEncoded;
             if (paramDef.list) {
-              if (valueStr === '$$') {
+              if (valueStr === '$') {
                 params[key] = params[key] || [];
               } else if (params[key]) {
                 params[key].push(value);
@@ -473,18 +455,6 @@ class Gouter {
               }
             } else {
               params[key] = value;
-            }
-          }
-        }
-      }
-      for (const key in paramDefs) {
-        if (!(key in params)) {
-          const paramDef = paramDefs[key];
-          if (typeof paramDef === 'object' && !paramDef.path && paramDef.req) {
-            if (paramDef.list) {
-              params[key] = [];
-            } else {
-              params[key] = paramDef.decode ? paramDef.decode('') : '';
             }
           }
         }
@@ -506,7 +476,11 @@ class Gouter {
           if (params) {
             const query = decodeQuery(name, queryStr);
             Object.assign(params, query);
-            const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params });
+            const state = /** @type {State<T>} */ ({
+              name,
+              /** @type {any} */
+              params,
+            });
             return state;
           }
         }
@@ -532,7 +506,7 @@ class Gouter {
      */
     this.buildState = (state, parents, builtPaths = new Set()) => {
       const { builders, buildState, encodePath } = this;
-      const path = encodePath(state);
+      const path = encodePath(state.name, state.params);
       builtPaths.add(path);
       const builder = builders[state.name];
       const builtState = builder && !state.stack ? builder(state, ...parents) : state;
@@ -637,7 +611,7 @@ class Gouter {
         const index = focusedState.index !== undefined ? focusedState.index : lastIndex;
         focusedState = stack[index] || stack[lastIndex];
         if (focusedState && focusedStates.indexOf(focusedState) === -1) {
-          focusedStates[focusedStates.length] = focusedState;
+          focusedStates.push(focusedState);
         } else {
           return focusedStates.reverse();
         }
@@ -713,14 +687,14 @@ class Gouter {
           if (redirection) {
             const redirectionStates = redirection(state);
             for (const redirectionState of redirectionStates) {
-              statesOrNullsExt[statesOrNullsExt.length] = redirectionState;
+              statesOrNullsExt.push(redirectionState);
             }
-            statesOrNullsExt[statesOrNullsExt.length] = state;
+            statesOrNullsExt.push(state);
           } else {
-            statesOrNullsExt[statesOrNullsExt.length] = state;
+            statesOrNullsExt.push(state);
           }
         } else {
-          statesOrNullsExt[statesOrNullsExt.length] = null;
+          statesOrNullsExt.push(null);
         }
       }
       const nextState = getNextState(...statesOrNullsExt);
@@ -734,7 +708,13 @@ class Gouter {
      */
     this.goTo = (name, params, stack, index) => {
       const { go } = this;
-      const state = /** @type {State<T> & {name: typeof name}} */ ({ name, params, stack, index });
+      const state = /** @type {State<T> & {name: typeof name}} */ ({
+        name,
+        /** @type {any} */
+        params,
+        stack,
+        index,
+      });
       go(state);
     };
 
