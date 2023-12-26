@@ -18,5 +18,6 @@ module.exports = {
     'import/no-extraneous-dependencies': 'off',
     'react/jsx-filename-extension': 'off',
     'arrow-body-style': 'off',
+    'class-methods-use-this': 'off',
   },
 };

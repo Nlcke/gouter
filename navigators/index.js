@@ -1,58 +1,71 @@
 /**
- * @type {<G extends import("..").GouterInstance>(gouter: G, options: {
- * names: G['rootState']['name'][]
- * }) => import("..").Navigator<any, any>}
+ * @type {(options: {onExit?: () => void}) => import("..").Navigator}
  */
 export const newStackNavigator =
-  ({ encodePath, getMergedState }, { names }) =>
-  (stateOrNull, parent) => {
-    if (stateOrNull) {
-      const state = stateOrNull;
-      if (names.indexOf(state.name) >= 0) {
-        const path = encodePath(state);
-        const stack = parent.stack || [];
-        const index = stack.findIndex((stackState) => encodePath(stackState) === path);
-        const prevState = stack[index];
-        const nextState = prevState ? getMergedState(prevState, state) : state;
-        const nextStack = [...stack.slice(0, index >= 0 ? index : undefined), nextState];
-        return { ...parent, stack: nextStack };
-      }
-    } else if (parent.stack && parent.stack.length > 1) {
-      const { stack } = parent;
-      const nextStack = stack.slice(0, -1);
-      return { ...parent, stack: nextStack };
+  ({ onExit }) =>
+  ({ parent, state, index }) => {
+    const { stack = [] } = parent;
+    if (state && index !== undefined) {
+      return { ...parent, stack: [...stack.slice(0, index), state] };
     }
-    return null;
+    if (state && index === undefined) {
+      return { ...parent, stack: [...stack, state] };
+    }
+    if (stack.length > 1) {
+      return { ...parent, stack: stack.slice(0, -1) };
+    }
+    if (onExit) {
+      onExit();
+    }
+    return parent;
   };
 
 /**
- * @type {<G extends import("..").GouterInstance>(gouter: G, options: {
- * names: G['rootState']['name'][]
- * }) => import("..").Navigator<any, any>}
+ * @type {(options: {onExit?: () => void}) => import("..").Navigator}
  */
 export const newTabNavigator =
-  ({ encodePath, getMergedState }, { names }) =>
-  (stateOrNull, parent) => {
-    if (stateOrNull) {
-      const state = stateOrNull;
-      if (names.indexOf(state.name) >= 0) {
-        const path = encodePath(state);
-        const stack = parent.stack || [];
-        const index = stack.findIndex((stackState) => encodePath(stackState) === path);
-        const nextIndex = index >= 0 ? index : stack.length;
-        const prevState = stack[index];
-        const nextState = prevState ? getMergedState(prevState, state) : state;
-        const nextStack = [...stack];
-        nextStack[nextIndex] = nextState;
-        return { ...parent, stack: nextStack, index: nextIndex };
-      }
-    } else {
-      const lastIndex = (parent.stack || []).length - 1;
-      const index = parent.index !== undefined ? parent.index : lastIndex;
-      const nextIndex = index + 1;
-      if (nextIndex <= lastIndex) {
-        return { ...parent, index: nextIndex };
-      }
+  ({ onExit }) =>
+  ({ parent, state, index, allowed }) => {
+    const { stack = [] } = parent;
+    if (state && index !== undefined) {
+      return { ...parent, index };
     }
-    return null;
+    if (state && index === undefined) {
+      const nameIndex = allowed.indexOf(state.name);
+      const splitIndex = stack.findIndex(
+        (prevState) => allowed.indexOf(prevState.name) > nameIndex,
+      );
+      if (splitIndex >= 0) {
+        return {
+          ...parent,
+          stack: [...stack.slice(0, splitIndex), state, ...stack.slice(splitIndex)],
+          index: splitIndex,
+        };
+      }
+      return { ...parent, stack: [...stack, state], index: stack.length };
+    }
+    const lastIndex = stack.length - 1;
+    const nextIndex = (parent.index || 0) + 1;
+    if (nextIndex <= lastIndex) {
+      return { ...parent, stack, index: nextIndex };
+    }
+    if (onExit) {
+      onExit();
+    }
+    return parent;
+  };
+
+/**
+ * @type {(options: {onExit?: () => void}) => import("..").Navigator}
+ */
+export const newSwitchNavigator =
+  ({ onExit }) =>
+  ({ parent, state }) => {
+    if (state) {
+      return { ...parent, stack: [state] };
+    }
+    if (onExit) {
+      onExit();
+    }
+    return parent;
   };

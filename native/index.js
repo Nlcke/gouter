@@ -3,7 +3,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /** @typedef {import('..').default<any>} Gouter */
 
-/** @typedef {Gouter['rootState']} State */
+/** @typedef {import('..').State<import('..').Config>} State */
 
 /**
  * @typedef {{
@@ -94,16 +94,16 @@ const defaultAnimatedParentIndexes = [];
  * @type {(
  * prevStack: State[],
  * nextStack: State[],
- * encodePath: (state: State) => string
+ * getStateKey: (state: State) => string
  * )=> State[]}
  */
-const getJoinedStack = (prevStack, nextStack, encodePath) => {
+const getJoinedStack = (prevStack, nextStack, getStateKey) => {
   if (prevStack === nextStack || prevStack.length === 0) {
     return nextStack;
   }
 
-  const prevPaths = prevStack.map(encodePath);
-  const nextPaths = nextStack.map(encodePath);
+  const prevPaths = prevStack.map(getStateKey);
+  const nextPaths = nextStack.map(getStateKey);
 
   let lastPath = null;
 
@@ -167,7 +167,7 @@ let panRespondersBlocked = false;
  * @type {React.FC<{
  * state: State
  * screenConfigMap: ScreenConfigMap<any>
- * encodePath: Gouter['encodePath']
+ * getStateKey: Gouter['getStateKey']
  * goTo: Gouter['goTo']
  * isStale: boolean
  * isFocused: boolean
@@ -184,7 +184,7 @@ const GouterNativeStack = memo(
   ({
     state,
     screenConfigMap,
-    encodePath,
+    getStateKey,
     goTo,
     isStale,
     isFocused,
@@ -215,8 +215,8 @@ const GouterNativeStack = memo(
     }, []);
 
     const stack = useMemo(
-      () => getJoinedStack(prevStack, nextStack, encodePath),
-      [encodePath, nextStack, prevStack],
+      () => getJoinedStack(prevStack, nextStack, getStateKey),
+      [getStateKey, nextStack, prevStack],
     );
 
     prevStackRef.current = stack;
@@ -454,7 +454,7 @@ const GouterNativeStack = memo(
           duration,
         }).start(({ finished }) => {
           if (finished) {
-            goTo(nextState.name, nextState.params, nextState.stack);
+            goTo(nextState.name, nextState.params);
           }
         });
       },
@@ -512,9 +512,9 @@ const GouterNativeStack = memo(
       () =>
         stack.map((subState, subIndex) =>
           createElement(GouterNativeStack, {
-            key: encodePath(subState),
+            key: getStateKey(subState),
             state: subState,
-            encodePath,
+            getStateKey,
             goTo,
             screenConfigMap,
             isStale: nextStack.indexOf(subState) === -1,
@@ -529,7 +529,7 @@ const GouterNativeStack = memo(
           }),
         ),
       [
-        encodePath,
+        getStateKey,
         focusedIndex,
         goTo,
         nextStack,
@@ -549,13 +549,13 @@ const GouterNativeStack = memo(
     );
 
     return createElement(Animated.View, {
-      key: encodePath(state),
+      key: getStateKey(state),
       ...panHandlers,
       style,
       children: [
         Screen
           ? createElement(Screen, {
-              key: encodePath(state),
+              key: getStateKey(state),
               state,
               isFocused,
               isStale,
@@ -573,7 +573,7 @@ const GouterNativeStack = memo(
  * @type {React.FC<{
  * state: State
  * screenConfigMap: ScreenConfigMap<any>
- * encodePath: (state: {name: any, params: Record<string, any>}) => string
+ * getStateKey: (state: {name: any, params: Record<string, any>}) => string
  * goTo: (name: any, params: Record<string, any>, stack?: any) => void
  * }>}
  */

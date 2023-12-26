@@ -15,9 +15,6 @@
     "./native": "./native/index.js",
     "./navigators": "./navigators/index.js"
   },
-  "dependencies": {
-    "path-to-regexp": "6.2.1"
-  },
   "devDependencies": {
     "eslint": "^8.40.0",
     "eslint-config-airbnb": "^19.0.4",
