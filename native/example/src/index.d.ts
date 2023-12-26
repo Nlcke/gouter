@@ -17,4 +17,4 @@ type GouterConfig = {
 type GouterState<T extends keyof GouterConfig = keyof GouterConfig> =
   import('gouter').State<GouterConfig, T>;
 
-type GouterScreen = ScreenMap<State>;
+type GouterScreen = import('gouter/native').ScreenMap<GouterState>;

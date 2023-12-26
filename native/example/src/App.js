@@ -66,7 +66,7 @@ const Button = ({title, onPress, selected}) => (
   </TouchableOpacity>
 );
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['App']} */
+/** @type {GouterScreen['App']} */
 const App = ({children}) => {
   return (
     <View style={styles.container}>
@@ -76,17 +76,17 @@ const App = ({children}) => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginStack']} */
+/** @type {GouterScreen['LoginStack']} */
 const LoginStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
-/** @type {import('./index.d.ts')['Screen'] ['LoginConfirmationStack']} */
+/** @type {GouterScreen['LoginConfirmationStack']} */
 const LoginConfirmationStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginModal']} */
+/** @type {GouterScreen['LoginModal']} */
 const LoginModal = () => {
   return (
     <View style={styles.modalContainer} renderToHardwareTextureAndroid>
@@ -95,7 +95,7 @@ const LoginModal = () => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['Login']} */
+/** @type {GouterScreen['Login']} */
 const Login = ({state}) => {
   return (
     <View style={styles.container}>
@@ -126,7 +126,7 @@ const Login = ({state}) => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginConfirmation']} */
+/** @type {GouterScreen['LoginConfirmation']} */
 const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
   const [parentIndex] = parentIndexes;
 
@@ -186,7 +186,7 @@ const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
                       stack: [
                         {
                           name: 'Login',
-                          params: {},
+                          params: {name: 'user'},
                         },
                       ],
                     },
@@ -199,7 +199,7 @@ const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
       <Button
         title="goTo Login"
         onPress={() => {
-          goTo('Login', {});
+          goTo('Login', {name: 'user'});
         }}
       />
       <Button
@@ -212,7 +212,7 @@ const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['Tabs']} */
+/** @type {GouterScreen['Tabs']} */
 export const LoginDrawer = () => {
   return (
     <View style={{flexDirection: 'row', flex: 1}}>
@@ -234,7 +234,7 @@ export const LoginDrawer = () => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['Tabs']} */
+/** @type {GouterScreen['Tabs']} */
 const Tabs = ({state: tabsState, children}) => {
   const stack = tabsState.stack || [];
   const currentIndex =
@@ -291,7 +291,7 @@ const Tabs = ({state: tabsState, children}) => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['Home']} */
+/** @type {GouterScreen['Home']} */
 const Home = () => {
   return (
     <View style={styles.container}>
@@ -302,7 +302,7 @@ const Home = () => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['Post']} */
+/** @type {GouterScreen['Post']} */
 const Post = () => {
   return (
     <View style={styles.container}>
@@ -313,24 +313,13 @@ const Post = () => {
   );
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['Profile']} */
+/** @type {GouterScreen['Profile']} */
 const Profile = () => {
   return (
     <ScrollView style={styles.container}>
       <Text>Profile</Text>
       <Button title="go back" onPress={goBack} />
       <Text>{'profile '.repeat(500)}</Text>
-    </ScrollView>
-  );
-};
-
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['_']} */
-const NotFound = ({state}) => {
-  return (
-    <ScrollView style={styles.container}>
-      <Text>404</Text>
-      <Button title="go back" onPress={goBack} />
-      <Text>{state.params.url}</Text>
     </ScrollView>
   );
 };
@@ -468,11 +457,8 @@ const drawerSettings = {
   swipeDetectionSize: '80%',
 };
 
-/** @type {import('gouter/native').ScreenConfigMap<State>} */
+/** @type {import('gouter/native').ScreenConfigMap<GouterState>} */
 const screenConfigMap = {
-  _: {
-    component: NotFound,
-  },
   App: {
     component: App,
     stackSettings: defaultSettings,
