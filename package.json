@@ -1,6 +1,6 @@
 {
   "name": "gouter",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "description": "universal router",
   "main": "index.js",
   "type": "module",
