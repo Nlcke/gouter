@@ -411,7 +411,7 @@ class Gouter {
     const {
       goTo,
       routes,
-      rootState,
+      getRootState,
       getFocusedStatesFromState,
       getStateFromFocusedStates,
       buildState,
@@ -424,19 +424,12 @@ class Gouter {
     if (redirector) {
       const redirectorStates = redirector({ name, params });
       for (const redirectorState of redirectorStates) {
-        const {
-          name: redirectedName,
-          params: redirectedParams,
-          stack = [],
-          index = -1,
-        } = redirectorState;
-        batch(() => {
-          goTo(redirectedName, redirectedParams, { stack, index });
-        }, true);
+        const { name: redirectedName, params: redirectedParams } = redirectorState;
+        batch(() => goTo(redirectedName, redirectedParams), true);
       }
     }
     const state = /** @type {State<T, typeof name>} */ ({ name, params });
-    const focusedStates = getFocusedStatesFromState(rootState);
+    const focusedStates = getFocusedStatesFromState(getRootState());
     for (let index = 0; index < focusedStates.length; index += 1) {
       const focusedState = focusedStates[index];
       const { navigator, allowed } = routes[focusedState.name];
