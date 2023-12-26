@@ -5,7 +5,7 @@ const path = require('path');
 const normalize = filename => path.normalize(`${__dirname}/${filename}`);
 
 /** @type {(src: string, dest: string, exclude: string[]) => void} */
-const copyDir = function (src, dest, exclude) {
+const copyDir = (src, dest, exclude) => {
   if (exclude.includes(src)) {
     return;
   }
