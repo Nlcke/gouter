@@ -16,7 +16,7 @@ import {
   goTo,
   listen,
   replace,
-  encodePath,
+  getStateKey,
   setRootState,
 } from './router';
 
@@ -81,7 +81,7 @@ const LoginStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
-/** @type {import('gouter/native').ScreenMap<import('./router').State>['LoginConfirmationStack']} */
+/** @type {import('./index.d.ts')['Screen'] ['LoginConfirmationStack']} */
 const LoginConfirmationStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
@@ -468,7 +468,7 @@ const drawerSettings = {
   swipeDetectionSize: '80%',
 };
 
-/** @type {import('gouter/native').ScreenConfigMap<import('./router').State>} */
+/** @type {import('gouter/native').ScreenConfigMap<State>} */
 const screenConfigMap = {
   _: {
     component: NotFound,
@@ -534,7 +534,7 @@ const AppWrapper = () => {
     <GouterNative
       state={state}
       screenConfigMap={screenConfigMap}
-      encodePath={encodePath}
+      getStateKey={getStateKey}
       goTo={goTo}
     />
   );

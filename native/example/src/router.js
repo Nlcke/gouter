@@ -1,102 +1,74 @@
 import Gouter from 'gouter';
 import {newStackNavigator, newTabNavigator} from 'gouter/navigators';
 
-const gouter = new Gouter({
-  _: {
-    url: [],
-  },
+/** @type {import('gouter').Routes<GouterConfig>} */
+const routes = {
   App: {
-    _: '/',
+    navigator: newStackNavigator({}),
+    allowed: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
+    builder: state => ({
+      ...state,
+      stack: [{name: 'LoginStack', params: {}}],
+    }),
   },
   LoginStack: {
-    _: '/login-stack',
+    navigator: newStackNavigator({}),
+    allowed: ['Login', 'LoginModal'],
+    builder: state => ({
+      ...state,
+      stack: [{name: 'Login', params: {name: 'user'}}],
+    }),
   },
   Login: {
-    _: '/login',
-    name: {decode: str => str, encode: str => str},
+    builder: state => ({...state, params: {name: 'user'}}),
+    redirector: () => [{name: 'LoginStack', params: {}}],
   },
-  LoginModal: {
-    _: '/login/modal',
-  },
+  LoginModal: {},
   LoginConfirmationStack: {
-    _: '/login-confirmation-stack',
+    navigator: newStackNavigator({}),
+    allowed: ['LoginConfirmation', 'LoginDrawer'],
   },
   LoginConfirmation: {
-    _: '/login-confirmation',
-    phone: ['/', /\d+/],
+    redirector: () => [{name: 'LoginConfirmationStack', params: {}}],
   },
-  LoginDrawer: {
-    _: '/login/drawer',
-  },
+  LoginDrawer: {},
   Tabs: {
-    _: '/tabs',
+    navigator: newTabNavigator({}),
+    allowed: ['Home', 'Post', 'Profile'],
+    builder: state => ({
+      ...state,
+      stack: [
+        {name: 'Home', params: {}},
+        {name: 'Post', params: {}},
+        {name: 'Profile', params: {}},
+      ],
+    }),
   },
-  Home: {
-    _: '/home',
-  },
-  Post: {
-    _: '/post',
-  },
-  Profile: {
-    _: '/profile',
-  },
-});
+  Home: {},
+  Post: {},
+  Profile: {},
+};
+
+const gouter = new Gouter(routes, {name: 'App', params: {}});
 
 const {
   setRootState,
-  setBuilders,
-  setNavigators,
-  setRedirections,
   goTo,
   goBack,
   replace,
   getRootState,
   listen,
-  encodePath,
+  getStateKey,
+  batch,
 } = gouter;
 
-setNavigators({
-  App: newStackNavigator(gouter, {
-    names: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
-  }),
-  Tabs: newTabNavigator(gouter, {
-    names: ['Home', 'Post', 'Profile'],
-  }),
-  LoginStack: newStackNavigator(gouter, {
-    names: ['Login', 'LoginModal'],
-  }),
-  LoginConfirmationStack: newStackNavigator(gouter, {
-    names: ['LoginConfirmation', 'LoginDrawer'],
-  }),
-});
-
-setBuilders({
-  App: state => ({
-    ...state,
-    stack: [{name: 'LoginStack', params: {}}],
-  }),
-  LoginStack: state => ({
-    ...state,
-    stack: [{name: 'Login', params: {}}],
-  }),
-  Login: state => ({...state, params: {name: 'user'}}),
-  Tabs: state => ({
-    ...state,
-    stack: [
-      {name: 'Home', params: {}},
-      {name: 'Post', params: {}},
-      {name: 'Profile', params: {}},
-    ],
-  }),
-});
-
-setRedirections({
-  Login: () => [{name: 'LoginStack', params: {}}],
-  LoginConfirmation: () => [{name: 'LoginConfirmationStack', params: {}}],
-});
-
-setRootState({name: 'App', params: {}});
-
-/** @typedef {gouter['rootState']} State */
-
-export {goTo, goBack, replace, getRootState, setRootState, listen, encodePath};
+export {
+  goTo,
+  goBack,
+  replace,
+  getRootState,
+  setRootState,
+  listen,
+  getStateKey,
+  batch,
+};
