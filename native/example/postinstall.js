@@ -38,9 +38,3 @@ copyDir(
     '../node_modules',
   ].map(normalize),
 );
-
-copyDir(
-  normalize('../../node_modules/path-to-regexp'),
-  normalize('./node_modules/path-to-regexp'),
-  [],
-);
