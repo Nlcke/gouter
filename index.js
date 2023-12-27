@@ -314,13 +314,10 @@ class Gouter {
    * @type {(state: State<T>, disableBuilders?: boolean) => void}
    */
   setRootState(state, disableBuilders) {
-    const { rootState, batchDepth, getAreStatesEqual, buildState, listeners } = this;
+    const { batchDepth, buildState, listeners } = this;
     const builtState = disableBuilders ? state : buildState(state);
     if (batchDepth > 0) {
       this.rootState = state;
-      return;
-    }
-    if (getAreStatesEqual(rootState, builtState)) {
       return;
     }
     this.rootState = builtState;
