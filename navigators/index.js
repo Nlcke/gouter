@@ -44,9 +44,8 @@ export const newTabNavigator =
       }
       return { ...parent, stack: [...stack, state], index: stack.length };
     }
-    const lastIndex = stack.length - 1;
-    const nextIndex = (parent.index || 0) + 1;
-    if (nextIndex <= lastIndex) {
+    const nextIndex = (parent.index === undefined ? stack.length - 1 : parent.index) + 1;
+    if (nextIndex < stack.length) {
       return { ...parent, stack, index: nextIndex };
     }
     if (onExit) {
