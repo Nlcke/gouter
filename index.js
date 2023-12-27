@@ -321,9 +321,7 @@ class Gouter {
       return;
     }
     this.rootState = builtState;
-    for (const listener of listeners) {
-      listener(builtState);
-    }
+    listeners.forEach((listener) => listener(builtState));
   }
 
   /**
@@ -432,7 +430,7 @@ class Gouter {
       const { navigator, allowed } = routes[focusedState.name];
       if (navigator && allowed) {
         const parents = focusedStates.slice(index);
-        if (allowed.includes(name)) {
+        if (allowed.indexOf(name) >= 0) {
           const [firstParent] = parents;
           let currentIndex;
           let currentState = state;
