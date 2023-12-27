@@ -6,7 +6,9 @@ type GouterConfig = {
   };
   LoginModal: {};
   LoginConfirmationStack: {};
-  LoginConfirmation: {phone: string};
+  LoginConfirmation: {
+    phone: string;
+  };
   LoginDrawer: {};
   Tabs: {};
   Home: {};
