@@ -11,7 +11,7 @@ Tiny navigation library for React Native with simple API and rich features.
 ```js
 import Gouter from 'gouter'; // router
 import GouterNative from 'gouter/native'; // React Native component
-import { newStackNavigator, newTabNavigator } from 'gouter/navigators'; // navigators
+import { newStackNavigator, newTabNavigator, newSwitchNavigator } from 'gouter/navigators'; // navigators
 ```
 
 ## Examples
@@ -22,100 +22,218 @@ Gouter example for React Native is at `native/example`.
 
 ### Part 1: Router
 
-Here you will define available routes, rules for navigation and export router methods.
+Here you will define types, available routes, rules for navigation and export router methods.
+
+#### Define types
+
+It is recommended to create separate file with `.ts` or `.d.ts` extension for Gouter types. You may
+name it `routerTypes` for example. Add following type definitions to it (`.ts`):
+
+```ts
+import { State } from 'gouter';
+import { ScreenMap } from 'gouter/native';
+
+export type GouterConfig = {
+  // your config
+};
+
+export type GouterState<T extends keyof GouterConfig = keyof GouterConfig> = State<GouterConfig, T>;
+
+export type GouterScreen = ScreenMap<GouterState>;
+```
+
+`GouterState` may be used to create typed states and `GouterScreen` makes your screens fully typed.
+
+Now fill your config. The keys of the config are screen names and their values are screen
+parameters. Gouter instance will use it for type suggestions. For example:
+
+```ts
+export type GouterConfig = {
+  App: {};
+  LoginStack: {};
+  Login: {
+    name: string;
+  };
+  LoginModal: {};
+  LoginConfirmationStack: {};
+  LoginConfirmation: {
+    phone: string;
+  };
+  LoginDrawer: {};
+  Tabs: {};
+  Home: {};
+  Post: {};
+  Profile: {};
+};
+```
 
 #### Define routes
 
-Import Gouter and pass your routes to it as object where keys are route names and values are
-parameters definitions. Routes not only help with type suggestions but define how to encode state to
-url and decode it back. Parameters definitions are objects where keys are parameter names and values
-are strings, tuples or objects with decode/encode methods. Please, note: the order of that parameter
-definitions matters for encoding/decoding.
-
-- Strings are used only as static parts to encode/decode urls (`'/login'`, `'/tabs'`) and will not
-  be presented as state parameters, but used to convert states and urls. So you may use any keys for
-  them (like `_` in examples).
-- Tuples are used for url path parameters and will be presented as string or string array parameters
-  (`[]`, `['/', /\d+/]`). They consist of all optional prefix, regexp, suffix and modifier
-  (`'' | '?' | '+' | '*'`). This structure is chosen due to compatibility with `path-to-regexp`
-  module which is Gouter dependency that helps to convert urls to states and back. You may customize
-  that conversion using `setPathToRegexpOptions` method.
-- Objects with `encode` and `decode` methods are used for url query parameters and will be presented
-  as state parameters (`{ decode: parseFloat, encode: String }`) with type of `decode` result. If
-  you set `required` flag to true then query parameter will be mandatory. You may use
-  `QueryParamDef<T>` type to define them before creating Gouter instance.
-
-When you pass routes you should also define special required 'notFound' route with key `_` and `url`
-param. It is used to handle situations when state or url is broken and cannot be encoded/decoded
-normally. You may add 404 screen for it.
-
-```js
-import Gouter from 'gouter';
-import { newStackNavigator, newTabNavigator } from 'gouter/navigators';
-
-const gouter = new Gouter({
-  _: {
-    url: [],
-  },
-  App: {
-    _: '/',
-  },
-  LoginStack: {
-    _: '/login-stack',
-  },
-  Login: {
-    _: '/login',
-    name: { decode: (str) => str, encode: (str) => str },
-  },
-  LoginModal: {
-    _: '/login/modal',
-  },
-  LoginConfirmationStack: {
-    _: '/login-confirmation-stack',
-  },
-  LoginConfirmation: {
-    _: '/login-confirmation',
-    phone: ['/', /\d+/],
-  },
-  LoginDrawer: {
-    _: '/login/drawer',
-  },
-  Tabs: {
-    _: '/tabs',
-  },
-  Home: {
-    _: '/home',
-  },
-  Post: {
-    _: '/post',
-  },
-  Profile: {
-    _: '/profile',
-  },
-});
-```
-
-Each Gouter instance uses strictly typed tree-like structure called `State` to represent current
-router state (called `rootState`) and that's enough to represent any complex navigation state
-including tabs, drawers, modals etc.
+Now when you have that type definitions let's create Gouter instance. Add another file with `.ts` or
+`.js` extension for Gouter types. You may name it `router` for example. Put following code to this
+file (`.ts`):
 
 ```ts
-type State<Routes> = {
+import Gouter, { Routes } from 'gouter';
+import { newStackNavigator, newTabNavigator, newSwitchNavigator } from 'gouter/navigators';
+import { GouterConfig } from 'routerTypes';
+
+const routes: Routes<GouterConfig> = {
+  // your routes
+};
+
+const gouter = new Gouter(
+  routes,
+  // pass your initial state instead
+  { name: 'App', params: {} },
+);
+
+const { setRootState, goTo, goBack, replace, getRootState, listen, getStateKey, batch } = gouter;
+
+export { goTo, goBack, replace, getRootState, setRootState, listen, getStateKey, batch };
+```
+
+First we import the `Gouter` itself to create an instance and `Routes` type to define routes for
+that instance. They are imported from `gouter` package which is router core. We already imported
+`State` for type definitions, but it also has other useful types like `ParamDef`, `Navigator`,
+`Route` for advanced use cases.
+
+Next we fill routes using type suggestions from our `GouterConfig`. Everything in `Route` type is
+optional, so at first you may pass empty objects `{}` to each route name. Like that:
+
+```ts
+const routes: Routes<GouterConfig> = {
+  App: {},
+  Login: {},
+  Tabs: {},
+};
+```
+
+However we cannot normally navigate without at least one navigator and list of allowed route names
+for navigation. Always use `allowed` field otherwise `goTo` navigation method will not work. For
+example:
+
+```ts
+const routes: Routes<GouterConfig> = {
+  App: {
+    navigator: newStackNavigator({}),
+    allowed: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
+  },
+  Login: {},
+  Tabs: {},
+};
+```
+
+Here `newStackNavigator` call creates customized navigator instance. We imported it from
+`gouter/navigators` which has good set of useful navigators. You may also write your own later using
+`Navigator` type if they are not enough for your needs.
+
+Let's check following example of routes:
+
+```ts
+const routes: Routes<GouterConfig> = {
+  App: {
+    navigator: newStackNavigator({}),
+    allowed: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
+    builder: (state) => ({
+      ...state,
+      stack: [{ name: 'LoginStack', params: {} }],
+    }),
+  },
+  LoginStack: {
+    navigator: newStackNavigator({}),
+    allowed: ['Login', 'LoginModal'],
+    builder: (state) => ({
+      ...state,
+      stack: [{ name: 'Login', params: { name: 'user' } }],
+    }),
+  },
+  Login: {
+    builder: (state) => ({ ...state, params: { name: 'user' } }),
+    redirector: () => [{ name: 'LoginStack', params: {} }],
+  },
+  LoginModal: {},
+  LoginConfirmationStack: {
+    navigator: newStackNavigator({}),
+    allowed: ['LoginConfirmation', 'LoginDrawer'],
+  },
+  LoginConfirmation: {
+    redirector: () => [{ name: 'LoginConfirmationStack', params: {} }],
+  },
+  LoginDrawer: {},
+  Tabs: {
+    navigator: newTabNavigator({}),
+    allowed: ['Home', 'Post', 'Profile'],
+    builder: (state) => ({
+      ...state,
+      stack: [
+        { name: 'Home', params: {} },
+        { name: 'Post', params: {} },
+        { name: 'Profile', params: {} },
+      ],
+    }),
+  },
+  Home: {},
+  Post: {},
+  Profile: {},
+};
+```
+
+It has two new things: `builder` and `redirector` fields. The builder is a function which creates
+updated state when that stack has no stack. So when you navigate to a route with `builder` and state
+with empty stack it will be updated automatically, for example we may create stack for it. And
+`redirector` goes through it's states to simplify our navigation to inner states.
+
+#### Key generation
+
+Some states should have unique id or ids. Imagine posts, users and stuff like that. So to
+distinguish states Gouter needs `keygen` field in a route. It should be simple function which
+returns unique string based on state params:
+
+```ts
+const UserRoute: Route<GouterConfig, 'User'> = {
+  keygen: ({ id }) => id,
+};
+```
+
+Now you may create multiple user states in same stack and easily navigate to them by their id.
+
+#### About Gouter states
+
+Each Gouter instance uses strictly typed tree-like structure called `State` to represent current
+router state (called `rootState`) and that's enough for any complex navigation tree including tabs,
+drawers, modals etc.
+
+```ts
+type State<GouterConfig> = {
   name: string; // unique route name
-  params: Record<string, any>; // path and query params
+  params: Record<string, any>; // params for that route name
   stack?: State[]; // optional list of inner states
   index?: number; // optional index of focused state in stack
 };
 ```
 
-#### Extract methods
+#### Create Gouter instance
+
+When your routes are defined you should pass them into Gouter constructor alongside with initial
+state. Created instance has useful methods to control navigation like `goTo`, `goBack` etc.
+
+```ts
+const gouter = new Gouter(
+  routes,
+  // pass your initial state instead
+  { name: 'App', params: {} },
+);
+```
+
+#### Export methods
 
 Since Gouter is highly customizable it doesn't hide most of it's methods and/or fields and Gouter
 class may be even extended to redefine them all. You decide what you will export from it's instance.
 However some parts are mandatory in order to use `GouterNative` like `getRootState`, `listen`,
-`goBack`, `encodePath`.
+`goBack`, `getStateKey`.
 
-```js
+```ts
 const {
   setRootState,
   setBuilders,
@@ -126,119 +244,60 @@ const {
   replace,
   getRootState,
   listen,
-  encodePath,
+  getStateKey,
 } = gouter;
+
+export { goTo, goBack, replace, getRootState, setRootState, listen, getStateKey };
 ```
 
-#### Set navigators
+#### Decode and encode urls
 
-Gouter navigators is powerful mechanism to control navigation flow.
-
-```js
-setNavigators({
-  App: newStackNavigator(gouter, {
-    names: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
-  }),
-  Tabs: newTabNavigator(gouter, {
-    names: ['Home', 'Post', 'Profile'],
-  }),
-  LoginStack: newStackNavigator(gouter, {
-    names: ['Login', 'LoginModal'],
-  }),
-  LoginConfirmationStack: newStackNavigator(gouter, {
-    names: ['LoginConfirmation', 'LoginDrawer'],
-  }),
-});
-```
-
-For convenience we imported ready navigators from `gouter/navigators`. The `navigator` is special
-function which accepts passed state or null, parent state (and rarely grandparents) and returns
-modified parent state or `null`. In case of `null` parent navigator will try to modify it's state
-and so on till the root state. You may create your own navigators for special needs, for example
-navigator which fully replaces current stack with new state:
+Each state could be encoded into url and decoded back. To do this add `path` field to a route first:
 
 ```ts
-const switchNavigator: Navigator<any, any> = (state, parent) => {
-  if (state) {
-    return { ...parent, stack: [state] };
-  } else {
-    return null;
-  }
+const UserRoute: Route<GouterConfig, 'User'> = {
+  path: {
+    _: 'user',
+    id: {},
+  },
 };
 ```
 
-#### Set Builders
+Methods `encodeUrl` and `decodeUrl` will now work and convert `{name: 'User', id: '17'}` into
+`/user/17` and back. The `path` uses two types of keys: started with `_` and others. Keys with `_`
+are static parts of url path, while others are dynamic. You may use any number keys.
 
-Gouter `setBuilders` method customizes how stacks and params are created when you go to some state.
-For each route you may define special function called `builder` which will be launched when you add
-a state without `stack` field to your navigation. It accepts current raw state with list of all
-parent states and returns updated state. When you use navigation methods they all build states and
-you don't need to pass stacks each time to initialize some new state.
-
-```js
-setBuilders({
-  App: (state) => ({ ...state, stack: [{ name: 'LoginWithModal', params: {} }] }),
-  LoginWithModal: (state) => ({ ...state, stack: [{ name: 'Login', params: {} }] }),
-  Login: (state) => ({ name: 'Login', params: { name: 'user', ...state.params } }),
-  Tabs: (state) => ({
-    ...state,
-    stack: [
-      { name: 'Home', params: {} },
-      { name: 'Post', params: {} },
-      { name: 'Profile', params: {} },
-    ],
-  }),
-});
-```
-
-#### Set redirections
-
-Gouter `setRedirections` method helps to simplify navigation via `goTo` and `go`. Instead of passing
-multiple states into `go` method to focus on some deeply nested state you pass only target state.
-This works by adding intermediate states from redirections when you use `go` or `goTo` methods and
-you just need to describe that states in `setRedirections` for your target state name.
-
-```js
-setRedirections({
-  Login: () => [{ name: 'LoginStack', params: {} }],
-  LoginConfirmation: () => [{ name: 'LoginConfirmationStack', params: {} }],
-});
-```
-
-#### Set state
-
-Before you add any listeners you should pass initial root state. If your builders are set and you
-didn't pass any `stack` they will be used to extend passed state. In this example we will get App
-with fresh stack consisting of `LoginStack` and `Login` states.
-
-```js
-setRootState({ name: 'App', params: {} });
-```
-
-#### Add type for screens
-
-This type will help you with type inference when you define screens:
+There is also `query` field which works for optional params (while `path` works only for required
+ones):
 
 ```ts
-export type State = (typeof gouter)['rootState'];
+const UserRoute: Route<GouterConfig, 'User'> = {
+  path: {
+    _: 'user',
+    id: {},
+  },
+  query: {
+    postFilter: {},
+  },
+};
 ```
 
-#### Export extracted methods
+The `query` field doesn't need static parts and now we can convert state like
+`{name: 'User', id: '17', postFilter: 'Jack'}` into `/user/17?postFilter=Jack`.
 
-```js
-export { goTo, goBack, replace, getRootState, setRootState, listen, encodePath };
-```
+Don't forget to check `ParamDef` type used for all path/query params for other decode/encode
+options.
 
 ### Part 2: Screens
 
-Using `State` defined in `router` file and `ScreenMap` from `gouter/native` you may fully type each
-screen:
+Using `Screen` defined in `routerTypes` file and `ScreenMap` from `gouter/native` you may fully type
+each screen:
 
 ```tsx
 import { ScreenMap } from 'gouter/native';
-import { State } from './router';
+import { GouterScreen, GouterState } from './routerTypes';
 
-const App: ScreenMap<State>['App'] = ({ children }) => {
+const App: GouterScreen['App'] = ({ children }) => {
   return (
     <View style={styles.container}>
       <Text>App</Text>
@@ -264,7 +323,7 @@ Add `GouterNative` and some mandatory parts from your Gouter instance at `router
 
 ```js
 import GouterNative from 'gouter/native';
-import { getState, goBack, goTo, listen, replace, encodePath, setState } from './router';
+import { getState, goBack, goTo, listen, replace, getStateKey, setState } from './router';
 ```
 
 #### Animations
@@ -333,9 +392,9 @@ using `StackSettings` type from `gouter/native`.
 
 ```ts
 import { ScreenConfigMap } from 'gouter/native';
-import { State } from './router';
+import { GouterState } from './routerState';
 
-const screenConfigMap: ScreenConfigMap<State> = {
+const screenConfigMap: ScreenConfigMap<GouterState> = {
   _: {
     component: NotFound,
   },
@@ -408,7 +467,7 @@ const AppWrapper = () => {
     <GouterNative
       state={state}
       screenConfigMap={screenConfigMap}
-      encodePath={encodePath}
+      getStateKey={getStateKey}
       goTo={goTo}
     />
   );
@@ -425,11 +484,9 @@ Use exported methods from your `router` file anywhere:
 - `goTo(name, params, stack, index)` to navigate to some state (same as `go(state)`)
 - `goBack()` to navigate back (same as `go(null)`)
 - `replace(replacer)` to replace some inner states of root state
-- `go(...statesOrNulls)` for advanced use cases like navigate back twice and then go to some state
-  etc.
+- `batch(() => {...})` to chain navigation actions without intermediate listeners' executions
 
-The navigation is just a change of current root state via `setRootState` or other methods like `go`,
+The navigation is just a change of current root state via `setRootState` or other methods like
 `goTo`, `goBack` and `replace` which call `setRootState` anyway. After that change gouter calculates
-new state using builders defined by `setBuilders` method if option `disableBuilders` is not enabled.
-Then compares states by `getAreStatesEqual` and if they are not equal it calls previously attached
-listeners via `listen` to notify them about changes.
+new state using builders defined by `builder` fields if option `disableBuilders` is not enabled. In
+the end it calls previously attached listeners via `listen` to notify them about changes.
