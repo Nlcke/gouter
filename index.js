@@ -58,7 +58,7 @@
  * query?: {[K in keyof T[N] as undefined extends T[N][K] ? K : never]?: ParamDef<T[N][K]>}
  * navigator?: Navigator<T, N> | Navigator<T> | Navigator
  * allowed?: (keyof T)[]
- * builder?: (state: State<T, N>) => State<T, N>
+ * builder?: (state: State<T, N>) => {stack: State<T>[], index?: number}
  * redirector?: (state: State<T, N>) => State<T>[]
  * }} Route
  */
@@ -80,7 +80,7 @@
  * @template {Config} T
  * @template {keyof T} [N=keyof T]
  * @typedef {{
- * params?: T[N] | ((params: T[N]) => T[N]),
+ * params?: T[N] | ((params: T[N], unmergedParams: T[N]) => T[N]),
  * stack?: State<T>[] | ((stack: State<T>[], params: T[N]) => State<T>[]),
  * index?: number | ((index: number, stack: State<T>[], params: T[N]) => number)
  * }} StateUpdate
@@ -146,6 +146,13 @@ class Gouter {
     this.paramsKeys = new WeakMap();
 
     /**
+     * Cache to speed up `buildState` method.
+     * @protected
+     * @type {WeakSet<State<T>[]>}
+     */
+    this.stackKeys = new WeakSet();
+
+    /**
      * Cache to speed up `decodePath` method.
      * @protected
      * @type {{[N in keyof T]?: RegExp}}
@@ -181,7 +188,7 @@ class Gouter {
    * @type {(state: State<T>) => string}
    */
   getStateKey(state) {
-    const { paramsKeys, routes } = this;
+    const { paramsKeys } = this;
     const { params } = state;
     const prevParamsKey = paramsKeys.get(params);
     if (prevParamsKey !== undefined) {
@@ -189,6 +196,7 @@ class Gouter {
     }
     const { name } = state;
     let paramsKey = /** @type {string} */ (name);
+    const { routes } = this;
     const { keygen } = routes[name];
     if (keygen) {
       paramsKey += `/${keygen(params)}`;
@@ -204,7 +212,7 @@ class Gouter {
    * @type {(callback: () => void, disableProcessing?: boolean) => void}
    */
   batch(callback, disableProcessing) {
-    const { getRootState, setRootState } = this;
+    const { getRootState, setRootState, buildState } = this;
     const rootState = getRootState();
     this.batchDepth += 1;
     let error;
@@ -219,84 +227,37 @@ class Gouter {
     if (error !== undefined) {
       throw error;
     }
+    const builtState = buildState(nextRootState);
     if (disableProcessing) {
-      this.rootState = nextRootState;
+      this.rootState = builtState;
     } else {
-      setRootState(nextRootState);
+      setRootState(builtState);
     }
   }
 
   /**
-   * Builds new state from a `state` by passing it and `parents`to
-   * appropriate state builder if any.
+   * Creates new state from passed `state` by using appropriate state builder if any. Passed `state`
+   * should have undefined `stack` property to be built.
    *
-   * Note: `builtPaths` should not be passed cause it is created automatically for recursion purposes.
+   * Note: `ignoredKeys` should not be passed cause it is created automatically for recursion purposes.
    * @protected
-   * @type {<N extends keyof T>(state: State<T, N>, builtPaths?: Set<string>) => State<T, N>}
+   * @type {<N extends keyof T>(state: State<T, N>, ignoredKeys?: string[]) => State<T, N>}
    */
-  buildState(state, builtPaths = new Set()) {
-    const { routes, buildState, getStateKey } = this;
-    const path = getStateKey(state);
-    builtPaths.add(path);
+  buildState(state, ignoredKeys = []) {
+    const { stackKeys, getStateKey } = this;
+    const { stack } = state;
+    if (stack && (stackKeys.has(stack) || stack.length === 0)) {
+      return state;
+    }
+    const { routes, buildState } = this;
     const { builder } = routes[state.name];
-    const builtState = builder && !state.stack ? builder(state) : state;
-    const { stack } = builtState;
-    if (stack && stack.length > 0) {
-      const builtStack = stack.map((stackState) => buildState(stackState, builtPaths));
-      const builtStateExt = { ...builtState, stack: builtStack };
-      return builtStateExt;
-    }
-    const builtStateExt = { ...builtState, stack: [] };
-    return builtStateExt;
-  }
-
-  /**
-   * Get true if states are equal, false otherwise.
-   * @protected
-   * @type {(stateA: State<T>, stateB: State<T>) => boolean}
-   */
-  getAreStatesEqual(stateA, stateB) {
-    const { getAreStatesEqual } = this;
-    if (stateA.name !== stateB.name || stateA.index !== stateB.index) {
-      return false;
-    }
-    const paramsA = stateA.params;
-    const paramsB = stateB.params;
-    if (paramsA !== paramsB) {
-      for (const key in paramsA) {
-        if (
-          paramsA[/** @type {keyof paramsA} */ (key)] !==
-          paramsB[/** @type {keyof paramsB} */ (key)]
-        ) {
-          return false;
-        }
-      }
-      for (const key in paramsB) {
-        if (
-          paramsA[/** @type {keyof paramsA} */ (key)] !==
-          paramsB[/** @type {keyof paramsB} */ (key)]
-        ) {
-          return false;
-        }
-      }
-    }
-    const stackA = stateA.stack;
-    const stackB = stateB.stack;
-    if (stackA !== stackB) {
-      if (stackA && stackB) {
-        if (stackA.length !== stackB.length) {
-          return false;
-        }
-        for (let i = 0; i < stackA.length; i += 1) {
-          if (!getAreStatesEqual(stackA[i], stackB[i])) {
-            return false;
-          }
-        }
-      } else {
-        return false;
-      }
-    }
-    return true;
+    const nextIgnoredKeys = [...ignoredKeys, getStateKey(state)];
+    const { stack: rawStack = [], index } =
+      stack || !builder || ignoredKeys.includes(getStateKey(state)) ? state : builder(state);
+    const builtStack = rawStack.map((stackState) => buildState(stackState, nextIgnoredKeys));
+    stackKeys.add(builtStack);
+    const builtState = { ...state, stack: builtStack, index };
+    return builtState;
   }
 
   /**
@@ -309,19 +270,16 @@ class Gouter {
   }
 
   /**
-   * Build and set current router root state and call listeners with it but only if state is changed.
-   * You may disable builders by using `disableBuilders` option.
-   * @type {(state: State<T>, disableBuilders?: boolean) => void}
+   * Build and set current router root state and call listeners with it.
+   * @type {(state: State<T>) => void}
    */
-  setRootState(state, disableBuilders) {
+  setRootState(state) {
     const { batchDepth, buildState, listeners } = this;
-    const builtState = disableBuilders ? state : buildState(state);
-    if (batchDepth > 0) {
-      this.rootState = state;
-      return;
-    }
+    const builtState = buildState(state);
     this.rootState = builtState;
-    listeners.forEach((listener) => listener(builtState));
+    if (batchDepth === 0) {
+      listeners.forEach((listener) => listener(builtState));
+    }
   }
 
   /**
@@ -333,7 +291,10 @@ class Gouter {
     const focusedStates = [state];
     let focusedState = state;
     for (;;) {
-      const stack = focusedState.stack || [];
+      const { stack } = focusedState;
+      if (!stack) {
+        return focusedStates.reverse();
+      }
       const lastIndex = stack.length - 1;
       const index = focusedState.index !== undefined ? focusedState.index : lastIndex;
       focusedState = stack[index] || stack[lastIndex];
@@ -348,12 +309,12 @@ class Gouter {
   /**
    * Get state from list of focused states where list sorted from bottom to top.
    * @protected
-   * @type {(firstFocusedState: State<T>, focusedStates: State<T>[]) => State<T>}
+   * @type {(focusedStates: State<T>[]) => State<T>}
    */
-  getStateFromFocusedStates(firstFocusedState, focusedStates) {
-    let state = firstFocusedState;
-    for (let parentIndex = 1; parentIndex < focusedStates.length; parentIndex += 1) {
-      const focusedState = focusedStates[parentIndex];
+  getStateFromFocusedStates(focusedStates) {
+    let [state] = focusedStates;
+    for (let index = 1; index < focusedStates.length; index += 1) {
+      const focusedState = focusedStates[index];
       const maybeStack = focusedState.stack;
       const stack = maybeStack && maybeStack.length > 1 ? [...maybeStack] : [state];
       const maxIndex = stack.length - 1;
@@ -369,13 +330,13 @@ class Gouter {
    * Applies update to state.
    * Updates in the order: params -> stack -> index.
    * @protected
-   * @type {<N extends keyof T>(state: State<T, N>, update: StateUpdate<T, N>) => State<T, N>}
+   * @type {<N extends keyof T>(state: State<T, N>, update: StateUpdate<T, N>, unmergedParams?: T[N]) => State<T, N>}
    */
-  getUpdatedState(state, update) {
+  getUpdatedState(state, update, unmergedParams) {
     const { buildState } = this;
     const params =
       typeof update.params === 'function'
-        ? update.params(state.params)
+        ? update.params(state.params, unmergedParams || state.params)
         : update.params || state.params;
     const stack = (
       typeof update.stack === 'function'
@@ -392,7 +353,9 @@ class Gouter {
             params,
           )
         : update.index;
-    return { name: state.name, params, stack, index };
+    /** @type {typeof state} */
+    const mergedState = { name: state.name, params, stack, index };
+    return mergedState;
   }
 
   /**
@@ -425,42 +388,36 @@ class Gouter {
     }
     const state = /** @type {State<T, typeof name>} */ ({ name, params });
     const focusedStates = getFocusedStatesFromState(getRootState());
-    for (let index = 0; index < focusedStates.length; index += 1) {
-      const focusedState = focusedStates[index];
+    for (const focusedState of focusedStates) {
       const { navigator, allowed } = routes[focusedState.name];
-      if (navigator && allowed) {
-        const parents = focusedStates.slice(index);
-        if (allowed.indexOf(name) >= 0) {
-          const [firstParent] = parents;
-          let currentIndex;
-          let currentState = state;
-          const { stack: parentStack } = firstParent;
-          if (parentStack && parentStack.length > 0) {
-            const stateKey = getStateKey(state);
-            for (let stackIndex = 0; stackIndex < parentStack.length; stackIndex += 1) {
-              if (getStateKey(parentStack[stackIndex]) === stateKey) {
-                currentIndex = stackIndex;
-                currentState = /** @type {State<T, typeof name>} */ (parentStack[stackIndex]);
-                break;
-              }
+      if (navigator && allowed && allowed.indexOf(name) >= 0) {
+        let currentIndex;
+        let currentState = state;
+        const { stack: parentStack } = focusedState;
+        if (parentStack && parentStack.length > 0) {
+          const stateKey = getStateKey(state);
+          for (let stackIndex = 0; stackIndex < parentStack.length; stackIndex += 1) {
+            if (getStateKey(parentStack[stackIndex]) === stateKey) {
+              currentIndex = stackIndex;
+              currentState = /** @type {State<T, typeof name>} */ (parentStack[stackIndex]);
+              break;
             }
           }
-          const builtState =
-            currentIndex !== undefined
-              ? { ...currentState, params: { ...currentState.params, ...state.params } }
-              : buildState(state);
-          const updatedState = update ? getUpdatedState(builtState, update) : builtState;
-          const nextParent = /** @type {Navigator<T>} */ (navigator)({
-            parent: firstParent,
-            state: updatedState,
-            index: currentIndex,
-            allowed,
-          });
-          if (nextParent !== firstParent) {
-            const nextState = getStateFromFocusedStates(nextParent, parents);
-            setRootState(nextState, true);
-            return;
-          }
+        }
+        const builtState = currentIndex !== undefined ? currentState : buildState(state);
+        const updatedState = update
+          ? getUpdatedState(builtState, update, currentState.params)
+          : builtState;
+        const nextState = /** @type {Navigator<T>} */ (navigator)({
+          parent: focusedState,
+          state: updatedState,
+          index: currentIndex,
+          allowed,
+        });
+        if (nextState !== focusedState) {
+          focusedStates.splice(0, focusedStates.indexOf(focusedState) + 1, buildState(nextState));
+          const nextRootState = getStateFromFocusedStates(focusedStates);
+          setRootState(nextRootState);
         }
       }
     }
@@ -477,23 +434,22 @@ class Gouter {
       getFocusedStatesFromState,
       getStateFromFocusedStates,
       setRootState,
+      buildState,
     } = this;
     const focusedStates = getFocusedStatesFromState(rootState);
-    for (let index = 0; index < focusedStates.length; index += 1) {
-      const focusedState = focusedStates[index];
+    for (const focusedState of focusedStates) {
       const { navigator, allowed } = routes[focusedState.name];
       if (navigator && allowed) {
-        const parents = focusedStates.slice(index);
-        const [firstParent] = parents;
-        const nextParent = /** @type {Navigator<T>} */ (navigator)({
+        const nextState = /** @type {Navigator<T>} */ (navigator)({
           state: null,
-          parent: firstParent,
+          parent: focusedState,
           allowed,
           index: undefined,
         });
-        if (nextParent !== firstParent) {
-          const nextState = getStateFromFocusedStates(nextParent, parents);
-          setRootState(nextState, true);
+        if (nextState !== focusedState) {
+          focusedStates.splice(0, focusedStates.indexOf(focusedState) + 1, buildState(nextState));
+          const nextRootState = getStateFromFocusedStates(focusedStates);
+          setRootState(nextRootState);
           return;
         }
       }
@@ -555,7 +511,7 @@ class Gouter {
   replace(replacer) {
     const { getReplacedState, setRootState } = this;
     const replacedState = getReplacedState(replacer);
-    setRootState(replacedState, true);
+    setRootState(replacedState);
   }
 
   /**

@@ -6,21 +6,18 @@ const routes = {
   App: {
     navigator: newStackNavigator({}),
     allowed: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
-    builder: state => ({
-      ...state,
+    builder: () => ({
       stack: [{name: 'LoginStack', params: {}}],
     }),
   },
   LoginStack: {
     navigator: newStackNavigator({}),
     allowed: ['Login', 'LoginModal'],
-    builder: state => ({
-      ...state,
+    builder: () => ({
       stack: [{name: 'Login', params: {name: 'user'}}],
     }),
   },
   Login: {
-    builder: state => ({...state, params: {name: 'user'}}),
     redirector: () => [{name: 'LoginStack', params: {}}],
   },
   LoginModal: {},
@@ -35,8 +32,7 @@ const routes = {
   Tabs: {
     navigator: newTabNavigator({}),
     allowed: ['Home', 'Post', 'Profile'],
-    builder: state => ({
-      ...state,
+    builder: () => ({
       stack: [
         {name: 'Home', params: {}},
         {name: 'Post', params: {}},
