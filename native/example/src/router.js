@@ -9,6 +9,12 @@ const routes = {
     builder: () => ({
       stack: [{name: 'LoginStack', params: {}}],
     }),
+    shouldGoBack: ({stack = []}) => {
+      if (stack.length === 1) {
+        return false;
+      }
+      return true;
+    },
   },
   LoginStack: {
     navigator: newStackNavigator({}),

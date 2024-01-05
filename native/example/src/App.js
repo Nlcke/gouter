@@ -457,8 +457,8 @@ const drawerSettings = {
   swipeDetectionSize: '80%',
 };
 
-/** @type {import('gouter/native').ScreenConfigMap<GouterConfig>} */
-const screenConfigMap = {
+/** @type {import('gouter/native').Screens<GouterConfig>} */
+const screens = {
   App: {
     component: App,
     stackSettings: defaultSettings,
@@ -519,9 +519,10 @@ const AppWrapper = () => {
   return (
     <GouterNative
       state={state}
-      screenConfigMap={screenConfigMap}
+      screens={screens}
       getStateKey={getStateKey}
       goTo={goTo}
+      goBack={goBack}
     />
   );
 };

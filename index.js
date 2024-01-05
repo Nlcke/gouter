@@ -60,6 +60,8 @@
  * allowed?: (keyof T)[]
  * builder?: (state: State<T, N>) => {stack: State<T>[], index?: number}
  * redirector?: (state: State<T, N>) => State<T>[]
+ * shouldGoTo?: (fromState: State<T, N>, toState: State<T>) => boolean
+ * shouldGoBack?: (state: State<T, N>) => boolean
  * }} Route
  */
 
@@ -84,7 +86,6 @@
  * stack?: State<T>[] | ((stack: State<T>[], params: T[N]) => State<T>[]),
  * index?: number | ((index: number, stack: State<T>[], params: T[N]) => number)
  * }} StateUpdate
-
  */
 
 /**
@@ -253,7 +254,7 @@ class Gouter {
     const { builder } = routes[state.name];
     const nextIgnoredKeys = [...ignoredKeys, getStateKey(state)];
     const { stack: rawStack = [], index } =
-      stack || !builder || ignoredKeys.includes(getStateKey(state)) ? state : builder(state);
+      stack || !builder || ignoredKeys.indexOf(getStateKey(state)) >= 0 ? state : builder(state);
     const builtStack = rawStack.map((stackState) => buildState(stackState, nextIgnoredKeys));
     stackKeys.add(builtStack);
     const builtState = { ...state, stack: builtStack, index };
@@ -363,7 +364,9 @@ class Gouter {
    * with same key generated from passed name and params. If that state exists it
    * merges passed params, otherwise it creates new state with them.
    * Then it applies passed update (if any) in the order: params -> stack -> index.
-   * @type {<N extends keyof T>(name: N, params: T[N], update?: StateUpdate<T, N>) => void}
+   * If a route has `shouldGoTo` then it may skip navigation.
+   * Returns root state if it's changed or null otherwise.
+   * @type {<N extends keyof T>(name: N, params: T[N], update?: StateUpdate<T, N>) => State<T> | null}
    */
   goTo(name, params, update) {
     const {
@@ -389,7 +392,12 @@ class Gouter {
     const state = /** @type {State<T, typeof name>} */ ({ name, params });
     const focusedStates = getFocusedStatesFromState(getRootState());
     for (const focusedState of focusedStates) {
-      const { navigator, allowed } = routes[focusedState.name];
+      const route = routes[focusedState.name];
+      const { shouldGoTo } = route;
+      if (shouldGoTo && !shouldGoTo(focusedState, state)) {
+        return null;
+      }
+      const { navigator, allowed } = route;
       if (navigator && allowed && allowed.indexOf(name) >= 0) {
         let currentIndex;
         let currentState = state;
@@ -415,17 +423,27 @@ class Gouter {
           allowed,
         });
         if (nextState !== focusedState) {
+          const areStatesEqual =
+            nextState.params === focusedState.params &&
+            nextState.stack === focusedState.stack &&
+            nextState.index === focusedState.index;
+          if (areStatesEqual) {
+            return null;
+          }
           focusedStates.splice(0, focusedStates.indexOf(focusedState) + 1, buildState(nextState));
           const nextRootState = getStateFromFocusedStates(focusedStates);
           setRootState(nextRootState);
+          return nextRootState;
         }
       }
     }
+    return null;
   }
 
   /**
-   * Go back using current stack navigator.
-   * @type {() => void}
+   * Go back using stack navigators. If a route has `shouldGoBack` then it may skip navigation.
+   * Returns root state if it's changed or null otherwise.
+   * @type {() => State<T> | null}
    */
   goBack() {
     const {
@@ -438,7 +456,12 @@ class Gouter {
     } = this;
     const focusedStates = getFocusedStatesFromState(rootState);
     for (const focusedState of focusedStates) {
-      const { navigator, allowed } = routes[focusedState.name];
+      const route = routes[focusedState.name];
+      const { shouldGoBack } = route;
+      if (shouldGoBack && !shouldGoBack(focusedState)) {
+        return null;
+      }
+      const { navigator, allowed } = route;
       if (navigator && allowed) {
         const nextState = /** @type {Navigator<T>} */ (navigator)({
           state: null,
@@ -447,13 +470,21 @@ class Gouter {
           index: undefined,
         });
         if (nextState !== focusedState) {
+          const areStatesEqual =
+            nextState.params === focusedState.params &&
+            nextState.stack === focusedState.stack &&
+            nextState.index === focusedState.index;
+          if (areStatesEqual) {
+            return null;
+          }
           focusedStates.splice(0, focusedStates.indexOf(focusedState) + 1, buildState(nextState));
           const nextRootState = getStateFromFocusedStates(focusedStates);
           setRootState(nextRootState);
-          return;
+          return nextRootState;
         }
       }
     }
+    return null;
   }
 
   /**

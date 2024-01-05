@@ -31,15 +31,15 @@ name it `routerTypes` for example. Add following type definitions to it (`.ts`):
 
 ```ts
 import { State } from 'gouter';
-import { ScreenMap } from 'gouter/native';
+import { Screen } from 'gouter/native';
 
 export type GouterConfig = {
   // your config
 };
 
-export type GouterState<T extends keyof GouterConfig = keyof GouterConfig> = State<GouterConfig, T>;
+export type GouterState<N extends keyof GouterConfig = keyof GouterConfig> = State<GouterConfig, N>;
 
-export type GouterScreen = ScreenMap<GouterState>;
+export type GouterScreen<N extends keyof GouterConfig> = Screen<GouterConfig, N>;
 ```
 
 `GouterState` may be used to create typed states and `GouterScreen` makes your screens fully typed.
@@ -184,6 +184,14 @@ updated state when that stack has no stack. So when you navigate to a route with
 with empty stack it will be updated automatically, for example we may create stack for it. And
 `redirector` goes through it's states to simplify our navigation to inner states.
 
+#### Navigation prevention
+
+Sometimes you need to prevent going to some state or going back. There are two route fields for
+this: `shouldGoTo` and `shouldGoBack`. Each field is a function which accepts current state (plus
+additional next state for `shouldGoTo`) and returns boolean. If true then navigation is allowed, if
+false it is blocked. You may also put some side effects into that functions, like showing
+`Press again to exit app` in case of app stack with last child.
+
 #### Key generation
 
 Some states should have unique id or ids. Imagine posts, users and stuff like that. So to
@@ -231,24 +239,7 @@ const gouter = new Gouter(
 Since Gouter is highly customizable it doesn't hide most of it's methods and/or fields and Gouter
 class may be even extended to redefine them all. You decide what you will export from it's instance.
 However some parts are mandatory in order to use `GouterNative` like `getRootState`, `listen`,
-`goBack`, `getStateKey`.
-
-```ts
-const {
-  setRootState,
-  setBuilders,
-  setNavigators,
-  setRedirections,
-  goTo,
-  goBack,
-  replace,
-  getRootState,
-  listen,
-  getStateKey,
-} = gouter;
-
-export { goTo, goBack, replace, getRootState, setRootState, listen, getStateKey };
-```
+`goTo`, `goBack` and `getStateKey`.
 
 #### Decode and encode urls
 
@@ -297,7 +288,7 @@ each screen:
 import { ScreenMap } from 'gouter/native';
 import { GouterScreen, GouterState } from './routerTypes';
 
-const App: GouterScreen['App'] = ({ children }) => {
+const App: GouterScreen<'App'> = ({ children }) => {
   return (
     <View style={styles.container}>
       <Text>App</Text>
@@ -384,17 +375,17 @@ const defaultSettings: StackSettings = {
 };
 ```
 
-#### Screen config map
+#### Screens
 
-Import screens and put each of them into `screenConfigMap` as `component`. Then add required stack
+Import screens and put each of them into `screens` map as `component`. Then add required stack
 settings as `stackSettings` for every screen with children. You may create shared stack settings by
 using `StackSettings` type from `gouter/native`.
 
 ```ts
-import { ScreenConfigMap } from 'gouter/native';
-import { GouterState } from './routerState';
+import { Screens } from 'gouter/native';
+import { GouterConfig } from './routerTypes';
 
-const screenConfigMap: ScreenConfigMap<GouterState> = {
+const screens: Screens<GouterConfig> = {
   _: {
     component: NotFound,
   },
@@ -438,6 +429,10 @@ const screenConfigMap: ScreenConfigMap<GouterState> = {
 };
 ```
 
+In some cases you may need to customize `stackSettings` on the fly. Just convert it into a function
+which accepts current state and returns `stackSettings`. It is convenient to use state params for
+settings control.
+
 #### GouterNative
 
 Finally you create and export main app component. Here we pass things we defined before to
@@ -466,9 +461,10 @@ const AppWrapper = () => {
   return (
     <GouterNative
       state={state}
-      screenConfigMap={screenConfigMap}
+      screens={screens}
       getStateKey={getStateKey}
       goTo={goTo}
+      goBack={goBack}
     />
   );
 };
@@ -481,12 +477,12 @@ export default AppWrapper;
 Use exported methods from your `router` file anywhere:
 
 - `setRootState(state)` to fully control current state
-- `goTo(name, params, stack, index)` to navigate to some state (same as `go(state)`)
-- `goBack()` to navigate back (same as `go(null)`)
-- `replace(replacer)` to replace some inner states of root state
+- `goTo(name, params, update)` to navigate to some state
+- `goBack()` to navigate back
+- `replace(replacer)` to replace some inner states with any depth inside root stack
 - `batch(() => {...})` to chain navigation actions without intermediate listeners' executions
 
 The navigation is just a change of current root state via `setRootState` or other methods like
 `goTo`, `goBack` and `replace` which call `setRootState` anyway. After that change gouter calculates
-new state using builders defined by `builder` fields if option `disableBuilders` is not enabled. In
-the end it calls previously attached listeners via `listen` to notify them about changes.
+new state using builders defined by `builder` fields. In the end it calls previously attached
+listeners via `listen` to notify them about changes.
