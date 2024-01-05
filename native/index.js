@@ -17,9 +17,10 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  */
 
 /**
- * @template {State} ScreenState
+ * @template {import('..').Config} T
+ * @template {keyof T} N
  * @typedef {{
- * state: ScreenState
+ * state: import('..').State<T, N>
  * isFocused: boolean
  * isStale: boolean
  * animationProps: AnimationProps
@@ -43,20 +44,29 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  */
 
 /**
+ * @template {import('..').Config} T
+ * @template {keyof T} N
+ * @typedef {(state: import('..').State<T, N>) => StackSettings} ComputableStackSettings
+ */
+
+/**
+ * @template {import('..').Config} T
+ * @template {keyof T} N
  * @typedef {{
- * component: React.ComponentType<ScreenProps<any>>
- * stackSettings?: StackSettings
+ * component: React.ComponentType<ScreenProps<T, N>>
+ * stackSettings?: StackSettings | ComputableStackSettings<T, N>
  * }} ScreenConfig
  */
 
 /**
- * @template {State} ScreenState
- * @typedef {{[Name in ScreenState['name']]: ScreenConfig}} ScreenConfigMap
+ * @template {import('..').Config} T
+ * @typedef {{[N in keyof T]: ScreenConfig<T, N>}} ScreenConfigMap
  */
 
 /**
- * @template {State} ScreenState
- * @typedef {{[Name in ScreenState['name']]: React.FC<ScreenProps<ScreenState & {name: Name}>>}} ScreenMap
+ * @template {import('..').Config} T
+ * @template {keyof T} N
+ * @typedef {React.FC<ScreenProps<T, N>>} Screen
  */
 
 const swipeStartThreshold = 5;
@@ -68,7 +78,7 @@ const defaultStackSettings = {
   animationDuration: 0,
 };
 
-/** @type {ScreenConfig} */
+/** @type {ScreenConfig<any, any>} */
 const defaultScreenConfig = {
   component: () => null,
 };
@@ -306,7 +316,11 @@ const GouterNativeStack = memo(
 
     const thisScreenConfig = screenConfigMap[state.name] || defaultScreenConfig;
 
-    const thisStackSettings = thisScreenConfig.stackSettings || defaultStackSettings;
+    const { stackSettings } = thisScreenConfig;
+    const thisStackSettings =
+      typeof stackSettings === 'function'
+        ? stackSettings(state)
+        : stackSettings || defaultStackSettings;
     const thisStackSettingsRef = useRef(thisStackSettings);
     thisStackSettingsRef.current = thisStackSettings;
 

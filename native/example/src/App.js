@@ -66,7 +66,7 @@ const Button = ({title, onPress, selected}) => (
   </TouchableOpacity>
 );
 
-/** @type {GouterScreen['App']} */
+/** @type {GouterScreen<'App'>} */
 const App = ({children}) => {
   return (
     <View style={styles.container}>
@@ -76,17 +76,17 @@ const App = ({children}) => {
   );
 };
 
-/** @type {GouterScreen['LoginStack']} */
+/** @type {GouterScreen<'LoginStack'>} */
 const LoginStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
-/** @type {GouterScreen['LoginConfirmationStack']} */
+/** @type {GouterScreen<'LoginConfirmationStack'>} */
 const LoginConfirmationStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
-/** @type {GouterScreen['LoginModal']} */
+/** @type {GouterScreen<'LoginModal'>} */
 const LoginModal = () => {
   return (
     <View style={styles.modalContainer} renderToHardwareTextureAndroid>
@@ -95,7 +95,7 @@ const LoginModal = () => {
   );
 };
 
-/** @type {GouterScreen['Login']} */
+/** @type {GouterScreen<'Login'>} */
 const Login = ({state}) => {
   return (
     <View style={styles.container}>
@@ -126,7 +126,7 @@ const Login = ({state}) => {
   );
 };
 
-/** @type {GouterScreen['LoginConfirmation']} */
+/** @type {GouterScreen<'LoginConfirmation'>} */
 const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
   const [parentIndex] = parentIndexes;
 
@@ -212,7 +212,7 @@ const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
   );
 };
 
-/** @type {GouterScreen['Tabs']} */
+/** @type {GouterScreen<'LoginDrawer'>} */
 export const LoginDrawer = () => {
   return (
     <View style={{flexDirection: 'row', flex: 1}}>
@@ -234,7 +234,7 @@ export const LoginDrawer = () => {
   );
 };
 
-/** @type {GouterScreen['Tabs']} */
+/** @type {GouterScreen<'Tabs'>} */
 const Tabs = ({state: tabsState, children}) => {
   const stack = tabsState.stack || [];
   const currentIndex =
@@ -291,7 +291,7 @@ const Tabs = ({state: tabsState, children}) => {
   );
 };
 
-/** @type {GouterScreen['Home']} */
+/** @type {GouterScreen<'Home'>} */
 const Home = () => {
   return (
     <View style={styles.container}>
@@ -302,7 +302,7 @@ const Home = () => {
   );
 };
 
-/** @type {GouterScreen['Post']} */
+/** @type {GouterScreen<'Post'>} */
 const Post = () => {
   return (
     <View style={styles.container}>
@@ -313,7 +313,7 @@ const Post = () => {
   );
 };
 
-/** @type {GouterScreen['Profile']} */
+/** @type {GouterScreen<'Profile'>} */
 const Profile = () => {
   return (
     <ScrollView style={styles.container}>
@@ -457,7 +457,7 @@ const drawerSettings = {
   swipeDetectionSize: '80%',
 };
 
-/** @type {import('gouter/native').ScreenConfigMap<GouterState>} */
+/** @type {import('gouter/native').ScreenConfigMap<GouterConfig>} */
 const screenConfigMap = {
   App: {
     component: App,
