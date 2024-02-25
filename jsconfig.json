@@ -2,8 +2,9 @@
   "compilerOptions": {
     "target": "ES2015",
     "module": "ES2015",
-    "checkJs": true,
+    "lib": ["ES2015"],
     "moduleResolution": "node",
+    "checkJs": true,
     "strict": true,
     "noImplicitReturns": true,
     "pretty": true,

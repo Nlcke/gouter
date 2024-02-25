@@ -1,18 +1,20 @@
 {
   "compilerOptions": {
+    "target": "ES2015",
+    "module": "ES2015",
     "lib": ["ES2015"],
+    "moduleResolution": "node",
     "allowJs": true,
     "checkJs": true,
     "declaration": true,
     "emitDeclarationOnly": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["index.js", "navigators/index.js", "native/index.js"],
+  "include": ["index.js", "navigators/index.js", "native/index.js", "state/index.js"],
   "typedocOptions": {
-    "entryPoints": ["index.js", "navigators/index.js", "native/index.js"],
+    "entryPoints": ["index.js", "navigators/index.js", "native/index.js", "state/index.js"],
     "out": "docs",
     "media": "media"
   }

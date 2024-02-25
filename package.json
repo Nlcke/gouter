@@ -1,26 +1,27 @@
 {
   "name": "gouter",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "description": "universal router",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "prepack": "tsc",
-    "postpack": "rimraf index.d.ts native/index.d.ts navigators/index.d.ts",
-    "typedoc": "typedoc",
+    "prepack": "tsc --project publish.tsconfig.json",
+    "postpack": "rimraf index.d.ts native/index.d.ts navigators/index.d.ts state/index.d.ts",
+    "typedoc": "typedoc --tsconfig publish.tsconfig.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "exports": {
     ".": "./index.js",
     "./native": "./native/index.js",
-    "./navigators": "./navigators/index.js"
+    "./navigators": "./navigators/index.js",
+    "./state": "./state/index.js"
   },
   "devDependencies": {
     "eslint": "^8.40.0",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^8.8.0",
     "prettier": "^2.8.8",
-    "typedoc": "^0.25.4"
+    "typedoc": "^0.25.8"
   },
   "peerDependencies": {
     "history": "^5.3.0"
@@ -29,6 +30,7 @@
     "index.js",
     "native/index.js",
     "navigators/index.js",
+    "state/index.js",
     "*.d.ts",
     "media/icon.png"
   ],

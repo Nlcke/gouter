@@ -19,5 +19,6 @@ module.exports = {
     'react/jsx-filename-extension': 'off',
     'arrow-body-style': 'off',
     'class-methods-use-this': 'off',
+    'import/prefer-default-export': 'off',
   },
 };

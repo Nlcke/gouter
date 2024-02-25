@@ -3,4 +3,5 @@ node_modules
 /index.d.ts
 native/index.d.ts
 navigators/index.d.ts
+state/index.d.ts
 /docs

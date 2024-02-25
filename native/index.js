@@ -1,9 +1,7 @@
 import { memo, useCallback, useMemo, useRef, useState, createElement } from 'react';
 import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
-/** @typedef {import('..').default<any>} Gouter */
-
-/** @typedef {import('..').State<import('..').Config>} State */
+/** @typedef {import('../state').GouterState} State */
 
 /**
  * @typedef {{
@@ -20,7 +18,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * @template {import('..').Config} T
  * @template {keyof T} N
  * @typedef {{
- * state: import('..').State<T, N>
+ * state: import('../state').GouterState<T, N>
  * isFocused: boolean
  * isStale: boolean
  * animationProps: AnimationProps
@@ -46,7 +44,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 /**
  * @template {import('..').Config} T
  * @template {keyof T} N
- * @typedef {(state: import('..').State<T, N>) => StackSettings} ComputableStackSettings
+ * @typedef {(state: import('../state').GouterState<T, N>) => StackSettings} ComputableStackSettings
  */
 
 /**
@@ -78,15 +76,15 @@ const defaultStackSettings = {
   animationDuration: 0,
 };
 
+/** @type {State[]} */
+const emptyStack = [];
+
 /** @type {ScreenConfig<any, any>} */
 const defaultScreenConfig = {
   component: () => null,
 };
 
 const defaultStackSettingsRef = { current: defaultStackSettings };
-
-/** @type {State[]} */
-const emptyStack = [];
 
 const defaultAnimatedValue = /** @type {EnhancedAnimatedValue} */ (new Animated.Value(0));
 defaultAnimatedValue.value = 0;
@@ -104,16 +102,15 @@ const defaultAnimatedParentIndexes = [];
  * @type {(
  * prevStack: State[],
  * nextStack: State[],
- * getStateKey: (state: State) => string
  * )=> State[]}
  */
-const getJoinedStack = (prevStack, nextStack, getStateKey) => {
+const getJoinedStack = (prevStack, nextStack) => {
   if (prevStack === nextStack || prevStack.length === 0) {
     return nextStack;
   }
 
-  const prevPaths = prevStack.map(getStateKey);
-  const nextPaths = nextStack.map(getStateKey);
+  const prevPaths = prevStack.map((state) => state.key);
+  const nextPaths = nextStack.map((state) => state.key);
 
   let lastPath = null;
 
@@ -179,10 +176,8 @@ const nextIndexMap = new WeakMap();
 /**
  * @type {React.FC<{
  * state: State
+ * routes: import('..').Routes<any>
  * screens: Screens<any>
- * getStateKey: Gouter['getStateKey']
- * goTo: Gouter['goTo']
- * goBack: Gouter['goBack']
  * isStale: boolean
  * isFocused: boolean
  * index: number
@@ -197,10 +192,8 @@ const nextIndexMap = new WeakMap();
 const GouterNativeStack = memo(
   ({
     state,
+    routes,
     screens,
-    getStateKey,
-    goTo,
-    goBack,
     isStale,
     isFocused,
     index,
@@ -213,7 +206,7 @@ const GouterNativeStack = memo(
   }) => {
     const [, updateState] = useState([]);
 
-    const nextStack = state.stack || emptyStack;
+    const nextStack = state.stack;
 
     const nextStackRef = useRef(nextStack);
     nextStackRef.current = nextStack;
@@ -229,17 +222,14 @@ const GouterNativeStack = memo(
       }
     }, []);
 
-    const stack = useMemo(
-      () => getJoinedStack(prevStack, nextStack, getStateKey),
-      [getStateKey, nextStack, prevStack],
-    );
+    const stack = useMemo(() => getJoinedStack(prevStack, nextStack), [nextStack, prevStack]);
 
     prevStackRef.current = stack;
 
     const thisStackRef = useRef(stack);
     thisStackRef.current = stack;
 
-    const focusedFreshIndex = state.index !== undefined ? state.index : nextStack.length - 1;
+    const focusedFreshIndex = state.focusedIndex;
     const focusedIndex = stack.indexOf(nextStack[focusedFreshIndex]);
     const thisAnimatedFocusedIndex = useEnhancedAnimatedValue(focusedIndex);
 
@@ -352,6 +342,26 @@ const GouterNativeStack = memo(
     const stateRef = useRef(state);
     stateRef.current = state;
 
+    const blockedRef = useRef({ prev: false, next: false });
+
+    const parentStack = state.parent ? state.parent.stack : emptyStack;
+
+    const prevParentStackRef = useRef(parentStack);
+    const prevParentStack = prevParentStackRef.current;
+    prevParentStackRef.current = parentStack;
+
+    if (parentStack !== prevParentStack) {
+      const route = routes[state.name] || {};
+      const { parent } = state;
+      if (route.blocker && parent) {
+        const fromStateIndex = parent.stack.indexOf(state);
+        const prevState = parent.stack[fromStateIndex - 1];
+        const nextState = parent.stack[fromStateIndex + 1];
+        blockedRef.current.prev = prevState && route.blocker(state, prevState);
+        blockedRef.current.next = nextState && route.blocker(state, nextState);
+      }
+    }
+
     const bounceAnimation = useMemo(
       () => Animated.spring(thisAnimatedBounce, { toValue: 0, useNativeDriver: true, delay: 32 }),
       [thisAnimatedBounce],
@@ -406,7 +416,7 @@ const GouterNativeStack = memo(
         }
         return shouldSet;
       },
-      [animatedFocusedIndex, animatedHeight, animatedWidth, stackSettingsRef],
+      [animatedFocusedIndex.value, animatedHeight, animatedWidth, stackSettingsRef],
     );
 
     /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderMove']>} */
@@ -425,7 +435,11 @@ const GouterNativeStack = memo(
         const valueRaw = valueRef.current - offset;
         const maxIndex = stackRef.current.length - 1;
         const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
-        if (value !== valueRaw) {
+        if (
+          value !== valueRaw ||
+          (valueRaw > indexRef.current && blockedRef.current.next) ||
+          (valueRaw < indexRef.current && blockedRef.current.prev)
+        ) {
           valueRef.current = (valueRaw > maxIndex ? maxIndex : 0) + offset;
           const bounceRaw = thisAnimatedBounce.value + valueRaw - value;
           const bounce = Math.max(Math.min(bounceRaw, maxIndex + 1), -1);
@@ -466,34 +480,23 @@ const GouterNativeStack = memo(
         const value = valueRaw < 0 ? 0 : valueRaw > maxIndex ? maxIndex : valueRaw;
         const nextPossibleIndex = Math.round(value);
         const nextState = stackRef.current[nextPossibleIndex] || stateRef.current;
-        let rootState = null;
-        if (nextState !== stateRef.current) {
-          const goBackPreferred = swipeDetection === 'left' || swipeDetection === 'top';
-          rootState = goBackPreferred ? goBack() : goTo(nextState.name, nextState.params);
-        }
-        const nextIndex = rootState ? nextPossibleIndex : indexRef.current;
+        // let blocked = false;
+        // const fromState = stateRef.current;
+        const nextIndex = nextState ? nextPossibleIndex : indexRef.current;
         const diff = 2 * Math.abs(nextIndex - value);
         const duration = Math.max(64, 500 * diff);
-        if (rootState) {
-          nextIndexMap.set(animatedFocusedIndex, nextIndex);
-        } else {
-          nextIndexMap.delete(animatedFocusedIndex);
-        }
+        // if (rootState) {
+        //   nextIndexMap.set(animatedFocusedIndex, nextIndex);
+        // } else {
+        //   nextIndexMap.delete(animatedFocusedIndex);
+        // }
         Animated.timing(animatedFocusedIndex, {
           toValue: nextIndex,
           useNativeDriver: true,
           duration,
         }).start();
       },
-      [
-        animatedFocusedIndex,
-        animatedHeight,
-        animatedWidth,
-        goBack,
-        goTo,
-        stackRef,
-        stackSettingsRef,
-      ],
+      [animatedFocusedIndex, animatedHeight, animatedWidth, stackRef, stackSettingsRef],
     );
 
     const panHandlers = useMemo(
@@ -547,11 +550,9 @@ const GouterNativeStack = memo(
       () =>
         stack.map((subState, subIndex) =>
           createElement(GouterNativeStack, {
-            key: getStateKey(subState),
+            key: subState.key,
             state: subState,
-            getStateKey,
-            goTo,
-            goBack,
+            routes,
             screens,
             isStale: nextStack.indexOf(subState) === -1,
             isFocused: subIndex === focusedIndex,
@@ -565,17 +566,15 @@ const GouterNativeStack = memo(
           }),
         ),
       [
-        stack,
-        getStateKey,
-        goTo,
-        goBack,
-        screens,
-        nextStack,
         focusedIndex,
+        nextStack,
+        routes,
+        screens,
+        stack,
         thisAnimatedFocusedIndex,
-        thisAnimatedWidth,
         thisAnimatedHeight,
         thisAnimatedParentIndexes,
+        thisAnimatedWidth,
       ],
     );
 
@@ -585,13 +584,13 @@ const GouterNativeStack = memo(
     );
 
     return createElement(Animated.View, {
-      key: getStateKey(state),
+      key: state.key,
       ...panHandlers,
       style,
       children: [
         Screen
           ? createElement(Screen, {
-              key: getStateKey(state),
+              key: state.key,
               state,
               isFocused,
               isStale,
@@ -607,14 +606,12 @@ const GouterNativeStack = memo(
 
 /**
  * @type {React.FC<{
- * state: State
+ * rootState: State
+ * routes: import('..').Routes<any>
  * screens: Screens<any>
- * getStateKey: (state: {name: any, params: Record<string, any>}) => string
- * goTo: (name: any, params: Record<string, any>, stack?: any) => State | null
- * goBack: () => State | null
  * }>}
  */
-const GouterNative = memo((props) =>
+export const GouterNative = memo(({ rootState, routes, screens }) =>
   createElement(GouterNativeStack, {
     isStale: false,
     isFocused: true,
@@ -625,8 +622,8 @@ const GouterNative = memo((props) =>
     animatedWidth: useEnhancedAnimatedValue(Dimensions.get('window').width),
     animatedHeight: useEnhancedAnimatedValue(Dimensions.get('window').height),
     animatedParentIndexes: defaultAnimatedParentIndexes,
-    ...props,
+    state: rootState,
+    routes,
+    screens,
   }),
 );
-
-export default GouterNative;
