@@ -390,7 +390,8 @@ class Gouter {
       }
     }
     const state = /** @type {State<T, typeof name>} */ ({ name, params });
-    const focusedStates = getFocusedStatesFromState(getRootState());
+    const rootState = getRootState();
+    const focusedStates = getFocusedStatesFromState(rootState);
     for (const focusedState of focusedStates) {
       const route = routes[focusedState.name];
       const { shouldGoTo } = route;
@@ -436,6 +437,12 @@ class Gouter {
           return nextRootState;
         }
       }
+    }
+    if (getStateKey(state) === getStateKey(rootState)) {
+      const nextState = /** @type {typeof state} */ ({ ...rootState, params });
+      const nextRootState = update ? getUpdatedState(nextState, update) : state;
+      setRootState(nextRootState);
+      return nextRootState;
     }
     return null;
   }
