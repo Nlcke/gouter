@@ -1,5 +1,5 @@
-import React, {useEffect, useMemo, useState} from 'react';
-import GouterNative from 'gouter/native';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {GouterNative} from 'gouter/native';
 import {
   StyleSheet,
   Text,
@@ -10,15 +10,7 @@ import {
   Keyboard,
   ScrollView,
 } from 'react-native';
-import {
-  getRootState,
-  goBack,
-  goTo,
-  listen,
-  replace,
-  getStateKey,
-  setRootState,
-} from './router';
+import {create, goBack, goTo, rootState, routes} from './router';
 
 const styles = StyleSheet.create({
   container: {
@@ -109,16 +101,9 @@ const Login = ({state}) => {
       <Button
         title="change name"
         onPress={() =>
-          replace(loginState =>
-            loginState.name === 'Login'
-              ? {
-                  ...loginState,
-                  params: {
-                    name: loginState.params.name === 'user' ? 'guest' : 'user',
-                  },
-                }
-              : loginState,
-          )
+          state.mergeParams({
+            name: state.params.name === 'user' ? 'guest' : 'user',
+          })
         }
       />
       <Button title="show modal" onPress={() => goTo('LoginModal', {})} />
@@ -148,15 +133,12 @@ const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
     [parentIndex],
   );
 
-  const [appState, setAppState] = useState(getRootState);
-  useEffect(() => listen(setAppState), []);
-  const stack = getRootState().stack || [];
-  const hasLogin = !!stack.find(
-    ({name, stack: stackOfLoginStack}) =>
-      name === 'LoginStack' &&
-      stackOfLoginStack &&
-      stackOfLoginStack.find(({name: subName}) => subName === 'Login'),
+  const getHasLogin = useCallback(
+    () => rootState.stack.find(state => state.name === 'LoginStack'),
+    [],
   );
+  const [hasLogin, setHasLogin] = useState(getHasLogin);
+  useEffect(() => rootState.listen(() => setHasLogin(getHasLogin())), []);
 
   return (
     <View style={styles.container}>
@@ -171,42 +153,27 @@ const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
       <Button
         title={hasLogin ? 'remove LoginStack' : 'add LoginStack'}
         onPress={() => {
-          setRootState(
-            hasLogin
-              ? {
-                  ...appState,
-                  stack: stack.filter(({name}) => name !== 'LoginStack'),
-                }
-              : {
-                  ...appState,
-                  stack: [
-                    {
-                      name: 'LoginStack',
-                      params: {},
-                      stack: [
-                        {
-                          name: 'Login',
-                          params: {name: 'user'},
-                        },
-                      ],
-                    },
-                    ...stack,
-                  ],
-                },
-          );
+          const {parent} = state;
+          if (!parent) {
+            return;
+          }
+          if (hasLogin) {
+            rootState.setStack(
+              rootState.stack.filter(({name}) => name !== 'LoginStack'),
+            );
+          } else {
+            rootState.setStack([create('LoginStack', {}), ...rootState.stack]);
+            state.focus();
+          }
         }}
       />
       <Button
         title="goTo Login"
-        onPress={() => {
-          goTo('Login', {name: 'user'});
-        }}
+        onPress={() => goTo('Login', {name: 'user'})}
       />
       <Button
         title="goTo LoginDrawer"
-        onPress={() => {
-          goTo('LoginDrawer', {});
-        }}
+        onPress={() => goTo('LoginDrawer', {})}
       />
     </View>
   );
@@ -235,56 +202,35 @@ export const LoginDrawer = () => {
 };
 
 /** @type {GouterScreen<'Tabs'>} */
-const Tabs = ({state: tabsState, children}) => {
-  const stack = tabsState.stack || [];
-  const currentIndex =
-    tabsState.index !== undefined ? tabsState.index : stack.length - 1;
+const Tabs = ({state, children}) => {
   return (
     <View style={styles.container}>
       <View style={styles.container}>{children}</View>
       <View style={styles.tabBar}>
-        {stack.map(({name}, index) => (
+        {state.stack.map(stackState => (
           <Button
-            key={name}
-            title={name}
-            onPress={() => goTo(name, {})}
-            selected={index === currentIndex}
+            key={stackState.name}
+            title={stackState.name}
+            onPress={() => goTo(stackState.name, {})}
+            selected={stackState === state.focusedChild}
           />
         ))}
         <Button
           key="remove"
           title="- Post"
           onPress={() => {
-            const appState = getRootState();
-            const nextStack = (appState.stack || []).map(subState =>
-              subState.name === 'Tabs'
-                ? {
-                    ...subState,
-                    index: 0,
-                    stack: (subState.stack || []).filter(
-                      ({name}) => name !== 'Post',
-                    ),
-                  }
-                : subState,
+            state.setStack(
+              state.stack.filter(stackState => stackState.name !== 'Post'),
             );
-            setRootState({...appState, stack: nextStack});
           }}
         />
         <Button key="add" title="+ Post" onPress={() => goTo('Post', {})} />
         <Button
           key="reverse"
           title="Reverse"
-          onPress={() =>
-            replace(state =>
-              state === tabsState
-                ? {
-                    ...state,
-                    stack: [...(state.stack || [])].reverse(),
-                    index: (state.stack || []).length - 1 - currentIndex,
-                  }
-                : state,
-            )
-          }
+          onPress={() => {
+            state.setStack(state.stack.slice().reverse());
+          }}
         />
       </View>
     </View>
@@ -439,7 +385,7 @@ const defaultSettings = {
 const modalSettings = {
   animation: modalAnimation,
   animationDuration,
-  swipeDetection: 'vertical',
+  swipeDetection: 'bottom',
 };
 
 /** @type {import('gouter/native').StackSettings} */
@@ -457,8 +403,8 @@ const drawerSettings = {
   swipeDetectionSize: '80%',
 };
 
-/** @type {import('gouter/native').Screens<GouterConfig>} */
-const screens = {
+/** @type {import('gouter/native').ScreenConfigs<Config>} */
+const screenConfigs = {
   App: {
     component: App,
     stackSettings: defaultSettings,
@@ -498,12 +444,26 @@ const screens = {
   },
 };
 
+/** @type {(state: import('gouter/state').GouterState) => any} */
+const toJson = state => ({
+  [`${state.focused ? '+' : '-'} ${state.name} ${JSON.stringify(
+    state.params,
+  ).replace(/"/g, '')}`]: state.stack.map(stackState => toJson(stackState)),
+});
+
+/** @type {(state: import('gouter/state').GouterState) => string} */
+const getJsonStr = state =>
+  JSON.stringify(toJson(state), null, 2).replace(/ *(\{|\}|\},)\n/g, (_, str) =>
+    ' '.repeat(str.replace(/[^ ]/g, '').length),
+  );
+
 const AppWrapper = () => {
-  const [state, setState] = useState(getRootState);
+  const [treeVisible, setTreeVisible] = useState(true);
+  const [jsonStr, setJsonStr] = useState(() => getJsonStr(rootState));
 
-  useEffect(() => listen(setState), []);
+  useEffect(() => rootState.listen(state => setJsonStr(getJsonStr(state))), []);
 
-  useEffect(() => listen(Keyboard.dismiss), []);
+  useEffect(() => rootState.listen(Keyboard.dismiss), []);
 
   useEffect(() => {
     const onHardwareBackPress = () => {
@@ -517,13 +477,35 @@ const AppWrapper = () => {
   }, []);
 
   return (
-    <GouterNative
-      state={state}
-      screens={screens}
-      getStateKey={getStateKey}
-      goTo={goTo}
-      goBack={goBack}
-    />
+    <View style={{flex: 1}}>
+      <GouterNative
+        rootState={rootState}
+        routes={routes}
+        screenConfigs={screenConfigs}
+      />
+      {treeVisible && (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Text
+            style={{
+              backgroundColor: '#00000066',
+              color: 'white',
+              flex: 1,
+            }}>
+            {jsonStr}
+          </Text>
+        </View>
+      )}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          right: 16,
+          backgroundColor: '#dddddd',
+          padding: 4,
+        }}
+        onPress={() => setTreeVisible(visible => !visible)}>
+        <Text>TREE</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 

@@ -140,13 +140,13 @@ export class GouterState {
       state.parent = undefined;
     }
     /** @type {Mutable<typeof this>} */ (this).stack = stack;
-    let maxfocusKey = Number.MIN_SAFE_INTEGER;
+    let maxFocusKey = Number.MIN_SAFE_INTEGER;
     let focusedIndex = -1;
     for (let i = 0; i < stack.length; i += 1) {
       const state = stack[i];
       state.parent = this;
-      if (state.focusKey >= maxfocusKey) {
-        maxfocusKey = state.focusKey;
+      if (state.focusKey >= maxFocusKey) {
+        maxFocusKey = state.focusKey;
         focusedIndex = i;
       }
     }
@@ -163,14 +163,7 @@ export class GouterState {
     const { parent } = this;
     if (parent) {
       const { stack } = parent;
-      let focusedIndex = -1;
-      for (let i = 0; i < stack.length; i += 1) {
-        const state = stack[i];
-        const focused = state === this;
-        if (focused) {
-          focusedIndex = i;
-        }
-      }
+      const focusedIndex = stack.indexOf(this);
       const prevFocusedIndex = parent.focusedIndex;
       if (focusedIndex !== prevFocusedIndex) {
         /** @type {Mutable<typeof parent>} */ (parent).focusedIndex = focusedIndex;
@@ -178,8 +171,12 @@ export class GouterState {
         if (focusedChild) {
           GouterState.schedule(focusedChild);
         }
-        parent.focus();
+        const prevFocusedChild = stack[prevFocusedIndex];
+        if (prevFocusedChild) {
+          GouterState.schedule(focusedChild);
+        }
       }
+      parent.focus();
     }
     this.focusKey = GouterState.currentFocusKey;
     GouterState.currentFocusKey += 1;
@@ -266,9 +263,6 @@ GouterState.notify = () => {
  * @returns
  */
 GouterState.schedule = (state) => {
-  if (!GouterState.listenersByState.has(state)) {
-    return;
-  }
   if (GouterState.schedulerReady) {
     GouterState.schedulerReady = false;
     new Promise((resolve) => {
@@ -276,4 +270,9 @@ GouterState.schedule = (state) => {
     }).then(GouterState.notify);
   }
   GouterState.modifiedStates.add(state);
+  let { parent } = state;
+  while (parent) {
+    GouterState.modifiedStates.add(parent);
+    parent = parent.parent;
+  }
 };

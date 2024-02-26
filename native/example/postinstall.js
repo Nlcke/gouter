@@ -24,7 +24,7 @@ const copyDir = (src, dest, exclude) => {
       copyDir(path.join(src, name), path.join(dest, name), exclude),
     );
   } else {
-    fs.copyFileSync(src, dest);
+    fs.linkSync(src, dest);
   }
 };
 
@@ -36,5 +36,6 @@ copyDir(
     '../../native/example',
     '../../node_modules',
     '../node_modules',
+    '../../docs',
   ].map(normalize),
 );

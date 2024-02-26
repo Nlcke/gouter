@@ -40,15 +40,15 @@ import { GouterState } from './state/index.js';
  * @prop {Navigator<T, N> | Navigator<T> | Navigator} navigator
  * @prop {(keyof T)[]} allowed
  * @prop {(parentState: GouterState<T, N>, toState: GouterState<T> | null) => boolean} [blocker]
- * @prop {(state: GouterState<T, N>, goTo: GoTo<T>) => void} [redirector]
  */
 
 /**
- * Set of rules, describing how to create new state stack.
+ * Set of helpful route options.
  * @template {Config} T
  * @template {keyof T} N
- * @typedef {Object} RouteBuilding
+ * @typedef {Object} RouteHelpers
  * @prop {(state: GouterState<T, N>, create: CreateGouterState<T>) => GouterState<T>[]} [builder]
+ * @prop {(state: GouterState<T, N>, goTo: GoTo<T>) => void} [redirector]
  */
 
 /**
@@ -61,7 +61,7 @@ import { GouterState } from './state/index.js';
  * Set of rules, describing how to navigate, build new state stack, encode and decode urls.
  * @template {Config} T
  * @template {keyof T} N
- * @typedef {Skippable<RouteNavigation<T, N>> & RouteBuilding<T, N>} Route
+ * @typedef {Skippable<RouteNavigation<T, N>> & RouteHelpers<T, N>} Route
  */
 
 /**
@@ -145,6 +145,10 @@ const go = (routes, rootState, toState, options) => {
                 prevState.focus();
                 const nextParams = options.merge ? options.merge(prevParams, params) : params;
                 prevState.setParams(nextParams);
+                const nextStack = navigator(parentState, prevState, route);
+                if (nextStack) {
+                  parentState.setStack(nextStack);
+                }
                 if (options.update) {
                   options.update(prevState);
                 }

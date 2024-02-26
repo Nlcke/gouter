@@ -1,4 +1,4 @@
-type GouterConfig = {
+type Config = {
   App: {};
   LoginStack: {};
   Login: {
@@ -16,8 +16,8 @@ type GouterConfig = {
   Profile: {};
 };
 
-type GouterState<N extends keyof GouterConfig = keyof GouterConfig> =
-  import('gouter').State<GouterConfig, N>;
+type State<N extends keyof Config = keyof Config> =
+  import('gouter/state').GouterState<Config, N>;
 
-type GouterScreen<N extends keyof GouterConfig> =
-  import('gouter/native').Screen<GouterConfig, N>;
+type GouterScreen<N extends keyof Config> =
+  import('gouter/native').GouterScreen<Config, N>;

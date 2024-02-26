@@ -17,26 +17,28 @@ export const newStackNavigator =
   };
 
 /**
- * @type {(options: {}) => import("../index").Navigator}
+ * @type {(options: {backBehavior?: (focusedIndex: number) => number}) => import("../index").Navigator}
  */
 export const newTabNavigator =
-  () =>
+  ({ backBehavior }) =>
   ({ stack, focusedIndex }, toState, { allowed = [] }) => {
     if (toState && toState.parent) {
       return stack;
     }
-    if (toState && focusedIndex === undefined) {
+    if (toState) {
       const nameIndex = allowed.indexOf(toState.name);
       const splitIndex = stack.findIndex(
-        (prevState) => allowed.indexOf(prevState.name) > nameIndex,
+        (stackState) => allowed.indexOf(stackState.name) > nameIndex,
       );
       if (splitIndex >= 0) {
         return [...stack.slice(0, splitIndex), toState, ...stack.slice(splitIndex)];
       }
       return [...stack, toState];
     }
-    const nextIndex = (focusedIndex >= 0 ? focusedIndex : stack.length - 1) + 1;
-    if (nextIndex < stack.length) {
+    const nextIndex = backBehavior ? backBehavior(focusedIndex) : 0;
+    const nextState = stack[nextIndex];
+    if (nextState && nextIndex !== focusedIndex) {
+      nextState.focus();
       return stack;
     }
     return null;
