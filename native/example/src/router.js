@@ -1,5 +1,6 @@
 import {getNavigation} from 'gouter';
 import {newStackNavigator, newTabNavigator} from 'gouter/navigators';
+import {getLinking} from 'gouter/linking';
 
 /** @type {import('gouter').Routes<Config>} */
 export const routes = {
@@ -44,3 +45,5 @@ export const {rootState, create, goBack, goTo} = getNavigation(
   'App',
   {},
 );
+
+export const {decodeUrl, encodeUrl} = getLinking(routes, create);

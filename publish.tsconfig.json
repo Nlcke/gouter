@@ -12,9 +12,21 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["index.js", "navigators/index.js", "native/index.js", "state/index.js"],
+  "include": [
+    "index.js",
+    "state/index.js",
+    "navigators/index.js",
+    "native/index.js",
+    "linking/index.js"
+  ],
   "typedocOptions": {
-    "entryPoints": ["index.js", "navigators/index.js", "native/index.js", "state/index.js"],
+    "entryPoints": [
+      "index.js",
+      "state/index.js",
+      "navigators/index.js",
+      "native/index.js",
+      "linking/index.js"
+    ],
     "out": "docs",
     "media": "media"
   }
