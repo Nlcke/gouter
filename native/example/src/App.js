@@ -97,6 +97,14 @@ const Login = ({state}) => {
         title="go to LoginConfirmation"
         onPress={() => goTo('LoginConfirmation', {phone: '2398723987'})}
       />
+      <Button
+        title="go to Stats #1"
+        onPress={() => goTo('Stats', {animation: 'slide'})}
+      />
+      <Button
+        title="go to Stats #2"
+        onPress={() => goTo('Stats', {animation: 'rotation'})}
+      />
       <Text>{'login '.repeat(100)}</Text>
       <Button
         title="change name"
@@ -107,6 +115,17 @@ const Login = ({state}) => {
         }
       />
       <Button title="show modal" onPress={() => goTo('LoginModal', {})} />
+    </View>
+  );
+};
+
+/** @type {GouterScreen<'Stats'>} */
+const Stats = ({state}) => {
+  return (
+    <View style={styles.container}>
+      <Text>Stats</Text>
+      <Text>animation: {state.params.animation}</Text>
+      <Button title="go back" onPress={goBack} />
     </View>
   );
 };
@@ -418,6 +437,13 @@ const screenConfigs = {
   },
   Login: {
     component: Login,
+  },
+  Stats: {
+    component: Stats,
+    stateSettings: state => ({
+      animation:
+        state.params.animation === 'rotation' ? defaultAnimation : iOSAnimation,
+    }),
   },
   LoginConfirmationStack: {
     component: LoginConfirmationStack,

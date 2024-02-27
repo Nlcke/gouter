@@ -42,9 +42,16 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  */
 
 /**
+ * @typedef {{
+ * animation?: Animation
+ * }} StateSettings
+ */
+
+/**
+ * @template S
  * @template {import('..').Config} T
  * @template {keyof T} N
- * @typedef {(state: import('../state').GouterState<T, N>) => StackSettings} ComputableStackSettings
+ * @typedef {(state: import('../state').GouterState<T, N>) => S} Computable
  */
 
 /**
@@ -52,7 +59,8 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  * @template {keyof T} N
  * @typedef {{
  * component: React.ComponentType<ScreenProps<T, N>>
- * stackSettings?: StackSettings | ComputableStackSettings<T, N>
+ * stackSettings?: StackSettings | Computable<StackSettings, T, N>
+ * stateSettings?: StateSettings | Computable<StateSettings, T, N>
  * }} ScreenConfig
  */
 
@@ -291,7 +299,18 @@ const GouterNativeStack = memo(
       ],
     );
 
-    const { animation } = stackSettingsRef.current;
+    const thisScreenConfig = screenConfigs[state.name] || defaultScreenConfig;
+
+    const { stackSettings, stateSettings } = thisScreenConfig;
+
+    const thisStateSettings =
+      typeof stateSettings === 'function' ? stateSettings(state) : stateSettings;
+
+    const { animation: stackAnimation } = stackSettingsRef.current;
+
+    const animation = thisStateSettings
+      ? thisStateSettings.animation || stackAnimation
+      : stackAnimation;
 
     const animatedStyleOrStyles = useMemo(
       () => (animation ? animation(animationProps) : null),
@@ -311,9 +330,6 @@ const GouterNativeStack = memo(
     const prevFocusedFreshIndex = focusedFreshIndexRef.current;
     focusedFreshIndexRef.current = focusedFreshIndex;
 
-    const thisScreenConfig = screenConfigs[state.name] || defaultScreenConfig;
-
-    const { stackSettings } = thisScreenConfig;
     const thisStackSettings =
       typeof stackSettings === 'function'
         ? stackSettings(state)

@@ -6,7 +6,7 @@ import {getLinking} from 'gouter/linking';
 export const routes = {
   App: {
     navigator: newStackNavigator({}),
-    allowed: ['LoginStack', 'LoginConfirmationStack', 'Tabs'],
+    allowed: ['LoginStack', 'LoginConfirmationStack', 'Tabs', 'Stats'],
     builder: (_, create) => [create('LoginStack', {})],
   },
   LoginStack: {
@@ -18,6 +18,7 @@ export const routes = {
     redirector: (_, goTo) => goTo('LoginStack', {}),
   },
   LoginModal: {},
+  Stats: {},
   LoginConfirmationStack: {
     navigator: newStackNavigator({}),
     allowed: ['LoginConfirmation', 'LoginDrawer'],

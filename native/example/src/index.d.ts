@@ -5,6 +5,9 @@ type Config = {
     name: string;
   };
   LoginModal: {};
+  Stats: {
+    animation?: 'slide' | 'rotation';
+  };
   LoginConfirmationStack: {};
   LoginConfirmation: {
     phone: string;
