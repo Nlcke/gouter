@@ -52,7 +52,7 @@ jobs:
         working-directory: native
 
       - name: Create the docs directory locally in CI
-        run: npx typedoc
+        run: npx typedoc --tsconfig publish.tsconfig.json
 
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4
