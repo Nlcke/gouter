@@ -1,6 +1,6 @@
 /**
  * Main tools to decode and encode urls.
- * @template {Config} T
+ * @template {import('..').Config} T
  * @typedef {Object} Linking
  * @prop {<N extends keyof T>(name: N, params: Partial<T[N]>) => string} encodePath Creates url path
  * string from state name and params. Uses `=` to escape params which equal to next path key and
