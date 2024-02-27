@@ -45,7 +45,7 @@ export class GouterState {
     /** unique key mainly for view libraries @readonly @type {number} */
     this.key = GouterState.currentStateKey;
 
-    /** unique serial number for enhanced focus system @private @type {number} */
+    /** unique serial number for enhanced focus system @protected @type {number} */
     this.focusKey = GouterState.currentFocusKey;
 
     GouterState.currentStateKey += 1;
@@ -64,7 +64,7 @@ export class GouterState {
 
   /**
    * Set parent state of this state or remove it by passing `undefined`.
-   * @private
+   * @protected
    * @type {(nextParent: GouterState<T> | undefined) => void}
    */
   set parent(nextParent) {
@@ -96,7 +96,7 @@ export class GouterState {
 
   /**
    * Current listeners of this state.
-   * @private
+   * @protected
    * @type {Set<Listener<T, N>>}
    * @see {@link listen}
    */
@@ -258,7 +258,8 @@ GouterState.notify = () => {
 };
 
 /**
- * Adds state to modified states. That states' listeners will be called using {@link GouterState.notify}.
+ * Adds state to modified states. That states' listeners will be called using
+ * {@link GouterState.notify}.
  * @param {GouterState} state
  * @returns
  */

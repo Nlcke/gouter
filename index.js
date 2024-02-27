@@ -6,8 +6,27 @@ import { GouterState } from './state/index.js';
  * `Navigator` defines how parent state stack is modified.
  * @template {Config} [T=Config]
  * @template {keyof T} [N=keyof T]
- * @typedef {(parentState: GouterState<T, N>, toState: GouterState<T, N> | null, route: Route<T, N>) => GouterState<T,
- * N>[] | null} Navigator
+ * @typedef {(parentState: GouterState<T, N>, toState: GouterState<T, N> | null, route: Route<T, N>)
+ * => GouterState<T, N>[] | null} Navigator
+ */
+
+/**
+ * `ParamDef` is url parameter definition. It controls how each route parameter is decoded
+ * from url to state and vice versa. Array parameter could be marked as `list` for better url look.
+ * @template P
+ * @typedef {({
+ *   list?: never,
+ *   decode: (str: string) => Exclude<P, undefined>,
+ *   encode?: (val: Exclude<P, undefined>) => string
+ * } | (Exclude<P, undefined> extends Array<infer E> ? {
+ *   list: true,
+ *   decode: ((str: string) => E),
+ *   encode?: ((val: E) => string)
+ * } : never)) | (string extends P ? {
+ *   list?: never,
+ *   decode?: (str: string) => Exclude<P, undefined>,
+ *   encode?: (val: Exclude<P, undefined>) => string
+ * } : never)} ParamDef
  */
 
 /**
@@ -19,17 +38,16 @@ import { GouterState } from './state/index.js';
  * @prop {(keyof T[N])[]} [keys] Enables search for existing state using list of params keys. Empty
  * list always creates new state. Nonempty list will be used to compare existing state params with
  * passed ones. Params compared using strict equality.
- * @prop {(prevParams: T[N], nextParams: T[N]) => T[N]} [merge] Merges previous and next
- * parameters on successful navigation to existing state.
+ * @prop {(prevParams: T[N], nextParams: T[N]) => T[N]} [merge] Merges previous and next parameters
+ * on successful navigation to existing state.
  * @prop {(state: GouterState<T, N>) => void} [update] Callback for further state update. Called
  * after successful navigation.
  */
 
 /**
- * Main navigation tool.
+ * Generic `goTo`.
  * @template {Config} T
- * @typedef {<N extends keyof T>(name: N, params: T[N], options?: GoToOptions<T,
- * N>) => void} GoTo
+ * @typedef {<N extends keyof T>(name: N, params: T[N], options?: GoToOptions<T, N>) => void} GoTo
  */
 
 /**
@@ -40,6 +58,16 @@ import { GouterState } from './state/index.js';
  * @prop {Navigator<T, N> | Navigator<T> | Navigator} navigator
  * @prop {(keyof T)[]} allowed
  * @prop {(parentState: GouterState<T, N>, toState: GouterState<T> | null) => boolean} [blocker]
+ */
+
+/**
+ * Set of rules, describing how to encode and decode urls.
+ * @template {Config} T
+ * @template {keyof T} N
+ * @typedef {Object} RouteLinking
+ * @prop {{[K in keyof T[N] as undefined extends T[N][K] ? never : K]: ParamDef<T[N][K]>} & {[K in
+ * `_${string}`]?: string}} [path]
+ * @prop {{[K in keyof T[N] as undefined extends T[N][K] ? K : never]?: ParamDef<T[N][K]>}} [query]
  */
 
 /**
@@ -61,7 +89,7 @@ import { GouterState } from './state/index.js';
  * Set of rules, describing how to navigate, build new state stack, encode and decode urls.
  * @template {Config} T
  * @template {keyof T} N
- * @typedef {Skippable<RouteNavigation<T, N>> & RouteHelpers<T, N>} Route
+ * @typedef {Skippable<RouteNavigation<T, N>> & RouteHelpers<T, N> & RouteLinking<T, N>} Route
  */
 
 /**
@@ -72,15 +100,19 @@ import { GouterState } from './state/index.js';
  */
 
 /**
+ * Generic `create`.
  * @template {Config} T
- * @typedef {<N extends keyof T>(
- * name: N,
- * params: T[N],
- * stack?: GouterState<T, keyof T>[] | undefined
- * ) => GouterState<T, N>} CreateGouterState
+ * @typedef {<N extends keyof T>( name: N, params: T[N], stack?: GouterState<T, keyof T>[] |
+ * undefined ) => GouterState<T, N>} CreateGouterState
  */
 
 /**
+ * Generic `goBack`.
+ * @typedef {() => void} GoBack
+ */
+
+/**
+ * Returns `create` tool for new states with stack auto-building.
  * @type {<T extends Config>(routes: Routes<T>) => CreateGouterState<T>}
  */
 const getCreate = (routes) => {
@@ -99,7 +131,11 @@ const getCreate = (routes) => {
   return create;
 };
 
-/** @type {(routes: Routes<any>, rootState: GouterState, toState: GouterState | null, options: GoToOptions<any, any>) => void} */
+/**
+ * Handles `goTo` and `goBack`.
+ * @type {(routes: Routes<any>, rootState: GouterState, toState: GouterState | null, options:
+ * GoToOptions<any, any>) => void}
+ */
 const go = (routes, rootState, toState, options) => {
   let parentState = rootState;
   for (;;) {
@@ -109,7 +145,6 @@ const go = (routes, rootState, toState, options) => {
       break;
     }
   }
-
   /** @type {Route<any, any>} */
   const { blocker } = routes[parentState.name] || {};
   if (blocker && blocker(parentState, toState)) {
@@ -179,12 +214,26 @@ const go = (routes, rootState, toState, options) => {
 };
 
 /**
- * @type {<T extends Config, N extends keyof T>(routes: Routes<T>, rootName: N, rootParams: T[N]) => {
- * rootState: GouterState<T, N>
- * goTo: GoTo<T>
- * goBack: () => void
- * create: CreateGouterState<T>
- * }}
+ * Main tools for navigation.
+ * @template {Config} T
+ * @template {keyof T} N
+ * @typedef {Object} Navigation
+ * @prop {GouterState<T, N>} rootState Main state tree.
+ * @prop {GoTo<T>} goTo Main navigation tool. By default it searches for nearest state with passed `name` (and matches
+ * passed `keys` if any) in stacks of focused states. If existing state not found then new state is
+ * created if it is allowed in current stack. Params are replaced by passed ones by default, however
+ * `merge` option may modify this behavior. When navigation is successful optional `update` callback
+ * is called for further state modification.
+ * @prop {GoBack} goBack Secondary navigation tool. It's behavior is defined by `navigator` option in route but usually it
+ * undoes `goTo` changes.
+ * @prop {CreateGouterState<T>} create Tool to create new typed states. It may also automatically build stack using `builder` option of
+ * route.
+ */
+
+/**
+ * Provides main tools for navigation.
+ * @type {<T extends Config, N extends keyof T>(routes: Routes<T>, rootName: N, rootParams: T[N]) =>
+ * Navigation<T, N>}
  */
 export const getNavigation = (routes, rootName, rootParams) => {
   const create = getCreate(routes);
