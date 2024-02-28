@@ -29,7 +29,7 @@ export class GouterState {
    * @param {T[N]} params collection of parameters to customize states
    * @param {GouterState<T>[]} [stack] optional list of inner states
    */
-  constructor(name, params, stack) {
+  constructor(name, params, stack = []) {
     /** string to distinguish states @readonly @type {N} */
     this.name = name;
 
@@ -37,7 +37,7 @@ export class GouterState {
     this.params = params;
 
     /** list of inner states @readonly @type {GouterState<T>[]} */
-    this.stack = [];
+    this.stack = GouterState.emptyStack;
 
     /** index of focused child state @readonly @type {number} */
     this.focusedIndex = -1;
@@ -50,8 +50,10 @@ export class GouterState {
 
     GouterState.currentStateKey += 1;
 
-    if (stack) {
+    if (stack.length) {
       this.setStack(stack);
+    } else {
+      this.stack = stack;
     }
   }
 
@@ -139,6 +141,7 @@ export class GouterState {
    * @param {GouterState<T>[]} stack
    */
   setStack(stack) {
+    const shouldSchedule = this.stack !== GouterState.emptyStack;
     const prevFocusedChild = this.focusedChild;
     for (const state of this.stack) {
       state.parent = undefined;
@@ -160,7 +163,9 @@ export class GouterState {
       GouterState.currentFocusKey += 1;
       focusedChild.focusKey = GouterState.currentFocusKey;
     }
-    GouterState.schedule(this);
+    if (shouldSchedule) {
+      GouterState.schedule(this);
+    }
     return this;
   }
 
@@ -201,10 +206,10 @@ export class GouterState {
   }
 
   /**
-   * Replaces current state fields including name, params, focusedIndex and stack.
-   * @template {keyof T} N
-   * @param {GouterState<T, N>} state
-   * @returns {GouterState<T, N>}
+   * Replaces current state fields including `name`, `params`, `focusedIndex` and `stack`.
+   * @template {keyof T} R
+   * @param {GouterState<T, R>} state
+   * @returns {GouterState<T, R>}
    */
   replace(state) {
     const thisState = /** @type {Mutable<GouterState>} */ (this);
@@ -242,6 +247,12 @@ GouterState.currentStateKey = Number.MIN_SAFE_INTEGER;
  * @type {number}
  */
 GouterState.currentFocusKey = Number.MIN_SAFE_INTEGER;
+
+/**
+ * Empty stack for state initialization only.
+ * @type {GouterState<any>[]}
+ */
+GouterState.emptyStack = [];
 
 /**
  * Parents of each state.

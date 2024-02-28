@@ -1,7 +1,8 @@
 node_modules
 .vscode
 /index.d.ts
+state/index.d.ts
 native/index.d.ts
 navigators/index.d.ts
-state/index.d.ts
+linking/index.d.ts
 /docs
