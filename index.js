@@ -57,7 +57,7 @@ import { GouterState } from './state/index.js';
  * @typedef {Object} RouteNavigation
  * @prop {Navigator<T, N> | Navigator<T> | Navigator} navigator
  * @prop {(keyof T)[]} allowed
- * @prop {(parentState: GouterState<T, N>, toState: GouterState<T> | null) => boolean} [blocker]
+ * @prop {(fromState: GouterState<T, N>, toState: GouterState<T> | null) => boolean} [blocker]
  */
 
 /**

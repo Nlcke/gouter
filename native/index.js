@@ -1,8 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState, createElement, useEffect } from 'react';
 import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
-/** @typedef {import('../state').GouterState} State */
-
 /**
  * @typedef {{
  * index: Animated.AnimatedSubtraction<number>
@@ -84,7 +82,7 @@ const defaultStackSettings = {
   animationDuration: 0,
 };
 
-/** @type {State[]} */
+/** @type {import('../state').GouterState[]} */
 const emptyStack = [];
 
 /** @type {ScreenConfig<any, any>} */
@@ -100,7 +98,7 @@ defaultAnimatedValue.addListener(({ value }) => {
   defaultAnimatedValue.value = value;
 });
 
-const defaultStackRef = { current: /** @type {State[]} */ ([]) };
+const defaultStackRef = { current: /** @type {import('../state').GouterState[]} */ ([]) };
 
 /** @type {Animated.AnimatedSubtraction<number>[]} */
 const defaultAnimatedParentIndexes = [];
@@ -108,9 +106,9 @@ const defaultAnimatedParentIndexes = [];
 /**
  * Joins previous and next stacks together
  * @type {(
- * prevStack: State[],
- * nextStack: State[],
- * )=> State[]}
+ * prevStack: import('../state').GouterState[],
+ * nextStack: import('../state').GouterState[],
+ * )=> import('../state').GouterState[]}
  */
 const getJoinedStack = (prevStack, nextStack) => {
   if (prevStack === nextStack || prevStack.length === 0) {
@@ -183,13 +181,13 @@ const nextIndexMap = new WeakMap();
 
 /**
  * @type {React.FC<{
- * state: State
+ * state: import('../state').GouterState
  * routes: import('..').Routes<any>
  * screenConfigs: ScreenConfigs<any>
  * isStale: boolean
  * isFocused: boolean
  * index: number
- * stackRef: React.MutableRefObject<State[]>
+ * stackRef: React.MutableRefObject<import('../state').GouterState[]>
  * stackSettingsRef: React.MutableRefObject<StackSettings>
  * animatedFocusedIndex: EnhancedAnimatedValue
  * animatedWidth: EnhancedAnimatedValue
@@ -642,7 +640,7 @@ const GouterNativeStack = memo(
 
 /**
  * @type {React.FC<{
- * rootState: State
+ * rootState: import('../state').GouterState
  * routes: import('..').Routes<any>
  * screenConfigs: ScreenConfigs<any>
  * }>}

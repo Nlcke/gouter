@@ -29,7 +29,7 @@ export class GouterState {
    * @param {T[N]} params collection of parameters to customize states
    * @param {GouterState<T>[]} [stack] optional list of inner states
    */
-  constructor(name, params, stack = []) {
+  constructor(name, params, stack) {
     /** string to distinguish states @readonly @type {N} */
     this.name = name;
 
@@ -37,7 +37,7 @@ export class GouterState {
     this.params = params;
 
     /** list of inner states @readonly @type {GouterState<T>[]} */
-    this.stack = stack;
+    this.stack = [];
 
     /** index of focused child state @readonly @type {number} */
     this.focusedIndex = -1;
@@ -46,11 +46,13 @@ export class GouterState {
     this.key = GouterState.currentStateKey;
 
     /** unique serial number for enhanced focus system @protected @type {number} */
-    this.focusKey = GouterState.currentFocusKey;
+    this.focusKey = Number.MIN_SAFE_INTEGER;
 
     GouterState.currentStateKey += 1;
 
-    GouterState.currentFocusKey += 1;
+    if (stack) {
+      this.setStack(stack);
+    }
   }
 
   /**
@@ -89,7 +91,7 @@ export class GouterState {
    * @readonly
    * @type {boolean}
    */
-  get focused() {
+  get isFocused() {
     const { parent } = this;
     return parent ? parent.focusedChild === this : false;
   }
@@ -132,10 +134,12 @@ export class GouterState {
   }
 
   /**
-   * Set current stack.
+   * Set current `stack` and `focusedIndex` using internal `focusKey` which is assigned on `focus`
+   * call. If `focus` is not called on some stack state then last stack state will be focused.
    * @param {GouterState<T>[]} stack
    */
   setStack(stack) {
+    const prevFocusedChild = this.focusedChild;
     for (const state of this.stack) {
       state.parent = undefined;
     }
@@ -151,12 +155,19 @@ export class GouterState {
       }
     }
     /** @type {Mutable<typeof this>} */ (this).focusedIndex = focusedIndex;
+    const { focusedChild } = this;
+    if (focusedChild && focusedChild !== prevFocusedChild) {
+      GouterState.currentFocusKey += 1;
+      focusedChild.focusKey = GouterState.currentFocusKey;
+    }
     GouterState.schedule(this);
     return this;
   }
 
   /**
-   * Focuses parent state on this state.
+   * Focuses on this state by changing `focusedIndex` of it's parents. If it has no parents yet then
+   * it's internal `focusKey` is set which later will be used in `setStack` to set correct
+   * `focusedIndex`.
    * @returns {this}
    */
   focus() {
@@ -164,22 +175,14 @@ export class GouterState {
     if (parent) {
       const { stack } = parent;
       const focusedIndex = stack.indexOf(this);
-      const prevFocusedIndex = parent.focusedIndex;
-      if (focusedIndex !== prevFocusedIndex) {
+      if (parent.focusedIndex !== focusedIndex) {
         /** @type {Mutable<typeof parent>} */ (parent).focusedIndex = focusedIndex;
-        const focusedChild = stack[focusedIndex];
-        if (focusedChild) {
-          GouterState.schedule(focusedChild);
-        }
-        const prevFocusedChild = stack[prevFocusedIndex];
-        if (prevFocusedChild) {
-          GouterState.schedule(focusedChild);
-        }
+        GouterState.schedule(parent);
       }
       parent.focus();
     }
-    this.focusKey = GouterState.currentFocusKey;
     GouterState.currentFocusKey += 1;
+    this.focusKey = GouterState.currentFocusKey;
     return this;
   }
 
@@ -196,6 +199,36 @@ export class GouterState {
     };
     return unlisten;
   }
+
+  /**
+   * Replaces current state fields including name, params, focusedIndex and stack.
+   * @template {keyof T} N
+   * @param {GouterState<T, N>} state
+   * @returns {GouterState<T, N>}
+   */
+  replace(state) {
+    const thisState = /** @type {Mutable<GouterState>} */ (this);
+    thisState.name = state.name;
+    thisState.params = state.params;
+    thisState.focusedIndex = state.focusedIndex;
+    this.setStack(state.stack);
+    return /** @type {typeof state} */ (/** @type {GouterState} */ (this));
+  }
+
+  /**
+   * Removes current state from it's parent stack or does nothing if it has no parent.
+   * @returns {GouterState<T, N>}
+   */
+  remove() {
+    const { parent } = this;
+    if (parent) {
+      const index = parent.stack.indexOf(this);
+      const nextStack = [...parent.stack];
+      nextStack.splice(index, 1);
+      parent.setStack(nextStack);
+    }
+    return this;
+  }
 }
 
 /**
@@ -205,7 +238,7 @@ export class GouterState {
 GouterState.currentStateKey = Number.MIN_SAFE_INTEGER;
 
 /**
- * Current focus key. Incremented and assigned on each new `GouterState` as `key`.
+ * Current focus key. Incremented and assigned to state `focusKey` on each `focus` call.
  * @type {number}
  */
 GouterState.currentFocusKey = Number.MIN_SAFE_INTEGER;

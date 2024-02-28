@@ -472,7 +472,7 @@ const screenConfigs = {
 
 /** @type {(state: import('gouter/state').GouterState) => any} */
 const toJson = state => ({
-  [`${state.focused ? '+' : '-'} ${state.name} ${JSON.stringify(
+  [`${state.isFocused ? '+' : '-'} ${state.name} ${JSON.stringify(
     state.params,
   ).replace(/"/g, '')}`]: state.stack.map(stackState => toJson(stackState)),
 });
