@@ -9,11 +9,11 @@ Tiny navigation library for React Native with simple API and rich features.
 ## Available Imports
 
 ```js
-import { getNavigation } from 'gouter'; // router
+import { GouterNavigation } from 'gouter'; // router
 import { GouterNative } from 'gouter/native'; // React Native component
-import { newStackNavigator, newTabNavigator, newSwitchNavigator } from 'gouter/navigators'; // navigators
-import { getLinking } from 'gouter/linking'; // url encoding and decoding
+import { GouterLinking } from 'gouter/linking'; // url encoding and decoding
 import { GouterState } from 'gouter/state'; // state
+import { newStackNavigator, newTabNavigator, newSwitchNavigator } from 'gouter/navigators'; // navigators
 ```
 
 ## Examples

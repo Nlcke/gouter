@@ -1,17 +1,23 @@
-import {getNavigation} from 'gouter';
+import {GouterNavigation} from 'gouter';
 import {newStackNavigator, newTabNavigator} from 'gouter/navigators';
-import {getLinking} from 'gouter/linking';
+import {GouterLinking} from 'gouter/linking';
 
 /** @type {import('gouter').Routes<Config>} */
 export const routes = {
   App: {
     navigator: newStackNavigator({}),
-    allowed: ['LoginStack', 'LoginConfirmationStack', 'Tabs', 'Stats'],
+    allowed: [
+      'LoginStack',
+      'LoginConfirmationStack',
+      'Tabs',
+      'Stats',
+      'LoginModal',
+    ],
     builder: (_, create) => [create('LoginStack', {})],
   },
   LoginStack: {
     navigator: newStackNavigator({}),
-    allowed: ['Login', 'LoginModal'],
+    allowed: ['Login'],
     builder: (_, create) => [create('Login', {name: 'user'})],
   },
   Login: {
@@ -41,10 +47,10 @@ export const routes = {
   Profile: {},
 };
 
-export const {rootState, create, goBack, goTo} = getNavigation(
+export const {rootState, create, goBack, goTo} = new GouterNavigation(
   routes,
   'App',
   {},
 );
 
-export const {decodeUrl, encodeUrl} = getLinking(routes, create);
+export const {decodeUrl, encodeUrl} = new GouterLinking(routes, create);

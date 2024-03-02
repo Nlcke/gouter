@@ -11,7 +11,9 @@ export const newStackNavigator =
       return [...stack, toState];
     }
     if (stack.length > 1) {
-      return stack.slice(0, -1);
+      const nextStack = stack.slice(0, -1);
+      nextStack[nextStack.length - 1].focus();
+      return nextStack;
     }
     return null;
   };

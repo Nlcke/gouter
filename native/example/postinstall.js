@@ -24,7 +24,13 @@ const copyDir = (src, dest, exclude) => {
       copyDir(path.join(src, name), path.join(dest, name), exclude),
     );
   } else {
-    fs.linkSync(src, dest);
+    try {
+      fs.linkSync(src, dest);
+    } catch (e) {
+      if (/** @type {any} */ (e).code !== 'EEXIST') {
+        throw e;
+      }
+    }
   }
 };
 

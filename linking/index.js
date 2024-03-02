@@ -1,48 +1,60 @@
-/**
- * Main tools to decode and encode urls.
- * @template {import('..').Config} T
- * @typedef {Object} Linking
- * @prop {<N extends keyof T>(name: N, params: Partial<T[N]>) => string} encodePath Creates url path
- * string from state name and params. Uses `=` to escape params which equal to next path key and
- * also to represent empty string.
- * @prop {<N extends keyof T>(name: N, params: Partial<T[N]>) => string} encodeQuery Creates url
- * query string from state name and params. Uses `/` to represent empty array for params with `list:
- * true`.
- * @prop {(state: import('../state').GouterState<T>) => string} encodeUrl Creates url from state
- * using it's name and params.
- * @prop {<N extends keyof T>(name: N, pathStr: string) => Partial<T[N]> | null} decodePath Get
- * required state params from path or null if path is not matched.
- * @prop {<N extends keyof T>(name: N, queryStr: string) => Partial<T[N]>} decodeQuery Creates query
- * parameters from route name and url query string.
- * @prop {(url: string) => import('../state').GouterState<T> | null} decodeUrl Creates router state
- * from url or returns null if no route found.
- */
+import { bindMethods } from '../index.js';
 
 /**
- * Provides main tools to decode and encode urls.
- * @template {import('..').Config} T
- * @param {import('..').Routes<T>} routes
- * @param {import('..').CreateGouterState<T>} create
- * @returns {Linking<T>}
+ * Provides tools to decode and encode urls.
+ * @template {import('../state').GouterConfig} T
  */
-export const getLinking = (routes, create) => {
+export class GouterLinking {
+  /**
+   * Creates GouterLinking using required `routes` and `create`.
+   * @param {import('..').Routes<T>} routes map of names to route configurations
+   * @param {import('..').GouterNavigation<T, keyof T>['create']} create tool for new states with stack auto-building
+   */
+  constructor(routes, create) {
+    bindMethods(this);
+
+    /**
+     * map of names to route configurations
+     * @protected
+     * @type {import('..').Routes<T>}
+     */
+    this.routes = routes;
+
+    /**
+     * tool for new states with stack auto-building used in {@link decodeUrl}
+     * @protected
+     * @type {import('..').GouterNavigation<T, keyof T>['create']}
+     */
+    this.create = create;
+
+    /**
+     * Cache to speed up {@link decodePath}.
+     * @protected
+     * @type {{[N in keyof T]?: RegExp}}
+     */
+    this.pathRegexpByName = {};
+  }
+
   /**
    * Safely encodes a text string as a valid component of a Uniform Resource Identifier (URI).
-   * @type {(uriComponent: string) => string}
+   * @protected
+   * @param {string} uriComponent
+   * @returns {string}
    */
-  const safeEncodeURIComponent = (uriComponent) => {
+  safeEncodeURIComponent(uriComponent) {
     return uriComponent.replace(/[/?&=#%]/g, encodeURIComponent);
-  };
+  }
 
   /**
-   * Cache to speed up `decodePath`.
-   * @type {{[N in keyof T]?: RegExp}}
+   * Creates url path string from state name and params. Uses `=` to escape params which equal to
+   * next path key and also to represent empty string.
+   * @template {keyof T} N
+   * @param {N} name
+   * @param {Partial<T[N]>} params
+   * @returns {string}
    */
-  const pathRegexpByName = {};
-
-  /** @type {<N extends keyof T>(name: N, params: Partial<T[N]>) => string} */
-  const encodePath = (name, params) => {
-    const paramDefs = routes[name].path;
+  encodePath(name, params) {
+    const paramDefs = this.routes[name].path;
     let pathStr = '';
     let hasList = false;
     let sectionPos = 0;
@@ -56,7 +68,7 @@ export const getLinking = (routes, create) => {
         const value = /** @type {any} */ (params)[key];
         if (paramDef.list) {
           if (hasList) {
-            const valueEncoded = safeEncodeURIComponent(key);
+            const valueEncoded = this.safeEncodeURIComponent(key);
             if (`/${pathStr.slice(sectionPos)}/`.includes(`/${valueEncoded}/`)) {
               const head = pathStr.slice(0, sectionPos);
               const section = pathStr
@@ -77,18 +89,18 @@ export const getLinking = (routes, create) => {
           if (Array.isArray(value) && value.length > 0) {
             const valueEncoded = value
               .map(encode)
-              .map(safeEncodeURIComponent)
+              .map(this.safeEncodeURIComponent)
               .map((item) => item || escapeChar)
               .join('/');
             pathStr += `/${valueEncoded}`;
           }
         } else {
           const valueStr = encode(value);
-          const valueEncoded = safeEncodeURIComponent(valueStr);
+          const valueEncoded = this.safeEncodeURIComponent(valueStr);
           pathStr += `/${valueEncoded || escapeChar}`;
         }
       } else {
-        const valueEncoded = safeEncodeURIComponent(paramDef);
+        const valueEncoded = this.safeEncodeURIComponent(paramDef);
         if (`/${pathStr.slice(sectionPos)}/`.includes(`/${valueEncoded}/`)) {
           const head = pathStr.slice(0, sectionPos);
           const section = pathStr
@@ -106,12 +118,19 @@ export const getLinking = (routes, create) => {
       }
     }
     return pathStr;
-  };
+  }
 
-  /** @type {<N extends keyof T>(name: N, params: Partial<T[N]>) => string} */
-  const encodeQuery = (name, params) => {
+  /**
+   * Creates url query string from state name and params. Uses `/` to represent empty array for
+   * params with `list: true`.
+   * @template {keyof T} N
+   * @param {N} name
+   * @param {Partial<T[N]>} params
+   * @returns {string}
+   */
+  encodeQuery(name, params) {
     let queryStr = '';
-    const paramDefs = routes[name].query;
+    const paramDefs = this.routes[name].query;
     if (!paramDefs) {
       return queryStr;
     }
@@ -120,14 +139,14 @@ export const getLinking = (routes, create) => {
       const paramDef = /** @type {import('..').ParamDef<any>} */ (paramDefs[key]);
       const value = /** @type {any} */ (params)[key];
       if (value !== undefined) {
-        const keyEncoded = safeEncodeURIComponent(key);
+        const keyEncoded = this.safeEncodeURIComponent(key);
         const { encode = String } = paramDef;
         if (paramDef.list) {
           if (Array.isArray(value)) {
             if (value.length > 0) {
               for (const item of value) {
                 const itemStr = encode(item);
-                const itemEncoded = safeEncodeURIComponent(itemStr);
+                const itemEncoded = this.safeEncodeURIComponent(itemStr);
                 queryStr += `&${keyEncoded}${itemEncoded ? '=' : ''}${itemEncoded}`;
               }
             } else {
@@ -136,31 +155,37 @@ export const getLinking = (routes, create) => {
           }
         } else {
           const valueStr = encode(value);
-          const valueEncoded = safeEncodeURIComponent(valueStr);
+          const valueEncoded = this.safeEncodeURIComponent(valueStr);
           queryStr += `&${keyEncoded}${valueEncoded ? '=' : ''}${valueEncoded}`;
         }
       }
     }
     queryStr = queryStr.slice(1);
     return queryStr;
-  };
+  }
 
   /**
-   * Create url from state name and params.
-   * @type {(state: import('../state').GouterState<T>) => string}
+   * Creates url from state using it's `name` and `params`.
+   * @param {import('../state').GouterState<T>} state
+   * @returns {string}
    */
-  const encodeUrl = (state) => {
+  encodeUrl(state) {
     const { name, params } = state;
-    const pathStr = encodePath(name, params);
-    const queryStr = encodeQuery(name, params);
+    const pathStr = this.encodePath(name, params);
+    const queryStr = this.encodeQuery(name, params);
     const url = pathStr + (queryStr ? `?${queryStr}` : '');
     return url;
-  };
+  }
 
-  /** @type {(name: keyof T) => RegExp} */
-  const getPathRegexp = (name) => {
-    const paramDefs = routes[name].path;
-    const pathRegexp = pathRegexpByName[name];
+  /**
+   * Get path regexp for route name.
+   * @protected
+   * @param {keyof T} name
+   * @returns {RegExp}
+   */
+  getPathRegexp(name) {
+    const paramDefs = this.routes[name].path;
+    const pathRegexp = this.pathRegexpByName[name];
     if (pathRegexp) {
       return pathRegexp;
     }
@@ -175,7 +200,7 @@ export const getLinking = (routes, create) => {
       if (typeof paramDef === 'object') {
         if (paramDef.list) {
           if (hasList) {
-            const valueEncoded = safeEncodeURIComponent(key);
+            const valueEncoded = this.safeEncodeURIComponent(key);
             regexpStr += `/${valueEncoded}${listStr}`;
           } else {
             hasList = true;
@@ -185,20 +210,27 @@ export const getLinking = (routes, create) => {
           regexpStr += paramStr;
         }
       } else {
-        const valueEncoded = safeEncodeURIComponent(paramDef);
+        const valueEncoded = this.safeEncodeURIComponent(paramDef);
         regexpStr += `/${valueEncoded}`;
         hasList = false;
       }
     }
     const newPathRegexp = RegExp(`^${regexpStr}$`);
-    pathRegexpByName[name] = newPathRegexp;
+    this.pathRegexpByName[name] = newPathRegexp;
     return newPathRegexp;
-  };
+  }
 
-  /** @type {<N extends keyof T>(name: N, pathStr: string) => Partial<T[N]> | null} */
-  const decodePath = (name, pathStr) => {
-    const paramDefs = routes[name].path;
-    const regexp = getPathRegexp(name);
+  /**
+   * Creates path parameters from route name and url query string or returns null if no route
+   * matched.
+   * @template {keyof T} N
+   * @param {N} name
+   * @param {string} pathStr
+   * @returns {Partial<T[N]> | null}
+   */
+  decodePath(name, pathStr) {
+    const paramDefs = this.routes[name].path;
+    const regexp = this.getPathRegexp(name);
     const groups = pathStr.match(regexp);
     if (!groups) {
       return null;
@@ -242,11 +274,17 @@ export const getLinking = (routes, create) => {
       }
     }
     return params;
-  };
+  }
 
-  /** @type {<N extends keyof T>(name: N, queryStr: string) => Partial<T[N]>} */
-  const decodeQuery = (name, queryStr) => {
-    const paramDefs = routes[name].query;
+  /**
+   * Creates query parameters from route name and url query string.
+   * @template {keyof T} N
+   * @param {N} name
+   * @param {string} queryStr
+   * @returns {Partial<T[N]>}
+   */
+  decodeQuery(name, queryStr) {
+    const paramDefs = this.routes[name].query;
     const params = /** @type {any} */ ({});
     if (!paramDefs) {
       return params;
@@ -279,34 +317,31 @@ export const getLinking = (routes, create) => {
       }
     }
     return params;
-  };
+  }
 
   /**
-   * Creates router state from url or returns null if no route found.
+   *
    * @type {(url: string) => import('../state').GouterState<T> | null}
    */
-  const decodeUrl = (url) => {
+
+  /**
+   * Creates state from url or returns null if no route matched.
+   * @param {string} url
+   * @returns {import('../state').GouterState<T> | null}
+   */
+  decodeUrl(url) {
     const [, pathStr, queryStr] = /** @type {RegExpMatchArray} */ (
       url.match(/^([^?#]*)\??([^#]*)#?.*$/)
     );
-    for (const name in routes) {
-      const pathParams = decodePath(name, pathStr);
+    for (const name in this.routes) {
+      const pathParams = this.decodePath(name, pathStr);
       if (pathParams) {
-        const queryParams = decodeQuery(name, queryStr);
-        const params = /** @type {any} */ ({ ...queryParams, ...pathParams });
-        const state = create(name, params);
+        const queryParams = this.decodeQuery(name, queryStr);
+        const params = /** @type {T[typeof name]} */ ({ ...queryParams, ...pathParams });
+        const state = this.create(name, params);
         return state;
       }
     }
     return null;
-  };
-
-  return {
-    decodePath,
-    decodeQuery,
-    decodeUrl,
-    encodePath,
-    encodeQuery,
-    encodeUrl,
-  };
-};
+  }
+}

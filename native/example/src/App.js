@@ -324,7 +324,7 @@ const iOSAnimation = ({index, width}) => [
     backgroundColor: 'black',
     opacity: index.interpolate({
       inputRange: [-1, 0, 1],
-      outputRange: [0.2, 0, 0],
+      outputRange: [0, 0.2, 0],
     }),
   },
   {
@@ -348,7 +348,7 @@ const drawerAnimation = ({index, width}) => [
     backgroundColor: 'black',
     opacity: index.interpolate({
       inputRange: [-1, 0, 1],
-      outputRange: [0.2, 0, 0],
+      outputRange: [0, 0.2, 0],
     }),
   },
   {
@@ -372,7 +372,7 @@ const modalAnimation = ({index, height}) => [
     backgroundColor: 'black',
     opacity: index.interpolate({
       inputRange: [-1, 0, 1],
-      outputRange: [0.5, 0, 0],
+      outputRange: [0, 0.5, 0],
     }),
   },
   {
@@ -434,6 +434,9 @@ const screenConfigs = {
   },
   LoginModal: {
     component: LoginModal,
+    stateSettings: {
+      animation: modalAnimation,
+    },
   },
   Login: {
     component: Login,

@@ -1,6 +1,6 @@
 /**
  * Map of names to route params.
- * @typedef {Record<any, Record<any, any>>} Config
+ * @typedef {Record<any, Record<any, any>>} GouterConfig
  */
 
 /**
@@ -10,16 +10,16 @@
  */
 
 /**
- * `Listener` callback is called when current state changes.
- * @template {Config} T
+ * Called when current state changes.
+ * @template {GouterConfig} T
  * @template {keyof T} N
- * @typedef {(state: GouterState<T, N>) => void} Listener
+ * @typedef {(state: GouterState<T, N>) => void} GouterListener
  */
 
 /**
  * Tree-like structure with name, params and stack to build complex navigation. Has useful methods
  * to access and control each part.
- * @template {Config} [T=Config]
+ * @template {GouterConfig} [T=GouterConfig]
  * @template {keyof T} [N=keyof T]
  */
 export class GouterState {
@@ -101,7 +101,7 @@ export class GouterState {
   /**
    * Current listeners of this state.
    * @protected
-   * @type {Set<Listener<T, N>>}
+   * @type {Set<GouterListener<T, N>>}
    * @see {@link listen}
    */
   get listeners() {
@@ -193,7 +193,7 @@ export class GouterState {
 
   /**
    * Adds new listener of router state changes to listeners and returns `unlisten` callback.
-   * @param {Listener<T, N>} listener
+   * @param {GouterListener<T, N>} listener
    * @returns {() => void} `unlisten` callback
    */
   listen(listener) {
@@ -262,7 +262,7 @@ GouterState.parentByState = new WeakMap();
 
 /**
  * Listeners of each state.
- * @type {WeakMap<GouterState, Set<Listener<any, any>>>}
+ * @type {WeakMap<GouterState, Set<GouterListener<any, any>>>}
  */
 GouterState.listenersByState = new WeakMap();
 

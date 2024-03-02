@@ -1,4 +1,13 @@
-import { memo, useCallback, useMemo, useRef, useState, createElement, useEffect } from 'react';
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  createElement,
+  useEffect,
+  Fragment,
+} from 'react';
 import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /**
@@ -13,7 +22,7 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  */
 
 /**
- * @template {import('..').Config} T
+ * @template {import('../state').GouterConfig} T
  * @template {keyof T} N
  * @typedef {{
  * state: import('../state').GouterState<T, N>
@@ -30,11 +39,13 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /** @typedef {(props: AnimationProps) => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation */
 
+/** @typedef {'horizontal' | 'vertical' | 'top' | 'right' | 'bottom' | 'left' | 'none'} SwipeDetection */
+
 /**
  * @typedef {{
  * animation: Animation
  * animationDuration: number
- * swipeDetection?: 'horizontal' | 'vertical' | 'top' | 'right' | 'bottom' | 'left' | 'none'
+ * swipeDetection?: SwipeDetection
  * swipeDetectionSize?: number | string
  * }} StackSettings
  */
@@ -47,13 +58,13 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /**
  * @template S
- * @template {import('..').Config} T
+ * @template {import('../state').GouterConfig} T
  * @template {keyof T} N
  * @typedef {(state: import('../state').GouterState<T, N>) => S} Computable
  */
 
 /**
- * @template {import('..').Config} T
+ * @template {import('../state').GouterConfig} T
  * @template {keyof T} N
  * @typedef {{
  * component: React.ComponentType<ScreenProps<T, N>>
@@ -63,15 +74,21 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  */
 
 /**
- * @template {import('..').Config} T
+ * @template {import('../state').GouterConfig} T
  * @typedef {{[N in keyof T]: ScreenConfig<T, N>}} ScreenConfigs
  */
 
 /**
- * @template {import('..').Config} T
+ * @template {import('../state').GouterConfig} T
  * @template {keyof T} N
  * @typedef {React.FC<ScreenProps<T, N>>} GouterScreen
  */
+
+/** @type {SwipeDetection[]} */
+const unidirectionalSwipes = ['left', 'top', 'right', 'bottom'];
+
+/** @type {SwipeDetection[]} */
+const horizontalSwipes = ['horizontal', 'left', 'right'];
 
 const swipeStartThreshold = 5;
 const swipeCancelThreshold = 20;
@@ -175,9 +192,6 @@ const useEnhancedAnimatedValue = (initialValue) => {
 };
 
 let panRespondersBlocked = false;
-
-/** @type {WeakMap<EnhancedAnimatedValue, number>} */
-const nextIndexMap = new WeakMap();
 
 /**
  * @type {React.FC<{
@@ -306,9 +320,7 @@ const GouterNativeStack = memo(
 
     const { animation: stackAnimation } = stackSettingsRef.current;
 
-    const animation = thisStateSettings
-      ? thisStateSettings.animation || stackAnimation
-      : stackAnimation;
+    const animation = (thisStateSettings && thisStateSettings.animation) || stackAnimation;
 
     const animatedStyleOrStyles = useMemo(
       () => (animation ? animation(animationProps) : null),
@@ -342,7 +354,7 @@ const GouterNativeStack = memo(
       if (duration === 0) {
         thisAnimatedFocusedIndex.setValue(focusedIndex);
         updateStack({ finished: true });
-      } else if (focusedIndex !== nextIndexMap.get(thisAnimatedFocusedIndex)) {
+      } else {
         Animated.timing(thisAnimatedFocusedIndex, {
           useNativeDriver: true,
           toValue: focusedIndex,
@@ -350,8 +362,6 @@ const GouterNativeStack = memo(
         }).start(updateStack);
       }
     }
-
-    nextIndexMap.delete(thisAnimatedFocusedIndex);
 
     const valueRef = useRef(0);
 
@@ -373,16 +383,12 @@ const GouterNativeStack = memo(
         const fromStateIndex = parent.stack.indexOf(state);
         const prevState = parent.stack[fromStateIndex - 1];
         const nextState = parent.stack[fromStateIndex + 1];
-        const { swipeDetection } = stackSettingsRef.current;
-        const isSingleDirection =
-          swipeDetection === 'left' ||
-          swipeDetection === 'top' ||
-          swipeDetection === 'right' ||
-          swipeDetection === 'bottom';
+        const { swipeDetection = 'none' } = stackSettingsRef.current;
+        const isUnidirectional = unidirectionalSwipes.indexOf(swipeDetection) >= 0;
         blockedRef.current.prev =
-          prevState && route.blocker(state, isSingleDirection ? null : prevState);
+          prevState && route.blocker(state, isUnidirectional ? null : prevState);
         blockedRef.current.next =
-          nextState && route.blocker(state, isSingleDirection ? null : nextState);
+          nextState && route.blocker(state, isUnidirectional ? null : nextState);
       }
     }
 
@@ -399,14 +405,11 @@ const GouterNativeStack = memo(
           event.stopPropagation();
           return false;
         }
-        const { swipeDetection, swipeDetectionSize } = stackSettingsRef.current;
-        if (!swipeDetection || swipeDetection === 'none') {
+        const { swipeDetection = 'none', swipeDetectionSize } = stackSettingsRef.current;
+        if (swipeDetection === 'none') {
           return false;
         }
-        const isHorizontal =
-          swipeDetection === 'horizontal' ||
-          swipeDetection === 'left' ||
-          swipeDetection === 'right';
+        const isHorizontal = horizontalSwipes.indexOf(swipeDetection) >= 0;
         const locationValue = isHorizontal ? moveX : moveY;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
         if (locationValue < 0 || locationValue > side) {
@@ -448,11 +451,8 @@ const GouterNativeStack = memo(
       (event, { dx, dy }) => {
         event.preventDefault();
         event.stopPropagation();
-        const { swipeDetection } = stackSettingsRef.current;
-        const isHorizontal =
-          swipeDetection === 'horizontal' ||
-          swipeDetection === 'left' ||
-          swipeDetection === 'right';
+        const { swipeDetection = 'none' } = stackSettingsRef.current;
+        const isHorizontal = horizontalSwipes.indexOf(swipeDetection) >= 0;
         const delta = isHorizontal ? dx : dy;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
         const offset = delta / side || 0;
@@ -489,11 +489,8 @@ const GouterNativeStack = memo(
         panRespondersBlocked = false;
         event.preventDefault();
         event.stopPropagation();
-        const { swipeDetection } = stackSettingsRef.current;
-        const isHorizontal =
-          swipeDetection === 'horizontal' ||
-          swipeDetection === 'left' ||
-          swipeDetection === 'right';
+        const { swipeDetection = 'none' } = stackSettingsRef.current;
+        const isHorizontal = horizontalSwipes.indexOf(swipeDetection) >= 0;
         const delta = isHorizontal ? dx : dy;
         const velocity = isHorizontal ? vx : vy;
         const side = isHorizontal ? animatedWidth.value : animatedHeight.value;
@@ -519,12 +516,7 @@ const GouterNativeStack = memo(
               return;
             }
             nextState.focus();
-            if (
-              swipeDetection === 'left' ||
-              swipeDetection === 'top' ||
-              swipeDetection === 'right' ||
-              swipeDetection === 'bottom'
-            ) {
+            if (unidirectionalSwipes.indexOf(swipeDetection) >= 0) {
               parent.setStack(parent.stack.filter((stackState) => stackState !== prevState));
             }
           }
@@ -545,50 +537,17 @@ const GouterNativeStack = memo(
       [onMoveShouldSetPanResponder, onPanResponderMove, onPanResponderReleaseOrTerminate],
     );
 
-    const layoutChild = useMemo(
-      () =>
-        createElement(Animated.View, {
-          key: '',
-          style: { ...StyleSheet.absoluteFillObject, opacity: 0 },
-          pointerEvents: 'none',
-          onLayout: ({ nativeEvent }) => {
-            const { width, height } = nativeEvent.layout;
-            const shouldUpdate = thisAnimatedWidth.value === 0 && thisAnimatedHeight.value === 0;
-            thisAnimatedWidth.setValue(width);
-            thisAnimatedHeight.setValue(height);
-            if (shouldUpdate) {
-              updateState([]);
-            }
-          },
-        }),
-      [thisAnimatedWidth, thisAnimatedHeight],
-    );
-
-    const overlayChild = useMemo(
-      () =>
-        overlayStyle
-          ? createElement(Animated.View, {
-              key: '',
-              style: { ...StyleSheet.absoluteFillObject, opacity: 0, ...overlayStyle },
-              pointerEvents: 'none',
-            })
-          : null,
-      [overlayStyle],
-    );
-
-    const hasSize = animatedWidth.value > 0 && animatedHeight.value > 0;
-
-    const Screen = thisScreenConfig.component;
+    const { component } = thisScreenConfig;
 
     const children = useMemo(
       () =>
-        stack.map((subState, subIndex) =>
+        stack.map((stackState, subIndex) =>
           createElement(GouterNativeStack, {
-            key: subState.key,
-            state: subState,
+            key: stackState.key,
+            state: stackState,
             routes,
             screenConfigs,
-            isStale: nextStack.indexOf(subState) === -1,
+            isStale: nextStack.indexOf(stackState) === -1,
             isFocused: subIndex === focusedIndex,
             animatedFocusedIndex: thisAnimatedFocusedIndex,
             index: subIndex,
@@ -612,27 +571,41 @@ const GouterNativeStack = memo(
       ],
     );
 
-    const extendedChildren = useMemo(
-      () => (hasSize ? [layoutChild, ...children] : layoutChild),
-      [hasSize, layoutChild, children],
+    const screen = component
+      ? createElement(component, {
+          key: state.key,
+          state,
+          isFocused,
+          isStale,
+          animationProps,
+          children,
+        })
+      : null;
+
+    const underlay = useMemo(
+      () =>
+        createElement(Animated.View, {
+          key: 'underlay',
+          style: [StyleSheet.absoluteFill, overlayStyle],
+          pointerEvents: 'none',
+          onLayout: ({ nativeEvent }) => {
+            const { width, height } = nativeEvent.layout;
+            thisAnimatedWidth.setValue(width);
+            thisAnimatedHeight.setValue(height);
+          },
+        }),
+      [thisAnimatedWidth, thisAnimatedHeight, overlayStyle],
     );
 
-    return createElement(Animated.View, {
-      key: state.key,
-      ...panHandlers,
-      style,
+    return createElement(Fragment, {
       children: [
-        Screen
-          ? createElement(Screen, {
-              key: state.key,
-              state,
-              isFocused,
-              isStale,
-              animationProps,
-              children: extendedChildren,
-            })
-          : null,
-        overlayChild,
+        underlay,
+        createElement(Animated.View, {
+          key: 'screen',
+          ...panHandlers,
+          style,
+          children: [screen],
+        }),
       ],
     });
   },
