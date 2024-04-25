@@ -1,5 +1,11 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {GouterNative} from 'gouter/native';
+import {
+  GouterNative,
+  useGouterState,
+  getAnimatedValues,
+  useIsFocused,
+  useIsStale,
+} from 'gouter/native';
 import {
   StyleSheet,
   Text,
@@ -9,6 +15,7 @@ import {
   Animated,
   Keyboard,
   ScrollView,
+  Easing,
 } from 'react-native';
 import {create, goBack, goTo, rootState, routes} from './router';
 
@@ -131,9 +138,8 @@ const Stats = ({state}) => {
 };
 
 /** @type {GouterScreen<'LoginConfirmation'>} */
-const LoginConfirmation = ({state, animationProps: {parentIndexes}}) => {
-  const [parentIndex] = parentIndexes;
-
+const LoginConfirmation = ({state}) => {
+  const parentIndex = getAnimatedValues(state.parent || state).index;
   const animatedTextStyle = useMemo(
     () => ({
       opacity: parentIndex.interpolate({
@@ -257,11 +263,13 @@ const Tabs = ({state, children}) => {
 };
 
 /** @type {GouterScreen<'Home'>} */
-const Home = () => {
+const Home = ({}) => {
+  const isFocused = useIsFocused();
   return (
     <View style={styles.container}>
       <Text>Home</Text>
       <Button title="go back" onPress={goBack} />
+      <Text>isFocused: {isFocused ? 'true' : 'false'}</Text>
       <Text>{'home '.repeat(100)}</Text>
     </View>
   );
@@ -269,13 +277,20 @@ const Home = () => {
 
 /** @type {GouterScreen<'Post'>} */
 const Post = () => {
+  const isStale = useIsStale();
   return (
     <View style={styles.container}>
       <Text>Post</Text>
       <Button title="go back" onPress={goBack} />
+      <Text>isStale: {isStale ? 'true' : 'false'}</Text>
       <Text>{'post '.repeat(100)}</Text>
     </View>
   );
+};
+
+const GouterStateName = () => {
+  const state = useGouterState();
+  return <Text>state name: {state ? state.name : null}</Text>;
 };
 
 /** @type {GouterScreen<'Profile'>} */
@@ -284,24 +299,21 @@ const Profile = () => {
     <ScrollView style={styles.container}>
       <Text>Profile</Text>
       <Button title="go back" onPress={goBack} />
+      <GouterStateName />
       <Text>{'profile '.repeat(500)}</Text>
     </ScrollView>
   );
 };
 
 /** @type {import('gouter/native').Animation} */
-const defaultAnimation = ({index, width, focused, bounce}) => ({
-  zIndex: focused,
+const defaultAnimation = ({index, width}) => ({
   opacity: index.interpolate({
     inputRange: [-1, 0, 1],
     outputRange: [0, 1, 0],
   }),
   transform: [
     {
-      translateX: Animated.multiply(
-        width,
-        Animated.subtract(index, Animated.multiply(bounce, 0.25)),
-      ),
+      translateX: Animated.multiply(width, index),
     },
     {
       scale: index.interpolate({
@@ -390,34 +402,31 @@ const modalAnimation = ({index, height}) => [
   },
 ];
 
-const animationDuration = 256;
-
-/** @type {import('gouter/native').StackSettings} */
+/** @type {import('gouter/native').StateSettings} */
 const defaultSettings = {
   animation: iOSAnimation,
-  animationDuration,
+  animationDuration: 256,
   swipeDetection: 'left',
   swipeDetectionSize: 40,
+  animationEasing: Easing.elastic(0.25),
 };
 
-/** @type {import('gouter/native').StackSettings} */
+/** @type {import('gouter/native').StateSettings} */
 const modalSettings = {
   animation: modalAnimation,
-  animationDuration,
   swipeDetection: 'bottom',
 };
 
-/** @type {import('gouter/native').StackSettings} */
+/** @type {import('gouter/native').StateSettings} */
 const tabsSettings = {
   animation: defaultAnimation,
-  animationDuration: 1256,
   swipeDetection: 'horizontal',
+  swipeDetectionSize: '100%',
 };
 
-/** @type {import('gouter/native').StackSettings} */
+/** @type {import('gouter/native').StateSettings} */
 const drawerSettings = {
   animation: drawerAnimation,
-  animationDuration,
   swipeDetection: 'right',
   swipeDetectionSize: '80%',
 };
@@ -426,16 +435,17 @@ const drawerSettings = {
 const screenConfigs = {
   App: {
     component: App,
-    stackSettings: defaultSettings,
   },
   LoginStack: {
     component: LoginStack,
-    stackSettings: modalSettings,
   },
   LoginModal: {
     component: LoginModal,
     stateSettings: {
       animation: modalAnimation,
+      swipeDetection: 'bottom',
+      swipeDetectionSize: '100%',
+      prevScreenFixed: true,
     },
   },
   Login: {
@@ -443,9 +453,8 @@ const screenConfigs = {
   },
   Stats: {
     component: Stats,
-    stateSettings: state => ({
-      animation:
-        state.params.animation === 'rotation' ? defaultAnimation : iOSAnimation,
+    stateSettings: ({params: {animation}}) => ({
+      animation: animation === 'rotation' ? defaultAnimation : iOSAnimation,
     }),
   },
   LoginConfirmationStack: {
@@ -508,9 +517,10 @@ const AppWrapper = () => {
   return (
     <View style={{flex: 1}}>
       <GouterNative
-        rootState={rootState}
+        state={rootState}
         routes={routes}
         screenConfigs={screenConfigs}
+        defaultSettings={defaultSettings}
       />
       {treeVisible && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
