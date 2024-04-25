@@ -12,8 +12,8 @@ export const bindMethods = (instance) => {
   for (const key of keys) {
     const method = /** @type {Function} */ (instance[key]);
     if (typeof method === 'function' && key !== 'constructor') {
-      const descriptor = Object.getOwnPropertyDescriptor(prototype, key);
-      Object.defineProperty(prototype, key, { ...descriptor, value: method.bind(instance) });
+      const descriptor = Object.getOwnPropertyDescriptor(instance, key);
+      Object.defineProperty(instance, key, { ...descriptor, value: method.bind(instance) });
     }
   }
 };
