@@ -129,6 +129,8 @@ export class GouterNavigation {
      * @type {GouterState<T, K>}
      */
     this.rootState = this.create(rootName, rootParams);
+
+    GouterState.rootStates.add(this.rootState);
   }
 
   /**
@@ -230,12 +232,12 @@ export class GouterNavigation {
                 }
               }
               if (hasMatch) {
-                prevState.focus();
                 const nextParams = options.merge ? options.merge(prevParams, params) : params;
                 prevState.setParams(nextParams);
                 const nextStack = navigator(parentState, prevState, route);
                 if (nextStack) {
                   parentState.setStack(nextStack);
+                  prevState.focus();
                 }
                 if (options.update) {
                   options.update(prevState);

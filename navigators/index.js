@@ -12,7 +12,7 @@ export const newStackNavigator =
     }
     if (stack.length > 1) {
       const nextStack = stack.slice(0, -1);
-      nextStack[nextStack.length - 1].focus();
+      nextStack[nextStack.length - 1].withFocus();
       return nextStack;
     }
     return null;
@@ -40,7 +40,7 @@ export const newTabNavigator =
     const nextIndex = backBehavior ? backBehavior(focusedIndex) : 0;
     const nextState = stack[nextIndex];
     if (nextState && nextIndex !== focusedIndex) {
-      nextState.focus();
+      nextState.withFocus();
       return stack;
     }
     return null;
