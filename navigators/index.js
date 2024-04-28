@@ -1,5 +1,5 @@
 /**
- * @type {(options: {}) => import("../index").Navigator}
+ * @returns {import("../index").Navigator}
  */
 export const newStackNavigator =
   () =>
@@ -19,10 +19,13 @@ export const newStackNavigator =
   };
 
 /**
- * @type {(options: {backBehavior?: (focusedIndex: number) => number}) => import("../index").Navigator}
+ * @param {object} [options] provides additional customization for navigator behavior
+ * @param {(focusedIndex: number) => number} [options.backBehavior] calculates next `focusedIndex`
+ * after current one on `goBack` call
+ * @returns {import("../index").Navigator}
  */
 export const newTabNavigator =
-  ({ backBehavior }) =>
+  ({ backBehavior } = {}) =>
   ({ stack, focusedIndex }, toState, { allowed = [] }) => {
     if (toState && toState.parent) {
       return stack;
@@ -47,7 +50,7 @@ export const newTabNavigator =
   };
 
 /**
- * @type {(options: {}) => import("../index").Navigator}
+ * @returns {import("../index").Navigator}
  */
 export const newSwitchNavigator = () => (_, toState) => {
   if (toState) {
