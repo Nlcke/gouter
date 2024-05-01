@@ -5,7 +5,7 @@ import {GouterLinking} from 'gouter/linking';
 /** @type {import('gouter').Routes<Config>} */
 export const routes = {
   App: {
-    navigator: newStackNavigator({}),
+    navigator: newStackNavigator(),
     allowed: [
       'LoginStack',
       'LoginConfirmationStack',
@@ -16,7 +16,7 @@ export const routes = {
     builder: (_, create) => [create('LoginStack', {})],
   },
   LoginStack: {
-    navigator: newStackNavigator({}),
+    navigator: newStackNavigator(),
     allowed: ['Login'],
     builder: (_, create) => [create('Login', {name: 'user'})],
   },
@@ -26,7 +26,7 @@ export const routes = {
   LoginModal: {},
   Stats: {},
   LoginConfirmationStack: {
-    navigator: newStackNavigator({}),
+    navigator: newStackNavigator(),
     allowed: ['LoginConfirmation', 'LoginDrawer'],
   },
   LoginConfirmation: {
@@ -34,7 +34,7 @@ export const routes = {
   },
   LoginDrawer: {},
   Tabs: {
-    navigator: newTabNavigator({}),
+    navigator: newTabNavigator(),
     allowed: ['Home', 'Post', 'Profile'],
     builder: (_, create) => [
       create('Home', {}),
