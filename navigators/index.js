@@ -3,9 +3,9 @@
  */
 export const newStackNavigator =
   () =>
-  ({ stack, focusedIndex }, toState) => {
+  ({ stack }, toState) => {
     if (toState && toState.parent) {
-      return [...stack.slice(0, focusedIndex), toState];
+      return stack.slice(0, stack.indexOf(toState) + 1);
     }
     if (toState) {
       return [...stack, toState];
