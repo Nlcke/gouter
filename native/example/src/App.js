@@ -15,9 +15,9 @@ import {
   Animated,
   Keyboard,
   ScrollView,
-  Easing,
 } from 'react-native';
 import {create, goBack, goTo, rootState, routes} from './router';
+import {Easing, interpolate} from 'react-native-reanimated';
 
 const styles = StyleSheet.create({
   container: {
@@ -171,6 +171,7 @@ const LoginConfirmation = ({state}) => {
         <Text>Login Confirmation</Text>
       </Animated.View>
       <Text>Phone: {state.params.phone}</Text>
+      <Button title="go to Stats" onPress={() => goTo('Stats', {})} />
       <Button title="go to Tabs" onPress={() => goTo('Tabs', {})} />
       <Button title="go to App" onPress={() => goTo('App', {})} />
       <Text>{'confirmation '.repeat(50)}</Text>
@@ -306,7 +307,7 @@ const Profile = () => {
 };
 
 /** @type {import('gouter/native').Animation} */
-const defaultAnimation = ({index, width}) => ({
+const tabAnimation = ({index, width}) => ({
   opacity: index.interpolate({
     inputRange: [-1, 0, 1],
     outputRange: [0, 1, 0],
@@ -330,6 +331,24 @@ const defaultAnimation = ({index, width}) => ({
   ],
 });
 
+/** @type {import('gouter/native').ReanimatedAnimation} */
+const tabReanimatedAnimation =
+  ({index, width}) =>
+  () => {
+    'worklet';
+    return {
+      transform: [
+        {
+          translateX: interpolate(
+            index.value,
+            [-1, 0, 1],
+            [-width.value, 0, width.value],
+          ),
+        },
+      ],
+    };
+  };
+
 /** @type {import('gouter/native').Animation} */
 const iOSAnimation = ({index, width}) => [
   {
@@ -351,6 +370,31 @@ const iOSAnimation = ({index, width}) => [
         ),
       },
     ],
+  },
+];
+
+/** @type {import('gouter/native').ReanimatedAnimation} */
+const iOSReanimatedAnimation = ({index, width}) => [
+  () => {
+    'worklet';
+    return {
+      backgroundColor: 'black',
+      opacity: interpolate(index.value, [-1, 0, 1], [0, 0.2, 0]),
+    };
+  },
+  () => {
+    'worklet';
+    return {
+      transform: [
+        {
+          translateX: interpolate(
+            index.value,
+            [-1, 0, 1],
+            [-0.25 * width.value, 0, width.value],
+          ),
+        },
+      ],
+    };
   },
 ];
 
@@ -378,6 +422,28 @@ const drawerAnimation = ({index, width}) => [
   },
 ];
 
+/** @type {import('gouter/native').ReanimatedAnimation} */
+const drawerReanimatedAnimation = ({index, width}) => [
+  () => {
+    'worklet';
+    return {
+      backgroundColor: 'black',
+      opacity: interpolate(index.value, [-1, 0, 1], [0, 0.5, 0]),
+    };
+  },
+  () => {
+    'worklet';
+    return {
+      transform: [
+        {
+          translateX:
+            width.value * interpolate(index.value, [-1, 0, 1], [0, 0, 1]),
+        },
+      ],
+    };
+  },
+];
+
 /** @type {import('gouter/native').Animation} */
 const modalAnimation = ({index, height}) => [
   {
@@ -402,26 +468,45 @@ const modalAnimation = ({index, height}) => [
   },
 ];
 
+/** @type {import('gouter/native').ReanimatedAnimation} */
+const modalReanimatedAnimation = ({index, height}) => [
+  () => {
+    'worklet';
+    return {
+      backgroundColor: 'black',
+      opacity: interpolate(index.value, [-1, 0, 1], [0, 0.5, 0]),
+    };
+  },
+  () => {
+    'worklet';
+    return {
+      transform: [
+        {
+          translateY:
+            height.value * interpolate(index.value, [-1, 0, 1], [0, 0, 1]),
+        },
+      ],
+    };
+  },
+];
+
 /** @type {import('gouter/native').StateSettings} */
 const defaultSettings = {
   animation: iOSAnimation,
-  animationDuration: 256,
+  reanimatedAnimation: iOSReanimatedAnimation,
+  animationDuration: 3000,
   swipeDetection: 'left',
   swipeDetectionSize: 40,
   animationEasing: Easing.elastic(0.25),
 };
 
 /** @type {import('gouter/native').StateSettings} */
-const modalSettings = {
-  animation: modalAnimation,
-  swipeDetection: 'bottom',
-};
-
-/** @type {import('gouter/native').StateSettings} */
 const tabsSettings = {
-  animation: defaultAnimation,
+  animation: tabAnimation,
+  reanimatedAnimation: tabReanimatedAnimation,
   swipeDetection: 'horizontal',
   swipeDetectionSize: '100%',
+  animationDuration: 256,
 };
 
 /** @type {import('gouter/native').StateSettings} */
@@ -443,6 +528,7 @@ const screenConfigs = {
     component: LoginModal,
     stateSettings: {
       animation: modalAnimation,
+      reanimatedAnimation: modalReanimatedAnimation,
       swipeDetection: 'bottom',
       swipeDetectionSize: '100%',
       prevScreenFixed: true,
@@ -454,7 +540,7 @@ const screenConfigs = {
   Stats: {
     component: Stats,
     stateSettings: ({params: {animation}}) => ({
-      animation: animation === 'rotation' ? defaultAnimation : iOSAnimation,
+      animation: animation === 'rotation' ? tabAnimation : iOSAnimation,
     }),
   },
   LoginConfirmationStack: {
@@ -466,6 +552,11 @@ const screenConfigs = {
   },
   LoginDrawer: {
     component: LoginDrawer,
+    stateSettings: {
+      reanimatedAnimation: drawerReanimatedAnimation,
+      prevScreenFixed: true,
+      swipeDetectionSize: '100%',
+    },
   },
   Tabs: {
     component: Tabs,
@@ -521,6 +612,7 @@ const AppWrapper = () => {
         routes={routes}
         screenConfigs={screenConfigs}
         defaultSettings={defaultSettings}
+        reanimated
       />
       {treeVisible && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
