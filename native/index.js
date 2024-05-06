@@ -79,31 +79,18 @@ const startTiming = (node, toValue, duration, easing, callback) => {
     const setValue = (finished) => {
       animationsCount -= 1;
       if (!animationsCount) {
-        console.log('no animations!!!', 'size:', stateUpdaters.size);
         stateUpdaters.forEach((stateUpdate) => stateUpdate([]));
         stateUpdaters.clear();
       }
       if (fromValue !== valueByNode.get(node) || toValue !== nextValueByNode.get(node)) {
-        console.log(
-          'interrupted',
-          fromValue,
-          '!==',
-          valueByNode.get(node),
-          '||',
-          toValue,
-          '!==',
-          nextValueByNode.get(node),
-        );
         return;
       }
       if (finished) {
-        console.log('current value', toValue);
         valueByNode.set(node, toValue);
       } else {
         const currentDuration = (Date.now() - fromDate) / duration;
         const currentRawValue = fromValue + (toValue - fromValue) * currentDuration;
         const currentValue = easing ? easing(currentRawValue) : currentRawValue;
-        console.log('current value', currentValue);
         valueByNode.set(node, currentValue);
         nextValueByNode.set(node, toValue);
       }
@@ -137,7 +124,6 @@ const startTiming = (node, toValue, duration, easing, callback) => {
       // eslint-disable-next-line no-param-reassign
       node.value = toValue;
     }
-    console.log('current value', toValue);
     valueByNode.set(node, toValue);
     nextValueByNode.set(node, toValue);
     if (callback) {
