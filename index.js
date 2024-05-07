@@ -140,10 +140,11 @@ export class GouterNavigation {
    * @param {N} name string to distinguish states
    * @param {T[N]} params collection of parameters to customize states
    * @param {GouterState<T>[]} [stack] optional list of inner states
+   * @param {number} [focusedIndex] optional index of focused state in stack
    * @returns {GouterState<T, N>}
    */
-  create(name, params, stack) {
-    const state = new GouterState(name, params);
+  create(name, params, stack, focusedIndex) {
+    const state = new GouterState(name, params, stack, focusedIndex);
     if (!stack) {
       const route = this.routes[/** @type {keyof typeof this.routes} */ (name)];
       if (route && route.builder) {
@@ -185,6 +186,19 @@ export class GouterNavigation {
   }
 
   /**
+   * Returns current innermost focused state inside root state.
+   * @returns {GouterState<T>}
+   */
+  getFocusedState() {
+    /** @type {GouterState<T>} */
+    let focusedState = this.rootState;
+    while (focusedState.focusedChild) {
+      focusedState = focusedState.focusedChild;
+    }
+    return focusedState;
+  }
+
+  /**
    * Handles {@link goTo} and {@link goBack} since they have a lot in common.
    * @protected
    * @param {GouterState<T> | null} toState state for {@link goTo} or null for {@link goBack}
@@ -192,23 +206,14 @@ export class GouterNavigation {
    * @returns {void}
    */
   go(toState, options) {
-    /** @type {GouterState<T>} */
-    let parentState = this.rootState;
-    for (;;) {
-      if (parentState.focusedChild) {
-        parentState = parentState.focusedChild;
-      } else {
-        break;
-      }
-    }
-    /** @type {Route<any, any>} */
-    const { blocker } = this.routes[parentState.name] || {};
-    if (blocker && blocker(parentState, toState)) {
-      return;
-    }
+    let parentState = this.getFocusedState();
     for (;;) {
       /** @type {Route<any, any>} */
       const route = this.routes[parentState.name] || {};
+      const { blocker } = route;
+      if (blocker && blocker(parentState, toState)) {
+        return;
+      }
       const { navigator, allowed } = route;
       if (navigator && (!toState || allowed.indexOf(toState.name) >= 0)) {
         const { keys } = options;
