@@ -25,8 +25,9 @@ export const newStackNavigator =
  * @returns {import("../index").Navigator}
  */
 export const newTabNavigator =
-  ({ backBehavior } = {}) =>
+  (options) =>
   ({ stack, focusedIndex }, toState, { allowed = [] }) => {
+    const { backBehavior } = options || {};
     if (toState && toState.parent) {
       return stack;
     }
