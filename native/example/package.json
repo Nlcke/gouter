@@ -8,7 +8,7 @@
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest",
-    "watch": "node postinstall && syncdir ../.. ./node_modules/gouter -w -si --exclude example node_modules .git .vscode",
+    "watch": "node postinstall && syncdir ../.. ./node_modules/gouter -w -si -symlink --exclude example node_modules .git .vscode",
     "postinstall": "node postinstall"
   },
   "dependencies": {
