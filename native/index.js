@@ -385,19 +385,21 @@ const getListWithoutItem = (list, item) => {
   return nextList;
 };
 
-/** @type {WeakMap<WeakMap<GouterState, number>, number>} */
-const stackStateKeysCounters = new WeakMap();
+/** @type {number} */
+let stateKeyCounter = -1;
 
-/** @type {(stackState: GouterState, stackStateKeys: WeakMap<GouterState, number>) => number} */
-const getStackStateKey = (stackState, stackStateKeys) => {
-  const stackStateKey = stackStateKeys.get(stackState);
-  if (stackStateKey !== undefined) {
-    return stackStateKey;
+/** @type {WeakMap<GouterState, number>} */
+const keyByState = new WeakMap();
+
+/** @type {(state: GouterState) => number} */
+const getStateKey = (state) => {
+  const prevKey = keyByState.get(state);
+  if (prevKey !== undefined) {
+    return prevKey;
   }
-  const counter = stackStateKeysCounters.get(stackStateKeys) || 0;
-  stackStateKeysCounters.set(stackStateKeys, counter + 1);
-  stackStateKeys.set(stackState, counter);
-  return counter;
+  stateKeyCounter += 1;
+  keyByState.set(state, stateKeyCounter);
+  return stateKeyCounter;
 };
 
 /**
@@ -809,7 +811,10 @@ const ReanimatedComponent = memo(({ reanimation, state, panHandlers, screenChild
  * @prop {ScreenOptions} defaultOptions Will be used for this state and it's inner states at any
  * depth when `screenOptions` and `stackOptions` of target state has no defined field.
  * @prop {boolean | undefined} [reanimated] If true then `react-native-reanimated` module will be
- * used for every animation at `reanimation` field.
+ * used for every animation. In this case the `reanimation` field of screen options should be used
+ * instead of `animation` and `getReanimatedValues` function should be used instead of
+ * `getAnimatedValues`. Every `reanimation` and `animationEasing` should have `worklet` directive:
+ * https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/glossary#worklet.
  */
 
 /**
@@ -850,9 +855,6 @@ export const GouterNative = memo((props) => {
 
   const prevStack = prevStackRef.current;
 
-  /** @type {WeakMap<GouterState, number>} */
-  const stackStateKeys = useRef(new WeakMap()).current;
-
   const joinedStack = useMemo(() => {
     if (prevStack === nextStack || !prevStack.length) {
       return nextStack;
@@ -875,7 +877,13 @@ export const GouterNative = memo((props) => {
   const blurredIndex = blurredChild ? joinedStack.indexOf(blurredChild) : -1;
   const focusedIndex = focusedChild ? joinedStack.indexOf(focusedChild) : -1;
 
-  if (prevStack === emptyStack) {
+  const keyByStateRef = useRef(keyByState);
+  const isHotReload = keyByState !== keyByStateRef.current;
+  const reanimatedRef = useRef(reanimated);
+  const isAnimationReload = reanimated !== reanimatedRef.current;
+  if (prevStack === emptyStack || isHotReload || isAnimationReload) {
+    keyByStateRef.current = keyByState;
+    reanimatedRef.current = reanimated;
     if (!state.parent) {
       startTiming(getAniValues(state).index, 0, 0);
     }
@@ -932,7 +940,7 @@ export const GouterNative = memo((props) => {
     () =>
       joinedStack.map((stackState) =>
         createElement(GouterNative, {
-          key: getStackStateKey(stackState, stackStateKeys),
+          key: getStateKey(stackState),
           state: stackState,
           routes,
           screenConfigs,
@@ -940,7 +948,7 @@ export const GouterNative = memo((props) => {
           reanimated,
         }),
       ),
-    [defaultOptions, joinedStack, reanimated, routes, screenConfigs, stackStateKeys],
+    [defaultOptions, joinedStack, reanimated, routes, screenConfigs],
   );
 
   const { component } = screenConfigs[state.name] || { component: null };
