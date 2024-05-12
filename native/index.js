@@ -244,14 +244,14 @@ let panRespondersBlocked = false;
 const initialIndex = 1;
 
 /** @type {WeakMap<GouterState, AnimatedValues>} */
-const animatedValuesMap = new WeakMap();
+const animatedValuesByState = new WeakMap();
 
 /**
  * Get animated values: index, width, height.
  * @type {(state: GouterState) => AnimatedValues}
  */
 export const getAnimatedValues = (state) => {
-  const prevAnimatedValues = animatedValuesMap.get(state);
+  const prevAnimatedValues = animatedValuesByState.get(state);
   if (prevAnimatedValues) {
     return prevAnimatedValues;
   }
@@ -265,19 +265,19 @@ export const getAnimatedValues = (state) => {
     width: new Animated.Value(width),
     height: new Animated.Value(height),
   };
-  animatedValuesMap.set(state, animatedValues);
+  animatedValuesByState.set(state, animatedValues);
   return animatedValues;
 };
 
 /** @type {WeakMap<GouterState, ReanimatedValues>} */
-const reanimatedValuesMap = new WeakMap();
+const reanimatedValuesByState = new WeakMap();
 
 /**
  * Get reanimated values: index, width, height.
  * @type {(state: GouterState) => ReanimatedValues}
  */
 export const getReanimatedValues = (state) => {
-  const prevReanimatedValues = reanimatedValuesMap.get(state);
+  const prevReanimatedValues = reanimatedValuesByState.get(state);
   if (prevReanimatedValues) {
     return prevReanimatedValues;
   }
@@ -291,7 +291,7 @@ export const getReanimatedValues = (state) => {
     width: makeMutable(width),
     height: makeMutable(height),
   };
-  reanimatedValuesMap.set(state, reanimatedValues);
+  reanimatedValuesByState.set(state, reanimatedValues);
   return reanimatedValues;
 };
 
