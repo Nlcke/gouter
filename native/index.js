@@ -720,7 +720,7 @@ const usePanHandlers = (props) => {
  */
 
 /** @type {React.FC<AnimatableComponentProps>} */
-const AnimatedComponent = memo(({ animation, state, panHandlers, screenChildren }) => {
+const AnimatedComponent = ({ animation, state, panHandlers, screenChildren }) => {
   const values = getAnimatedValues(state);
 
   const styles = useMemo(() => (animation ? animation(values) : null), [values, animation]);
@@ -754,10 +754,10 @@ const AnimatedComponent = memo(({ animation, state, panHandlers, screenChildren 
       }),
     ],
   });
-});
+};
 
 /** @type {React.FC<AnimatableComponentProps>} */
-const ReanimatedComponent = memo(({ reanimation, state, panHandlers, screenChildren }) => {
+const ReanimatedComponent = ({ reanimation, state, panHandlers, screenChildren }) => {
   const values = getReanimatedValues(state);
 
   const updaters = useMemo(() => (reanimation ? reanimation(values) : null), [values, reanimation]);
@@ -801,7 +801,7 @@ const ReanimatedComponent = memo(({ reanimation, state, panHandlers, screenChild
       }),
     ],
   });
-});
+};
 
 /**
  * @typedef {Object} GouterNativeProps
@@ -953,19 +953,15 @@ export const GouterNative = memo((props) => {
 
   const { component } = screenConfigs[state.name] || { component: null };
 
-  const screenChildren = useMemo(
-    () =>
-      createElement(gouterStateContext.Provider, {
-        key: 'provider',
-        value: state,
-        children: createElement(component, {
-          key: 'component',
-          state,
-          children: componentChildren,
-        }),
-      }),
-    [component, componentChildren, state],
-  );
+  const screenChildren = createElement(gouterStateContext.Provider, {
+    key: 'provider',
+    value: state,
+    children: createElement(component, {
+      key: 'component',
+      state,
+      children: componentChildren,
+    }),
+  });
 
   return createElement(reanimated ? ReanimatedComponent : AnimatedComponent, {
     state,
