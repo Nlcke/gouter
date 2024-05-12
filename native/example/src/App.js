@@ -588,6 +588,8 @@ const AppWrapper = () => {
   const [treeVisible, setTreeVisible] = useState(true);
   const [jsonStr, setJsonStr] = useState(() => getJsonStr(rootState));
 
+  const [reanimated, setReanimated] = useState(true);
+
   useEffect(() => rootState.listen(state => setJsonStr(getJsonStr(state))), []);
 
   useEffect(() => rootState.listen(Keyboard.dismiss), []);
@@ -610,20 +612,30 @@ const AppWrapper = () => {
         routes={routes}
         screenConfigs={screenConfigs}
         defaultOptions={defaultOptions}
-        reanimated
+        reanimated={reanimated}
       />
       {treeVisible && (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
           <Text
             style={{
               backgroundColor: '#00000066',
-              color: 'white',
+              color: '#FFFFFFAA',
               flex: 1,
             }}>
             {jsonStr}
           </Text>
         </View>
       )}
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          right: 96,
+          backgroundColor: '#dddddd',
+          padding: 4,
+        }}
+        onPress={() => setReanimated(value => !value)}>
+        <Text>{reanimated ? 'REANIMATED' : 'ANIMATED'}</Text>
+      </TouchableOpacity>
       <TouchableOpacity
         style={{
           position: 'absolute',
