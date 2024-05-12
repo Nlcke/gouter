@@ -13,6 +13,8 @@ import {
 import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
 /** @ignore @typedef {import('../state').GouterState} GouterState */
+/** @ignore @typedef {import('../state').GouterConfig} GouterConfig */
+/** @ignore @typedef {import('react-native').ViewStyle} ViewStyle */
 
 let reanimatedLib;
 try {
@@ -21,15 +23,18 @@ try {
 } catch (e) {
   const throwReanimatedError = () => {
     const reanimatedLink = 'https://docs.swmansion.com/react-native-reanimated/';
-    throw Error(`install ${reanimatedLink} for enabled 'reanimated' prop of GouterNative`);
+    throw Error(`install ${reanimatedLink} to use 'reanimated' prop of GouterNative`);
   };
   reanimatedLib = new Proxy(/** @type {import('react-native-reanimated')} */ ({}), {
-    get: (_, p) => (p === 'useAnimatedStyle' ? () => null : throwReanimatedError),
+    get: (_, p) =>
+      p === 'useAnimatedStyle' || p === 'useAnimatedReaction' ? () => null : throwReanimatedError,
   });
 }
-const { makeMutable, withTiming, useAnimatedStyle, runOnJS, default: Reanimated } = reanimatedLib;
+const { makeMutable, withTiming, useAnimatedStyle, runOnJS, useAnimatedReaction } = reanimatedLib;
+const Reanimated = reanimatedLib.default;
 
-const emptyStyleFn = () => {
+/** @type {StyleUpdater} */
+const emptyStyleUpdater = () => {
   'worklet';
 
   return {};
@@ -55,10 +60,30 @@ const nextValueByNode = new WeakMap();
  */
 const getNextValue = (node) => nextValueByNode.get(node) || 0;
 
-let animationsCount = 0;
+/** @type {WeakSet<GouterState>} */
+const statesWithChildBlurring = new WeakSet();
+
+/** @type {WeakSet<GouterState>} */
+const statesWithChildFocusing = new WeakSet();
+
+/** @type {Set<Animated.Value | NumericSharedValue>} */
+const activeValues = new Set();
 
 /** @type {Set<React.Dispatch<React.SetStateAction<never[]>>>} */
 const stateUpdaters = new Set();
+
+/** @type {() => void} */
+const cleanStacks = () => {
+  if (!activeValues.size && stateUpdaters.size) {
+    for (const stateUpdater of stateUpdaters) {
+      stateUpdater([]);
+    }
+    stateUpdaters.clear();
+  }
+};
+
+/** @type {WeakMap<Animated.Value | NumericSharedValue, (...args: any[]) => void>} */
+const timingCallbackByNode = new WeakMap();
 
 /**
  * Starts timing animation
@@ -66,58 +91,51 @@ const stateUpdaters = new Set();
  * @param {number} toValue
  * @param {number} duration
  * @param {import('react-native').EasingFunction} [easing]
- * @param {(finished: boolean) => void} [callback]
+ * @param {() => void} [onFinish]
  * @returns {void}
  */
-const startTiming = (node, toValue, duration, easing, callback) => {
+const startTiming = (node, toValue, duration, easing, onFinish) => {
   if (duration) {
-    animationsCount += 1;
+    activeValues.add(node);
     nextValueByNode.set(node, toValue);
-    const fromValue = valueByNode.get(node) || 0;
-    const fromDate = Date.now();
-    /** @type {(finished: boolean) => void} */
-    const setValue = (finished) => {
-      animationsCount -= 1;
-      if (!animationsCount) {
-        stateUpdaters.forEach((stateUpdate) => stateUpdate([]));
-        stateUpdaters.clear();
-      }
-      if (fromValue !== valueByNode.get(node) || toValue !== nextValueByNode.get(node)) {
-        return;
-      }
-      if (finished) {
-        valueByNode.set(node, toValue);
-      } else {
-        const currentDuration = (Date.now() - fromDate) / duration;
-        const currentRawValue = fromValue + (toValue - fromValue) * currentDuration;
-        const currentValue = easing ? easing(currentRawValue) : currentRawValue;
-        valueByNode.set(node, currentValue);
-        nextValueByNode.set(node, toValue);
-      }
-    };
     if ('interpolate' in node) {
-      Animated.timing(node, { toValue, duration, easing, useNativeDriver: true }).start(
-        ({ finished }) => {
-          setValue(finished);
-          if (callback) {
-            callback(finished);
+      /** @type {Animated.EndCallback} */
+      const callback = ({ finished }) => {
+        activeValues.delete(node);
+        if (finished && timingCallbackByNode.get(node) === callback) {
+          timingCallbackByNode.delete(node);
+          valueByNode.set(node, toValue);
+          cleanStacks();
+          if (onFinish) {
+            onFinish();
           }
-        },
-      );
+        }
+      };
+      Animated.timing(node, { toValue, duration, easing, useNativeDriver: true }).start(callback);
+      timingCallbackByNode.set(node, callback);
     } else {
+      /** @type {(finished: boolean, value: number) => void} */
+      const callback = (finished) => {
+        activeValues.delete(node);
+        if (finished && timingCallbackByNode.get(node) === callback) {
+          timingCallbackByNode.delete(node);
+          valueByNode.set(node, toValue);
+          cleanStacks();
+          if (onFinish) {
+            onFinish();
+          }
+        }
+      };
+      timingCallbackByNode.set(node, callback);
       // eslint-disable-next-line no-param-reassign
       node.value = withTiming(
         toValue,
         easing ? { duration, easing } : { duration },
-        (finished = true) => {
-          runOnJS(setValue)(finished);
-          if (callback) {
-            runOnJS(callback)(finished);
-          }
-        },
+        (finished = true) => runOnJS(callback)(finished, node.value),
       );
     }
   } else {
+    timingCallbackByNode.delete(node);
     if ('interpolate' in node) {
       node.setValue(toValue);
     } else {
@@ -126,14 +144,14 @@ const startTiming = (node, toValue, duration, easing, callback) => {
     }
     valueByNode.set(node, toValue);
     nextValueByNode.set(node, toValue);
-    if (callback) {
-      callback(true);
+    if (onFinish) {
+      onFinish();
     }
   }
 };
 
 /**
- * @template {import('../state').GouterConfig} T
+ * @template {GouterConfig} T
  * @template {keyof T} N
  * @typedef {{
  * state: import('../state').GouterState<T, N>
@@ -141,52 +159,51 @@ const startTiming = (node, toValue, duration, easing, callback) => {
  * }} ScreenProps
  */
 
-/** @typedef {Animated.WithAnimatedValue<import('react-native').ViewStyle>} AnimatedStyle */
+/** @typedef {Animated.WithAnimatedObject<ViewStyle>} AnimatedStyle */
 
 /** @typedef {(animatedValues: AnimatedValues) => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation */
 
-/** @typedef {() => import('react-native').ViewStyle} ReanimatedStyle */
+/** @typedef {() => ViewStyle} StyleUpdater */
 
-/** @typedef {(reanimatedValues: ReanimatedValues) => ReanimatedStyle | [ReanimatedStyle, ReanimatedStyle]} ReanimatedAnimation */
+/** @typedef {(reanimatedValues: ReanimatedValues) => StyleUpdater | [StyleUpdater, StyleUpdater]} Reanimation */
 
 /** @typedef {'horizontal' | 'vertical' | 'top' | 'right' | 'bottom' | 'left' | 'none'} SwipeDetection */
 
 /**
- * @typedef {{
- * animation?: Animation
- * reanimatedAnimation?: ReanimatedAnimation
- * animationDuration?: number
- * animationEasing?: (value: number) => number
- * prevScreenFixed?: boolean
- * swipeDetection?: SwipeDetection
- * swipeDetectionSize?: number | string
- * }} StateSettings
+ * @typedef {Object} ScreenOptions
+ * @prop {Animation} [animation]
+ * @prop {Reanimation} [reanimation]
+ * @prop {number} [animationDuration]
+ * @prop {(value: number) => number} [animationEasing]
+ * @prop {boolean} [prevScreenFixed]
+ * @prop {SwipeDetection} [swipeDetection]
+ * @prop {number | string} [swipeDetectionSize]
  */
 
 /**
  * @template S
- * @template {import('../state').GouterConfig} T
+ * @template {GouterConfig} T
  * @template {keyof T} N
  * @typedef {(state: import('../state').GouterState<T, N>) => S} Computable
  */
 
 /**
- * @template {import('../state').GouterConfig} T
+ * @template {GouterConfig} T
  * @template {keyof T} N
  * @typedef {{
  * component: React.ComponentType<ScreenProps<T, N>>
- * stackSettings?: StateSettings | Computable<StateSettings, T, N>
- * stateSettings?: StateSettings | Computable<StateSettings, T, N>
+ * screenOptions?: ScreenOptions | Computable<ScreenOptions, T, N>
+ * stackOptions?: ScreenOptions | Computable<ScreenOptions, T, N>
  * }} ScreenConfig
  */
 
 /**
- * @template {import('../state').GouterConfig} T
+ * @template {GouterConfig} T
  * @typedef {{[N in keyof T]: ScreenConfig<T, N>}} ScreenConfigs
  */
 
 /**
- * @template {import('../state').GouterConfig} T
+ * @template {GouterConfig} T
  * @template {keyof T} N
  * @typedef {React.FC<ScreenProps<T, N>>} GouterScreen
  */
@@ -224,13 +241,7 @@ const emptyStack = [];
 
 let panRespondersBlocked = false;
 
-/** @type {(initialValue: number) => Animated.Value} */
-const newAnimatedValue = (initialValue) => {
-  const animatedValue = new Animated.Value(initialValue);
-  valueByNode.set(animatedValue, initialValue);
-  nextValueByNode.set(animatedValue, initialValue);
-  return animatedValue;
-};
+const initialIndex = 1;
 
 /** @type {WeakMap<GouterState, AnimatedValues>} */
 const animatedValuesMap = new WeakMap();
@@ -244,23 +255,18 @@ export const getAnimatedValues = (state) => {
   if (prevAnimatedValues) {
     return prevAnimatedValues;
   }
+  const index = new Animated.Value(initialIndex);
+  valueByNode.set(index, initialIndex);
+  nextValueByNode.set(index, initialIndex);
   const { width, height } = Dimensions.get('window');
   /** @type {AnimatedValues} */
   const animatedValues = {
-    width: newAnimatedValue(width),
-    height: newAnimatedValue(height),
-    index: newAnimatedValue(1),
+    index,
+    width: new Animated.Value(width),
+    height: new Animated.Value(height),
   };
   animatedValuesMap.set(state, animatedValues);
   return animatedValues;
-};
-
-/** @type {(initialValue: number) => NumericSharedValue} */
-const newReanimatedValue = (initialValue) => {
-  const reanimatedValue = makeMutable(initialValue);
-  valueByNode.set(reanimatedValue, initialValue);
-  nextValueByNode.set(reanimatedValue, initialValue);
-  return reanimatedValue;
 };
 
 /** @type {WeakMap<GouterState, ReanimatedValues>} */
@@ -275,12 +281,15 @@ export const getReanimatedValues = (state) => {
   if (prevReanimatedValues) {
     return prevReanimatedValues;
   }
+  const index = makeMutable(initialIndex);
+  valueByNode.set(index, initialIndex);
+  nextValueByNode.set(index, initialIndex);
   const { width, height } = Dimensions.get('window');
   /** @type {ReanimatedValues} */
   const reanimatedValues = {
-    width: newReanimatedValue(width),
-    height: newReanimatedValue(height),
-    index: newReanimatedValue(1),
+    index,
+    width: makeMutable(width),
+    height: makeMutable(height),
   };
   reanimatedValuesMap.set(state, reanimatedValues);
   return reanimatedValues;
@@ -292,27 +301,25 @@ const prevParentsMap = new WeakMap();
 /** @type {WeakMap<GouterState, Record<string, any>>} */
 const prevParamsMap = new WeakMap();
 
-/** @type {WeakMap<GouterState, StateSettings>} */
-const ownSettingsMap = new WeakMap();
+/** @type {WeakMap<GouterState, ScreenOptions>} */
+const screenOptionsMap = new WeakMap();
 
-/** @type {WeakMap<GouterState, StateSettings>} */
-const stackSettingsMap = new WeakMap();
+/** @type {WeakMap<GouterState, ScreenOptions>} */
+const stackOptionsMap = new WeakMap();
 
-/** @type {WeakMap<GouterState, StateSettings>} */
-const defaultSettingsMap = new WeakMap();
+/** @type {WeakMap<GouterState, ScreenOptions>} */
+const defaultOptionsMap = new WeakMap();
 
-/** @type {WeakMap<GouterState, StateSettings>} */
-const stateSettingsProxyMap = new WeakMap();
+/** @type {WeakMap<GouterState, ScreenOptions>} */
+const screenOptionsProxyMap = new WeakMap();
 
-const stateSettingsProxyHandler = {
-  /** @type {<Key extends keyof StateSettings>(state: GouterState, key: Key) => StateSettings[Key] | undefined} */
+const screenOptionsProxyHandler = {
+  /** @type {<Key extends keyof ScreenOptions>(state: GouterState, key: Key) => ScreenOptions[Key] | undefined} */
   get(state, key) {
-    for (const map of [ownSettingsMap, stackSettingsMap, defaultSettingsMap]) {
-      const settings = map.get(
-        map === stackSettingsMap ? prevParentsMap.get(state) || state : state,
-      );
-      if (settings && key in settings) {
-        return settings[key];
+    for (const map of [screenOptionsMap, stackOptionsMap, defaultOptionsMap]) {
+      const options = map.get(map === stackOptionsMap ? prevParentsMap.get(state) || state : state);
+      if (options && key in options) {
+        return options[key];
       }
     }
     return undefined;
@@ -320,14 +327,14 @@ const stateSettingsProxyHandler = {
 };
 
 /**
- * Get state settings proxy for current state based on screenConfigs and defaultSettings.
+ * Get state options proxy for current state based on screenConfigs and defaultOptions.
  * @param {GouterState} state
  * @param {ScreenConfigs<any>} screenConfigs
- * @param {StateSettings} defaultSettings
- * @returns {StateSettings}
+ * @param {ScreenOptions} defaultOptions
+ * @returns {ScreenOptions}
  */
-const getStateSettings = (state, screenConfigs, defaultSettings) => {
-  defaultSettingsMap.set(state, defaultSettings);
+const getScreenOptions = (state, screenConfigs, defaultOptions) => {
+  defaultOptionsMap.set(state, defaultOptions);
 
   const parentState = state.parent || prevParentsMap.get(state);
   if (parentState) {
@@ -338,32 +345,33 @@ const getStateSettings = (state, screenConfigs, defaultSettings) => {
   if (prevParams !== state.params) {
     const screenConfig = screenConfigs[state.name];
     if (screenConfig) {
-      const { stateSettings: ownSettings, stackSettings } = screenConfig;
-      if (ownSettings) {
-        const newOwnSettings = typeof ownSettings === 'function' ? ownSettings(state) : ownSettings;
-        ownSettingsMap.set(state, newOwnSettings);
+      const { screenOptions, stackOptions } = screenConfig;
+      if (screenOptions) {
+        const newScreenOptions =
+          typeof screenOptions === 'function' ? screenOptions(state) : screenOptions;
+        screenOptionsMap.set(state, newScreenOptions);
       }
-      if (stackSettings) {
-        const newStackSettings =
-          typeof stackSettings === 'function' ? stackSettings(state) : stackSettings;
-        stackSettingsMap.set(state, newStackSettings);
+      if (stackOptions) {
+        const newStackOptions =
+          typeof stackOptions === 'function' ? stackOptions(state) : stackOptions;
+        stackOptionsMap.set(state, newStackOptions);
       }
     }
     prevParamsMap.set(state, state.params);
   }
 
-  const prevStateSettings = stateSettingsProxyMap.get(state);
-  if (prevStateSettings) {
-    return prevStateSettings;
+  const prevScreenOptions = screenOptionsProxyMap.get(state);
+  if (prevScreenOptions) {
+    return prevScreenOptions;
   }
 
-  const stateSettings = new Proxy(
-    /** @type {StateSettings} */ (state),
-    /** @type {any} */ (stateSettingsProxyHandler),
+  const screenOptions = new Proxy(
+    /** @type {ScreenOptions} */ (state),
+    /** @type {any} */ (screenOptionsProxyHandler),
   );
-  stateSettingsProxyMap.set(state, stateSettings);
+  screenOptionsProxyMap.set(state, screenOptions);
 
-  return stateSettings;
+  return screenOptions;
 };
 
 /** @type {<T>(list: T[], item: T) => T[]} */
@@ -487,18 +495,18 @@ export const useIsRootStale = (listener) =>
 /**
  * Detects if gestures are blocked for next and prev states.
  * @param {GouterState} state
- * @param {StateSettings} stateSettings
+ * @param {ScreenOptions} screenOptions
  * @param {import('..').Routes<any>} routes
  * @returns {{prev: boolean, next: boolean}}
  */
-const getBlocked = (state, stateSettings, routes) => {
+const getBlocked = (state, screenOptions, routes) => {
   const route = routes[state.name] || {};
   const { parent } = state;
   if (route.blocker && parent) {
     const fromStateIndex = parent.stack.indexOf(state);
     const prevState = parent.stack[fromStateIndex - 1];
     const nextState = parent.stack[fromStateIndex + 1];
-    const { swipeDetection = 'none' } = stateSettings;
+    const { swipeDetection = 'none' } = screenOptions;
     const isUnidirectional = unidirectionalSwipes.indexOf(swipeDetection) >= 0;
     return {
       prev: !prevState || route.blocker(state, isUnidirectional ? null : prevState),
@@ -509,15 +517,10 @@ const getBlocked = (state, stateSettings, routes) => {
 };
 
 /**
- * @type {(props: { state: any, stateSettings: any, aniValues: any, getAniValues: any, routes: any })
- * => import('react-native').GestureResponderHandlers}
- */
-
-/**
  *
  * @param {{
  * state: GouterState,
- * stateSettings: StateSettings,
+ * screenOptions: ScreenOptions,
  * aniValues: AnimatedValues | ReanimatedValues,
  * getAniValues: ((state: GouterState) => AnimatedValues) | ((state: GouterState) => ReanimatedValues),
  * routes: import('..').Routes<any>}} props
@@ -533,17 +536,19 @@ const usePanHandlers = (props) => {
 
   /** @type {NonNullable<import('react-native').PanResponderCallbacks['onMoveShouldSetPanResponder']>} */
   const onMoveShouldSetPanResponder = useCallback((event, { dx, dy, moveX, moveY }) => {
-    const { aniValues, state, stateSettings, routes } = ref.current;
-    event.preventDefault();
-    if (panRespondersBlocked) {
-      event.stopPropagation();
+    const { aniValues, state, screenOptions, routes } = ref.current;
+
+    if (!state.isFocused || state.stack.length) {
       return false;
     }
-    const { isFocused } = state;
-    if (!isFocused) {
-      return false;
+    let parentState = state;
+    while (parentState.parent) {
+      parentState = parentState.parent;
+      if (!parentState.isFocused) {
+        return false;
+      }
     }
-    const { swipeDetection = 'none', swipeDetectionSize } = stateSettings;
+    const { swipeDetection = 'none', swipeDetectionSize } = screenOptions;
     if (swipeDetection === 'none') {
       return false;
     }
@@ -572,27 +577,30 @@ const usePanHandlers = (props) => {
     }
     const shouldSet =
       event.nativeEvent.touches.length === 1 &&
-      Math.abs(isHorizontal ? dx : dy) > swipeStartThreshold &&
-      Math.abs(isHorizontal ? dy : dx) < swipeCancelThreshold;
+      Math.abs(isHorizontal ? dx : dy) >= swipeStartThreshold &&
+      Math.abs(isHorizontal ? dy : dx) <= swipeCancelThreshold;
     if (shouldSet) {
       panRespondersBlocked = true;
       event.stopPropagation();
       valueRef.current = getValue(aniValues.index);
-      blockedRef.current = getBlocked(state, stateSettings, routes);
+      blockedRef.current = getBlocked(state, screenOptions, routes);
+      if (blockedRef.current.next && blockedRef.current.prev) {
+        return false;
+      }
     }
     return shouldSet;
   }, []);
 
   /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderMove']>} */
   const onPanResponderMove = useCallback((event, { dx, dy }) => {
-    const { aniValues, state, stateSettings, getAniValues } = ref.current;
-    const { parent, isFocused } = state;
-    if (!(parent && isFocused)) {
+    const { aniValues, state, screenOptions, getAniValues } = ref.current;
+    const { parent } = state;
+    if (!parent) {
       return;
     }
-    event.preventDefault();
+
     event.stopPropagation();
-    const { swipeDetection = 'none', prevScreenFixed } = stateSettings;
+    const { swipeDetection = 'none', prevScreenFixed } = screenOptions;
     const isHorizontal = horizontalSwipes.indexOf(swipeDetection) >= 0;
     const delta = isHorizontal ? dx : dy;
     const side = getValue(isHorizontal ? aniValues.width : aniValues.height);
@@ -613,19 +621,14 @@ const usePanHandlers = (props) => {
   /** @type {NonNullable<import('react-native').PanResponderCallbacks['onPanResponderRelease']>} */
   const onPanResponderReleaseOrTerminate = useCallback((event, { dx, vx, dy, vy }) => {
     panRespondersBlocked = false;
-    const { aniValues, state, stateSettings, getAniValues } = ref.current;
+    const { aniValues, state, screenOptions, getAniValues } = ref.current;
     const { parent, isFocused } = state;
     if (!(parent && isFocused)) {
       return;
     }
-    event.preventDefault();
+
     event.stopPropagation();
-    const {
-      swipeDetection = 'none',
-      animationDuration = 0,
-      animationEasing,
-      prevScreenFixed = false,
-    } = stateSettings;
+    const { swipeDetection = 'none', animationEasing, prevScreenFixed = false } = screenOptions;
     const isHorizontal = horizontalSwipes.indexOf(swipeDetection) >= 0;
     const delta = isHorizontal ? dx : dy;
     const velocity = isHorizontal ? vx : vy;
@@ -641,9 +644,14 @@ const usePanHandlers = (props) => {
     const hasNextState = !!nextState && state !== nextState;
     const shouldGoToNextState = hasNextState && Math.abs(value) >= 0.5;
 
-    const duration = shouldGoToNextState
-      ? animationDuration * (1 - Math.min(Math.abs(value), 1))
-      : animationDuration * Math.abs(rawValue);
+    const animationDuration = 300;
+
+    const duration = Math.max(
+      32,
+      shouldGoToNextState
+        ? animationDuration * (1 - Math.min(Math.abs(value), 1))
+        : animationDuration * Math.abs(rawValue),
+    );
 
     startTiming(
       aniValues.index,
@@ -651,12 +659,10 @@ const usePanHandlers = (props) => {
       duration,
       animationEasing,
       shouldGoToNextState && prevScreenFixed
-        ? (finished) => {
-            if (finished) {
-              nextState.focus();
-              if (unidirectionalSwipes.indexOf(swipeDetection) >= 0) {
-                parent.setStack(getListWithoutItem(parent.stack, state));
-              }
+        ? () => {
+            nextState.focus();
+            if (unidirectionalSwipes.indexOf(swipeDetection) >= 0) {
+              parent.setStack(getListWithoutItem(parent.stack, state));
             }
           }
         : undefined,
@@ -674,12 +680,10 @@ const usePanHandlers = (props) => {
         duration,
         animationEasing,
         shouldGoToNextState
-          ? (finished) => {
-              if (finished) {
-                nextState.focus();
-                if (unidirectionalSwipes.indexOf(swipeDetection) >= 0) {
-                  parent.setStack(getListWithoutItem(parent.stack, state));
-                }
+          ? () => {
+              nextState.focus();
+              if (unidirectionalSwipes.indexOf(swipeDetection) >= 0) {
+                parent.setStack(getListWithoutItem(parent.stack, state));
               }
             }
           : undefined,
@@ -695,6 +699,7 @@ const usePanHandlers = (props) => {
         onPanResponderRelease: onPanResponderReleaseOrTerminate,
         onPanResponderTerminate: onPanResponderReleaseOrTerminate,
         onPanResponderTerminationRequest: () => false,
+        onMoveShouldSetPanResponderCapture: () => panRespondersBlocked,
       }).panHandlers,
     [onMoveShouldSetPanResponder, onPanResponderMove, onPanResponderReleaseOrTerminate],
   );
@@ -703,22 +708,116 @@ const usePanHandlers = (props) => {
 };
 
 /**
+ * @ignore
+ * @typedef {Object} AnimatableComponentProps
+ * @prop {Animation | undefined} animation
+ * @prop {Reanimation | undefined} reanimation
+ * @prop {GouterState} state
+ * @prop {import('react-native').GestureResponderHandlers} panHandlers
+ * @prop {React.FunctionComponentElement<any>} screenChildren
+ */
+
+/** @type {React.FC<AnimatableComponentProps>} */
+const AnimatedComponent = memo(({ animation, state, panHandlers, screenChildren }) => {
+  const values = getAnimatedValues(state);
+
+  const styles = useMemo(() => (animation ? animation(values) : null), [values, animation]);
+
+  const [backdropStyle, screenStyle] = Array.isArray(styles) ? styles : [null, styles];
+
+  const { index } = values;
+
+  useEffect(() => {
+    const listenerId = index.addListener(({ value }) => valueByNode.set(index, value));
+    return () => index.removeListener(listenerId);
+  }, [index]);
+
+  return createElement(Fragment, {
+    children: [
+      createElement(Animated.View, {
+        key: 'backdrop',
+        style: useMemo(() => [StyleSheet.absoluteFill, backdropStyle], [backdropStyle]),
+        pointerEvents: 'none',
+        onLayout: ({ nativeEvent }) => {
+          const { width, height } = nativeEvent.layout;
+          startTiming(values.width, width, 0);
+          startTiming(values.height, height, 0);
+        },
+      }),
+      createElement(Animated.View, {
+        key: 'screen',
+        ...panHandlers,
+        style: useMemo(() => [StyleSheet.absoluteFill, screenStyle], [screenStyle]),
+        children: screenChildren,
+      }),
+    ],
+  });
+});
+
+/** @type {React.FC<AnimatableComponentProps>} */
+const ReanimatedComponent = memo(({ reanimation, state, panHandlers, screenChildren }) => {
+  const values = getReanimatedValues(state);
+
+  const updaters = useMemo(() => (reanimation ? reanimation(values) : null), [values, reanimation]);
+
+  const [backdropUpdater, screenUpdater] = Array.isArray(updaters) ? updaters : [null, updaters];
+
+  const dependencies = useMemo(() => Object.values(values), [values]);
+
+  const backdropStyle = useAnimatedStyle(backdropUpdater || emptyStyleUpdater, dependencies);
+
+  const screenStyle = useAnimatedStyle(screenUpdater || emptyStyleUpdater, dependencies);
+
+  const { index } = values;
+
+  /** @type {(value: number) => void} */
+  const setValue = useCallback((value) => valueByNode.set(index, value), [index]);
+
+  useAnimatedReaction(
+    () => index.value,
+    (value) => runOnJS(setValue)(value),
+    dependencies,
+  );
+
+  return createElement(Fragment, {
+    children: [
+      createElement(Reanimated.View, {
+        key: 'backdrop',
+        style: useMemo(() => [StyleSheet.absoluteFill, backdropStyle], [backdropStyle]),
+        pointerEvents: 'none',
+        onLayout: ({ nativeEvent }) => {
+          const { width, height } = nativeEvent.layout;
+          startTiming(values.width, width, 0);
+          startTiming(values.height, height, 0);
+        },
+      }),
+      createElement(Reanimated.View, {
+        key: 'screen',
+        ...panHandlers,
+        style: useMemo(() => [StyleSheet.absoluteFill, screenStyle], [screenStyle]),
+        children: screenChildren,
+      }),
+    ],
+  });
+});
+
+/**
  * @typedef {Object} GouterNativeProps
  * @prop {GouterState} state Root state to start render from.
  * @prop {import('..').Routes<any>} routes Navigation between screens.
  * @prop {ScreenConfigs<any>} screenConfigs Animation and gestures for each screen.
- * @prop {StateSettings} defaultSettings Will be used for this state and it's inner states at any
- * depth when `screenSettings` and `stackSettings` of target state has no defined field.
+ * @prop {ScreenOptions} defaultOptions Will be used for this state and it's inner states at any
+ * depth when `screenOptions` and `stackOptions` of target state has no defined field.
  * @prop {boolean | undefined} [reanimated] If true then `react-native-reanimated` module will be
- * used for every animation at `reanimatedAnimation` field.
+ * used for every animation at `reanimation` field.
  */
 
 /**
- * Main component to render screens and handle gestures
+ * Main component to render screens and handle gestures.
  * @type {React.FC<GouterNativeProps>}
  */
 export const GouterNative = memo((props) => {
-  const { state, routes, screenConfigs, defaultSettings, reanimated } = props;
+  const { state, routes, screenConfigs, defaultOptions, reanimated } = props;
 
   const [, updateState] = useState([]);
 
@@ -739,18 +838,12 @@ export const GouterNative = memo((props) => {
   stateUpdaters.delete(updateState);
 
   for (const stackState of prevStackRef.current) {
-    if (stackState.parent !== state) {
-      const aniValues = getAniValues(stackState);
-      const indexValue = getValue(aniValues.index);
-      const nextIndexValue = getNextValue(aniValues.index);
-      if (indexValue === nextIndexValue && Math.abs(indexValue) === 1) {
+    if (!stackState.parent) {
+      const { index } = getAniValues(stackState);
+      if (Math.abs(getNextValue(index)) === 1 && !activeValues.has(index)) {
         prevStackRef.current = getListWithoutItem(prevStackRef.current, stackState);
-      } else if (Math.abs(nextIndexValue) !== 1) {
+      } else {
         stateUpdaters.add(updateState);
-        const stackStateSettings = getStateSettings(stackState, screenConfigs, defaultSettings);
-        const { animationDuration, animationEasing } = stackStateSettings;
-        const toValue = indexValue >= 0 ? 1 : -1;
-        startTiming(aniValues.index, toValue, animationDuration || 1, animationEasing);
       }
     }
   }
@@ -767,9 +860,9 @@ export const GouterNative = memo((props) => {
     if (!nextStack.length) {
       return prevStack;
     }
-    const filteredPrevStack = prevStack.filter((stackState) => stackState.parent !== state);
+    const filteredPrevStack = prevStack.filter((stackState) => !nextStack.includes(stackState));
     return filteredPrevStack.length ? [...nextStack, ...filteredPrevStack] : nextStack;
-  }, [nextStack, prevStack, state]);
+  }, [nextStack, prevStack]);
 
   prevStackRef.current = joinedStack;
 
@@ -791,77 +884,51 @@ export const GouterNative = memo((props) => {
     }
   }
 
-  if (blurredChild && blurredChild !== focusedChild && blurredChild.parent === state) {
+  const hasAnimation = statesWithChildBlurring.has(state) || statesWithChildFocusing.has(state);
+
+  if (!hasAnimation && focusedChild) {
+    const aniValues = getAniValues(focusedChild);
+    const nextIndexValue = getNextValue(aniValues.index);
+    if (nextIndexValue !== 0) {
+      if (!activeValues.has(aniValues.index) && Math.abs(nextIndexValue) === 1) {
+        const toValue = blurredIndex > focusedIndex ? -1 : 1;
+        startTiming(aniValues.index, toValue, 0);
+      }
+      const options = getScreenOptions(focusedChild, screenConfigs, defaultOptions);
+      const { animationDuration, animationEasing } = options;
+      statesWithChildFocusing.add(focusedChild);
+      startTiming(aniValues.index, 0, animationDuration || 0, animationEasing, () => {
+        statesWithChildFocusing.delete(focusedChild);
+      });
+    }
+  }
+
+  if (!hasAnimation && blurredChild && blurredChild !== focusedChild) {
     const aniValues = getAniValues(blurredChild);
     const nextIndexValue = getNextValue(aniValues.index);
     if (Math.abs(nextIndexValue) !== 1) {
       const prevScreenFixed =
         focusedChild &&
-        getStateSettings(focusedChild, screenConfigs, defaultSettings).prevScreenFixed;
-      if (!prevScreenFixed && blurredChild.parent === state) {
+        getScreenOptions(focusedChild, screenConfigs, defaultOptions).prevScreenFixed;
+      if (!prevScreenFixed) {
         const toValue = blurredIndex > focusedIndex ? 1 : -1;
-        const { animationDuration, animationEasing } = getStateSettings(
-          blurredChild,
-          screenConfigs,
-          defaultSettings,
+        const options = getScreenOptions(blurredChild, screenConfigs, defaultOptions);
+        const { animationDuration, animationEasing } = options;
+        statesWithChildBlurring.add(blurredChild);
+        startTiming(aniValues.index, toValue, animationDuration || 0, animationEasing, () =>
+          statesWithChildBlurring.delete(blurredChild),
         );
-        startTiming(aniValues.index, toValue, animationDuration || 0, animationEasing);
       }
     }
   }
 
-  if (focusedChild) {
-    const aniValues = getAniValues(focusedChild);
-    const nextIndexValue = getNextValue(aniValues.index);
-    if (nextIndexValue !== 0) {
-      const indexValue = getValue(aniValues.index);
-      if (indexValue === nextIndexValue) {
-        const toValue = blurredIndex > focusedIndex ? -1 : 1;
-        startTiming(aniValues.index, toValue, 0);
-      }
-      const { animationDuration, animationEasing } = getStateSettings(
-        focusedChild,
-        screenConfigs,
-        defaultSettings,
-      );
-      startTiming(aniValues.index, 0, animationDuration || 0, animationEasing);
-    }
-  }
-
-  const stateSettings = getStateSettings(state, screenConfigs, defaultSettings);
+  const screenOptions = getScreenOptions(state, screenConfigs, defaultOptions);
 
   const aniValues = getAniValues(state);
 
-  const panHandlers = usePanHandlers({ state, stateSettings, aniValues, getAniValues, routes });
+  const panHandlers = usePanHandlers({ state, screenOptions, aniValues, getAniValues, routes });
 
-  const { component } = screenConfigs[state.name] || { component: null };
-
-  const anyAnimation = reanimated ? stateSettings.reanimatedAnimation : stateSettings.animation;
-
-  const animatedStyleOrStyles = useMemo(
-    () => (anyAnimation ? anyAnimation(/** @type {any} */ (aniValues)) : null),
-    [aniValues, anyAnimation],
-  );
-
-  const [underlayStyleOrFn, screenStyleOrFn] = Array.isArray(animatedStyleOrStyles)
-    ? animatedStyleOrStyles
-    : [null, animatedStyleOrStyles];
-
-  const reanimatedUnderlayStyle = useAnimatedStyle(
-    typeof underlayStyleOrFn === 'function' ? underlayStyleOrFn : emptyStyleFn,
-    reanimated ? Object.values(aniValues) : [],
-  );
-
-  const underlayStyle = reanimated ? reanimatedUnderlayStyle : underlayStyleOrFn;
-
-  const reanimatedScreenStyle = useAnimatedStyle(
-    typeof screenStyleOrFn === 'function' ? screenStyleOrFn : emptyStyleFn,
-    reanimated ? Object.values(aniValues) : [],
-  );
-
-  const screenStyle = reanimated ? reanimatedScreenStyle : screenStyleOrFn;
-
-  const stackChildren = useMemo(
+  const componentChildren = useMemo(
     () =>
       joinedStack.map((stackState) =>
         createElement(GouterNative, {
@@ -869,45 +936,34 @@ export const GouterNative = memo((props) => {
           state: stackState,
           routes,
           screenConfigs,
-          defaultSettings,
+          defaultOptions,
           reanimated,
         }),
       ),
-    [defaultSettings, joinedStack, reanimated, routes, screenConfigs, stackStateKeys],
+    [defaultOptions, joinedStack, reanimated, routes, screenConfigs, stackStateKeys],
   );
 
-  const View = reanimated ? Reanimated.View : Animated.View;
+  const { component } = screenConfigs[state.name] || { component: null };
 
-  return createElement(Fragment, {
-    children: [
-      createElement(/** @type {typeof Reanimated.View} */ (View), {
-        key: 'underlay',
-        style: useMemo(() => [StyleSheet.absoluteFill, underlayStyle], [underlayStyle]),
-        pointerEvents: 'none',
-        onLayout: ({ nativeEvent }) => {
-          const { width, height } = nativeEvent.layout;
-          startTiming(aniValues.width, width, 0);
-          startTiming(aniValues.height, height, 0);
-        },
+  const screenChildren = useMemo(
+    () =>
+      createElement(gouterStateContext.Provider, {
+        key: 'provider',
+        value: state,
+        children: createElement(component, {
+          key: 'component',
+          state,
+          children: componentChildren,
+        }),
       }),
-      createElement(/** @type {typeof Reanimated.View} */ (View), {
-        key: 'screen',
-        ...panHandlers,
-        style: useMemo(() => [StyleSheet.absoluteFill, screenStyle], [screenStyle]),
-        children: [
-          createElement(gouterStateContext.Provider, {
-            key: 'provider',
-            value: state,
-            children: [
-              createElement(component, {
-                key: 'component',
-                state,
-                children: stackChildren,
-              }),
-            ],
-          }),
-        ],
-      }),
-    ],
+    [component, componentChildren, state],
+  );
+
+  return createElement(reanimated ? ReanimatedComponent : AnimatedComponent, {
+    state,
+    animation: screenOptions.animation,
+    reanimation: screenOptions.reanimation,
+    panHandlers,
+    screenChildren,
   });
 });

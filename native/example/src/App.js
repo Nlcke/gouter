@@ -220,7 +220,7 @@ export const LoginDrawer = () => {
           flex: 0.8,
         }}>
         <View>
-          <Text>Settings</Text>
+          <Text>Options</Text>
         </View>
       </View>
     </View>
@@ -331,8 +331,8 @@ const tabAnimation = ({index, width}) => ({
   ],
 });
 
-/** @type {import('gouter/native').ReanimatedAnimation} */
-const tabReanimatedAnimation =
+/** @type {import('gouter/native').Reanimation} */
+const tabReanimation =
   ({index, width}) =>
   () => {
     'worklet';
@@ -373,8 +373,8 @@ const iOSAnimation = ({index, width}) => [
   },
 ];
 
-/** @type {import('gouter/native').ReanimatedAnimation} */
-const iOSReanimatedAnimation = ({index, width}) => [
+/** @type {import('gouter/native').Reanimation} */
+const iOSReanimation = ({index, width}) => [
   () => {
     'worklet';
     return {
@@ -422,8 +422,8 @@ const drawerAnimation = ({index, width}) => [
   },
 ];
 
-/** @type {import('gouter/native').ReanimatedAnimation} */
-const drawerReanimatedAnimation = ({index, width}) => [
+/** @type {import('gouter/native').Reanimation} */
+const drawerReanimation = ({index, width}) => [
   () => {
     'worklet';
     return {
@@ -468,8 +468,8 @@ const modalAnimation = ({index, height}) => [
   },
 ];
 
-/** @type {import('gouter/native').ReanimatedAnimation} */
-const modalReanimatedAnimation = ({index, height}) => [
+/** @type {import('gouter/native').Reanimation} */
+const modalReanimation = ({index, height}) => [
   () => {
     'worklet';
     return {
@@ -490,27 +490,26 @@ const modalReanimatedAnimation = ({index, height}) => [
   },
 ];
 
-/** @type {import('gouter/native').StateSettings} */
-const defaultSettings = {
+/** @type {import('gouter/native').ScreenOptions} */
+const defaultOptions = {
   animation: iOSAnimation,
-  reanimatedAnimation: iOSReanimatedAnimation,
-  animationDuration: 3000,
+  reanimation: iOSReanimation,
+  animationDuration: 1350,
   swipeDetection: 'left',
   swipeDetectionSize: 40,
   animationEasing: Easing.elastic(0.25),
 };
 
-/** @type {import('gouter/native').StateSettings} */
-const tabsSettings = {
+/** @type {import('gouter/native').ScreenOptions} */
+const tabsOptions = {
   animation: tabAnimation,
-  reanimatedAnimation: tabReanimatedAnimation,
+  reanimation: tabReanimation,
   swipeDetection: 'horizontal',
   swipeDetectionSize: '100%',
-  animationDuration: 256,
 };
 
-/** @type {import('gouter/native').StateSettings} */
-const drawerSettings = {
+/** @type {import('gouter/native').ScreenOptions} */
+const drawerOptions = {
   animation: drawerAnimation,
   swipeDetection: 'right',
   swipeDetectionSize: '80%',
@@ -526,9 +525,9 @@ const screenConfigs = {
   },
   LoginModal: {
     component: LoginModal,
-    stateSettings: {
+    screenOptions: {
       animation: modalAnimation,
-      reanimatedAnimation: modalReanimatedAnimation,
+      reanimation: modalReanimation,
       swipeDetection: 'bottom',
       swipeDetectionSize: '100%',
       prevScreenFixed: true,
@@ -539,28 +538,27 @@ const screenConfigs = {
   },
   Stats: {
     component: Stats,
-    stateSettings: ({params: {animation}}) => ({
+    screenOptions: ({params: {animation}}) => ({
       animation: animation === 'rotation' ? tabAnimation : iOSAnimation,
     }),
   },
   LoginConfirmationStack: {
     component: LoginConfirmationStack,
-    stackSettings: drawerSettings,
   },
   LoginConfirmation: {
     component: LoginConfirmation,
   },
   LoginDrawer: {
     component: LoginDrawer,
-    stateSettings: {
-      reanimatedAnimation: drawerReanimatedAnimation,
+    screenOptions: {
+      reanimation: drawerReanimation,
       prevScreenFixed: true,
       swipeDetectionSize: '100%',
     },
   },
   Tabs: {
     component: Tabs,
-    stackSettings: tabsSettings,
+    stackOptions: tabsOptions,
   },
   Home: {
     component: Home,
@@ -611,7 +609,7 @@ const AppWrapper = () => {
         state={rootState}
         routes={routes}
         screenConfigs={screenConfigs}
-        defaultSettings={defaultSettings}
+        defaultOptions={defaultOptions}
         reanimated
       />
       {treeVisible && (
