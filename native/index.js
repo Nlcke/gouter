@@ -906,7 +906,7 @@ export const GouterNative = memo((props) => {
       const { animationDuration, animationEasing } = options;
       statesWithChildFocusing.add(focusedChild);
       startTiming(aniValues.index, 0, animationDuration || 0, animationEasing, () => {
-        statesWithChildFocusing.delete(focusedChild);
+        statesWithChildFocusing.delete(state);
       });
     }
   }
@@ -924,7 +924,7 @@ export const GouterNative = memo((props) => {
         const { animationDuration, animationEasing } = options;
         statesWithChildBlurring.add(blurredChild);
         startTiming(aniValues.index, toValue, animationDuration || 0, animationEasing, () =>
-          statesWithChildBlurring.delete(blurredChild),
+          statesWithChildBlurring.delete(state),
         );
       }
     }
