@@ -8,7 +8,7 @@
     "prepack": "tsc --project publish.tsconfig.json",
     "postpack": "rimraf index.d.ts state/index.d.ts native/index.d.ts navigators/index.d.ts linking/index.d.ts",
     "typedoc": "typedoc --tsconfig publish.tsconfig.json",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
   },
   "exports": {
     ".": "./index.js",
@@ -18,9 +18,11 @@
     "./linking": "./linking/index.js"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
     "eslint": "^8.40.0",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^8.8.0",
+    "jest": "^29.7.0",
     "prettier": "^2.8.8",
     "typedoc": "^0.25.8"
   },
