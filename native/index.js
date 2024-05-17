@@ -72,21 +72,33 @@ const activeValues = new Set();
 /** @type {Set<React.Dispatch<React.SetStateAction<never[]>>>} */
 const stateUpdaters = new Set();
 
-/** @type {() => void} */
-const cleanStacks = () => {
-  if (!activeValues.size && stateUpdaters.size) {
-    for (const stateUpdater of stateUpdaters) {
-      stateUpdater([]);
-    }
-    stateUpdaters.clear();
-  }
-};
-
 /** @type {WeakMap<Animated.Value | NumericSharedValue, (...args: any[]) => void>} */
 const timingCallbackByNode = new WeakMap();
 
 /**
- * Starts timing animation
+ * Finishes timing animation.
+ * @param {Animated.Value | NumericSharedValue} node
+ * @param {number} toValue
+ * @param {(() => void) | undefined} onFinish
+ */
+const finishTiming = (node, toValue, onFinish) => {
+  timingCallbackByNode.delete(node);
+  activeValues.delete(node);
+  valueByNode.set(node, toValue);
+  nextValueByNode.set(node, toValue);
+  if (onFinish) {
+    if (!activeValues.size && stateUpdaters.size) {
+      for (const stateUpdater of stateUpdaters) {
+        stateUpdater([]);
+      }
+      stateUpdaters.clear();
+    }
+    onFinish();
+  }
+};
+
+/**
+ * Starts timing animation or immediately updates animated value at zero duration.
  * @param {Animated.Value | NumericSharedValue} node
  * @param {number} toValue
  * @param {number} duration
@@ -98,55 +110,31 @@ const startTiming = (node, toValue, duration, easing, onFinish) => {
   if (duration) {
     activeValues.add(node);
     nextValueByNode.set(node, toValue);
-    if ('interpolate' in node) {
-      /** @type {Animated.EndCallback} */
-      const callback = ({ finished }) => {
-        activeValues.delete(node);
-        if (finished && timingCallbackByNode.get(node) === callback) {
-          timingCallbackByNode.delete(node);
-          valueByNode.set(node, toValue);
-          cleanStacks();
-          if (onFinish) {
-            onFinish();
-          }
-        }
-      };
+    /** @type {Animated.EndCallback} */
+    const callback = ({ finished }) => {
+      if (finished && timingCallbackByNode.get(node) === callback) {
+        finishTiming(node, toValue, onFinish);
+      }
+    };
+    timingCallbackByNode.set(node, callback);
+    if ('setValue' in node) {
       Animated.timing(node, { toValue, duration, easing, useNativeDriver: true }).start(callback);
-      timingCallbackByNode.set(node, callback);
     } else {
-      /** @type {(finished: boolean, value: number) => void} */
-      const callback = (finished) => {
-        activeValues.delete(node);
-        if (finished && timingCallbackByNode.get(node) === callback) {
-          timingCallbackByNode.delete(node);
-          valueByNode.set(node, toValue);
-          cleanStacks();
-          if (onFinish) {
-            onFinish();
-          }
-        }
-      };
-      timingCallbackByNode.set(node, callback);
       // eslint-disable-next-line no-param-reassign
       node.value = withTiming(
         toValue,
         easing ? { duration, easing } : { duration },
-        (finished = true) => runOnJS(callback)(finished, node.value),
+        (finished = true) => runOnJS(callback)({ finished }),
       );
     }
   } else {
-    timingCallbackByNode.delete(node);
-    if ('interpolate' in node) {
+    if ('setValue' in node) {
       node.setValue(toValue);
     } else {
       // eslint-disable-next-line no-param-reassign
       node.value = toValue;
     }
-    valueByNode.set(node, toValue);
-    nextValueByNode.set(node, toValue);
-    if (onFinish) {
-      onFinish();
-    }
+    finishTiming(node, toValue, onFinish);
   }
 };
 
