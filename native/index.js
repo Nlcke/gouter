@@ -60,12 +60,6 @@ const nextValueByNode = new WeakMap();
  */
 const getNextValue = (node) => nextValueByNode.get(node) || 0;
 
-/** @type {WeakSet<GouterState>} */
-const statesWithChildBlurring = new WeakSet();
-
-/** @type {WeakSet<GouterState>} */
-const statesWithChildFocusing = new WeakSet();
-
 /** @type {Set<Animated.Value | NumericSharedValue>} */
 const activeValues = new Set();
 
@@ -830,13 +824,15 @@ export const GouterNative = memo((props) => {
 
   stateUpdaters.delete(updateState);
 
+  let hasScheduledUpdate = false;
+
   for (const stackState of prevStackRef.current) {
     if (!stackState.parent) {
       const { index } = getAniValues(stackState);
       if (Math.abs(getNextValue(index)) === 1 && !activeValues.has(index)) {
         prevStackRef.current = getListWithoutItem(prevStackRef.current, stackState);
       } else {
-        stateUpdaters.add(updateState);
+        hasScheduledUpdate = true;
       }
     }
   }
@@ -880,42 +876,39 @@ export const GouterNative = memo((props) => {
     }
   }
 
-  const hasAnimation = statesWithChildBlurring.has(state) || statesWithChildFocusing.has(state);
-
-  if (!hasAnimation && focusedChild) {
-    const aniValues = getAniValues(focusedChild);
-    const nextIndexValue = getNextValue(aniValues.index);
+  if (focusedChild) {
+    const { index } = getAniValues(focusedChild);
+    const nextIndexValue = getNextValue(index);
     if (nextIndexValue !== 0) {
-      if (!activeValues.has(aniValues.index) && Math.abs(nextIndexValue) === 1) {
+      if (!activeValues.has(index) && Math.abs(nextIndexValue) === 1) {
         const toValue = blurredIndex > focusedIndex ? -1 : 1;
-        startTiming(aniValues.index, toValue, 0);
+        startTiming(index, toValue, 0);
       }
       const options = getScreenOptions(focusedChild, screenConfigs, defaultOptions);
       const { animationDuration, animationEasing } = options;
-      statesWithChildFocusing.add(focusedChild);
-      startTiming(aniValues.index, 0, animationDuration || 0, animationEasing, () => {
-        statesWithChildFocusing.delete(state);
-      });
+      startTiming(index, 0, animationDuration || 0, animationEasing);
     }
   }
 
-  if (!hasAnimation && blurredChild && blurredChild !== focusedChild) {
-    const aniValues = getAniValues(blurredChild);
-    const nextIndexValue = getNextValue(aniValues.index);
+  if (blurredChild && blurredChild !== focusedChild) {
+    const { index } = getAniValues(blurredChild);
+    const nextIndexValue = getNextValue(index);
     if (Math.abs(nextIndexValue) !== 1) {
       const prevScreenFixed =
         focusedChild &&
+        blurredChild.parent &&
         getScreenOptions(focusedChild, screenConfigs, defaultOptions).prevScreenFixed;
       if (!prevScreenFixed) {
         const toValue = blurredIndex > focusedIndex ? 1 : -1;
         const options = getScreenOptions(blurredChild, screenConfigs, defaultOptions);
         const { animationDuration, animationEasing } = options;
-        statesWithChildBlurring.add(blurredChild);
-        startTiming(aniValues.index, toValue, animationDuration || 0, animationEasing, () =>
-          statesWithChildBlurring.delete(state),
-        );
+        startTiming(index, toValue, animationDuration || 0, animationEasing);
       }
     }
+  }
+
+  if (hasScheduledUpdate) {
+    stateUpdaters.add(updateState);
   }
 
   const screenOptions = getScreenOptions(state, screenConfigs, defaultOptions);
