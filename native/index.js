@@ -149,7 +149,10 @@ const startTiming = (node, toValue, duration, easing, onFinish) => {
 
 /** @typedef {(reanimatedValues: ReanimatedValues) => StyleUpdater | [StyleUpdater, StyleUpdater]} Reanimation */
 
-/** @typedef {'horizontal' | 'vertical' | 'top' | 'right' | 'bottom' | 'left' | 'none'} SwipeDetection */
+/**
+ * @typedef {'none' | 'top-edge' | 'right-edge' | 'bottom-edge' | 'left-edge' | 'horizontal-edge' |
+ * 'vertical-edge' | 'horizontal-full' | 'vertical-full'} SwipeDetection
+ */
 
 /**
  * @typedef {Object} ScreenOptions
@@ -159,7 +162,6 @@ const startTiming = (node, toValue, duration, easing, onFinish) => {
  * @prop {(value: number) => number} [animationEasing]
  * @prop {boolean} [prevScreenFixed]
  * @prop {SwipeDetection} [swipeDetection]
- * @prop {number | string} [swipeDetectionSize]
  */
 
 /**
@@ -209,11 +211,12 @@ const startTiming = (node, toValue, duration, easing, onFinish) => {
 /** @typedef {WeakMap<GouterState, AnimatedValues>} animatedValues */
 
 /** @type {SwipeDetection[]} */
-const unidirectionalSwipes = ['left', 'top', 'right', 'bottom'];
+const unidirectionalSwipes = ['left-edge', 'top-edge', 'right-edge', 'bottom-edge'];
 
 /** @type {SwipeDetection[]} */
-const horizontalSwipes = ['horizontal', 'left', 'right'];
+const horizontalSwipes = ['left-edge', 'right-edge', 'horizontal-edge', 'horizontal-full'];
 
+const swipeEdgeSize = 20;
 const swipeStartThreshold = 5;
 const swipeCancelThreshold = 20;
 const velocityMultiplier = 100;
@@ -532,7 +535,7 @@ const usePanHandlers = (props) => {
         return false;
       }
     }
-    const { swipeDetection = 'none', swipeDetectionSize } = screenOptions;
+    const { swipeDetection = 'none' } = screenOptions;
     if (swipeDetection === 'none') {
       return false;
     }
@@ -542,20 +545,16 @@ const usePanHandlers = (props) => {
     if (locationValue < 0 || locationValue > side) {
       return false;
     }
-    if (swipeDetectionSize !== undefined) {
-      const size =
-        typeof swipeDetectionSize === 'string'
-          ? 0.01 * (parseFloat(swipeDetectionSize) || 0) * side
-          : swipeDetectionSize;
-      if (swipeDetection === 'horizontal' || swipeDetection === 'vertical') {
-        if (locationValue > size && locationValue < side - size) {
-          return false;
-        }
-      } else if (swipeDetection === 'left' || swipeDetection === 'top') {
-        if (locationValue > size) {
-          return false;
-        }
-      } else if (locationValue < side - size) {
+    if (swipeDetection === 'horizontal-edge' || swipeDetection === 'vertical-edge') {
+      if (locationValue > swipeEdgeSize && locationValue < side - swipeEdgeSize) {
+        return false;
+      }
+    } else if (swipeDetection === 'left-edge' || swipeDetection === 'top-edge') {
+      if (locationValue > swipeEdgeSize) {
+        return false;
+      }
+    } else if (swipeDetection === 'right-edge' || swipeDetection === 'bottom-edge') {
+      if (locationValue < side - swipeEdgeSize) {
         return false;
       }
     }
