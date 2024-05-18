@@ -519,7 +519,7 @@ const screenConfigs = {
     screenOptions: {
       animation: modalAnimation,
       reanimation: modalReanimation,
-      swipeDetection: 'bottom-edge',
+      swipeDetection: 'vertical-full',
       prevScreenFixed: true,
     },
   },
@@ -543,7 +543,7 @@ const screenConfigs = {
     screenOptions: {
       reanimation: drawerReanimation,
       prevScreenFixed: true,
-      swipeDetection: 'right-edge',
+      swipeDetection: 'horizontal-full',
     },
   },
   Tabs: {
