@@ -80,13 +80,13 @@ const finishTiming = (node, toValue, onFinish) => {
   activeValues.delete(node);
   valueByNode.set(node, toValue);
   nextValueByNode.set(node, toValue);
-  if (onFinish) {
-    if (!activeValues.size && stateUpdaters.size) {
-      for (const stateUpdater of stateUpdaters) {
-        stateUpdater([]);
-      }
-      stateUpdaters.clear();
+  if (!activeValues.size && stateUpdaters.size) {
+    for (const stateUpdater of stateUpdaters) {
+      stateUpdater([]);
     }
+    stateUpdaters.clear();
+  }
+  if (onFinish) {
     onFinish();
   }
 };
