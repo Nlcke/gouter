@@ -495,8 +495,7 @@ const defaultOptions = {
   animation: iOSAnimation,
   reanimation: iOSReanimation,
   animationDuration: 1350,
-  swipeDetection: 'left',
-  swipeDetectionSize: 40,
+  swipeDetection: 'left-edge',
   animationEasing: Easing.elastic(0.25),
 };
 
@@ -504,15 +503,7 @@ const defaultOptions = {
 const tabsOptions = {
   animation: tabAnimation,
   reanimation: tabReanimation,
-  swipeDetection: 'horizontal',
-  swipeDetectionSize: '100%',
-};
-
-/** @type {import('gouter/native').ScreenOptions} */
-const drawerOptions = {
-  animation: drawerAnimation,
-  swipeDetection: 'right',
-  swipeDetectionSize: '80%',
+  swipeDetection: 'horizontal-full',
 };
 
 /** @type {import('gouter/native').ScreenConfigs<Config>} */
@@ -528,8 +519,7 @@ const screenConfigs = {
     screenOptions: {
       animation: modalAnimation,
       reanimation: modalReanimation,
-      swipeDetection: 'bottom',
-      swipeDetectionSize: '100%',
+      swipeDetection: 'bottom-edge',
       prevScreenFixed: true,
     },
   },
@@ -553,7 +543,7 @@ const screenConfigs = {
     screenOptions: {
       reanimation: drawerReanimation,
       prevScreenFixed: true,
-      swipeDetectionSize: '100%',
+      swipeDetection: 'right-edge',
     },
   },
   Tabs: {
