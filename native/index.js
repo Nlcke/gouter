@@ -238,7 +238,7 @@ const horizontalSwipes = ['left-edge', 'right-edge', 'horizontal-edge', 'horizon
 const swipeEdgeSize = 20;
 const swipeStartThreshold = 5;
 const swipeCancelThreshold = 20;
-const velocityMultiplier = 100;
+const velocityMultiplier = 256;
 
 /** @type {GouterState[]} */
 const emptyStack = [];
@@ -553,7 +553,6 @@ const usePanHandlers = (props) => {
   /** @type {NonNullable<import('react-native').PanResponderCallbacks['onMoveShouldSetPanResponder']>} */
   const onMoveShouldSetPanResponder = useCallback((event, { dx, dy, moveX, moveY }) => {
     const { aniValues, state, screenOptions, routes } = ref.current;
-
     if (!state.isFocused || state.stack.length) {
       return false;
     }
@@ -610,7 +609,6 @@ const usePanHandlers = (props) => {
     if (!parent) {
       return;
     }
-
     event.stopPropagation();
     const { swipeDetection = 'none', prevScreenFixed } = screenOptions;
     const isHorizontal = horizontalSwipes.indexOf(swipeDetection) >= 0;
@@ -634,8 +632,8 @@ const usePanHandlers = (props) => {
   const onPanResponderReleaseOrTerminate = useCallback((event, { dx, vx, dy, vy }) => {
     panRespondersBlocked = false;
     const { aniValues, state, screenOptions, getAniValues } = ref.current;
-    const { parent, isFocused } = state;
-    if (!(parent && isFocused)) {
+    const { parent } = state;
+    if (!parent) {
       return;
     }
 
@@ -656,13 +654,10 @@ const usePanHandlers = (props) => {
     const hasNextState = !!nextState && state !== nextState;
     const shouldGoToNextState = hasNextState && Math.abs(value) >= 0.5;
 
-    const animationDuration = 300;
-
-    const duration = Math.max(
-      32,
-      shouldGoToNextState
-        ? animationDuration * (1 - Math.min(Math.abs(value), 1))
-        : animationDuration * Math.abs(rawValue),
+    const { animationDuration = 0 } = screenOptions;
+    const duration = Math.min(
+      animationDuration,
+      Math.abs((shouldGoToNextState ? side - Math.abs(delta) : Math.abs(delta)) / velocity),
     );
 
     startTiming(
