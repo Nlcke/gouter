@@ -3,7 +3,6 @@ import {
   GouterNative,
   getAnimatedValues,
   getReanimatedValues,
-  useGouterState,
   useIsFocused,
   useIsStale,
   useIsRootFocused,
@@ -19,7 +18,14 @@ import {
   Keyboard,
   ScrollView,
 } from 'react-native';
-import {create, goBack, goTo, rootState, routes} from './router';
+import {
+  create,
+  goBack,
+  goTo,
+  rootState,
+  routes,
+  useScreenState,
+} from './router';
 import {Easing, interpolate} from 'react-native-reanimated';
 
 const styles = StyleSheet.create({
@@ -298,7 +304,7 @@ const Post = () => {
 };
 
 const GouterStateName = () => {
-  const state = useGouterState();
+  const state = useScreenState();
   return <Text>state name: {state ? state.name : null}</Text>;
 };
 

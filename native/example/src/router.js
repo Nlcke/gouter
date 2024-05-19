@@ -1,6 +1,7 @@
 import {GouterNavigation} from 'gouter';
 import {newStackNavigator, newTabNavigator} from 'gouter/navigators';
 import {GouterLinking} from 'gouter/linking';
+import {useGouterState} from 'gouter/native';
 
 /**
  * @template {keyof Config} [N = keyof Config]
@@ -67,3 +68,5 @@ export const {
 } = new GouterNavigation(routes, 'App', {});
 
 export const {decodeUrl, encodeUrl} = new GouterLinking(routes, create);
+
+export const useScreenState = () => useGouterState(routes);

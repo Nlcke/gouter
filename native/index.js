@@ -414,10 +414,18 @@ const getStateKey = (state) => {
 const gouterStateContext = createContext(/** @type {GouterState | null} */ (null));
 
 /**
- * Returns current gouter state from nearest provider or null otherwise.
- * @returns {GouterState | null}
+ * Returns current gouter state from nearest provider if it's name is in routes or null otherwise.
+ * @template {GouterConfig} T
+ * @param {import('..').Routes<T>} routes
+ * @returns {import('../state').GouterState<T> | null}
  */
-export const useGouterState = () => useContext(gouterStateContext);
+export const useGouterState = (routes) => {
+  const gouterState = useContext(gouterStateContext);
+  if (gouterState && gouterState.name in routes) {
+    return /** @type {import('../state').GouterState<T>} */ (gouterState);
+  }
+  return null;
+};
 
 /**
  * Base hook to listen for parent state changes.
