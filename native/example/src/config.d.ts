@@ -18,9 +18,3 @@ type Config = {
   Post: {};
   Profile: {};
 };
-
-type State<N extends keyof Config = keyof Config> =
-  import('gouter/state').GouterState<Config, N>;
-
-type GouterScreen<N extends keyof Config> =
-  import('gouter/native').GouterScreen<Config, N>;

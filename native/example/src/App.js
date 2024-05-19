@@ -1,9 +1,9 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   GouterNative,
-  useGouterState,
   getAnimatedValues,
   getReanimatedValues,
+  useGouterState,
   useIsFocused,
   useIsStale,
   useIsRootFocused,
@@ -59,6 +59,11 @@ const styles = StyleSheet.create({
   },
 });
 
+/**
+ * @template {keyof Config} N
+ * @typedef {import('gouter/native').GouterScreen< Config, N>} Screen
+ */
+
 /** @type {React.FC<{title: string, onPress: () => void, selected?: boolean}>} */
 const Button = ({title, onPress, selected}) => (
   <TouchableOpacity
@@ -68,7 +73,7 @@ const Button = ({title, onPress, selected}) => (
   </TouchableOpacity>
 );
 
-/** @type {GouterScreen<'App'>} */
+/** @type {Screen<'App'>} */
 const App = ({children}) => {
   return (
     <View style={styles.container}>
@@ -78,17 +83,17 @@ const App = ({children}) => {
   );
 };
 
-/** @type {GouterScreen<'LoginStack'>} */
+/** @type {Screen<'LoginStack'>} */
 const LoginStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
-/** @type {GouterScreen<'LoginConfirmationStack'>} */
+/** @type {Screen<'LoginConfirmationStack'>} */
 const LoginConfirmationStack = ({children}) => {
   return <View style={styles.container}>{children}</View>;
 };
 
-/** @type {GouterScreen<'LoginModal'>} */
+/** @type {Screen<'LoginModal'>} */
 const LoginModal = () => {
   return (
     <View style={styles.modalContainer} renderToHardwareTextureAndroid>
@@ -97,7 +102,7 @@ const LoginModal = () => {
   );
 };
 
-/** @type {GouterScreen<'Login'>} */
+/** @type {Screen<'Login'>} */
 const Login = ({state}) => {
   return (
     <View style={styles.container}>
@@ -129,7 +134,7 @@ const Login = ({state}) => {
   );
 };
 
-/** @type {GouterScreen<'Stats'>} */
+/** @type {Screen<'Stats'>} */
 const Stats = ({state}) => {
   return (
     <View style={styles.container}>
@@ -140,7 +145,7 @@ const Stats = ({state}) => {
   );
 };
 
-/** @type {GouterScreen<'LoginConfirmation'>} */
+/** @type {Screen<'LoginConfirmation'>} */
 const LoginConfirmation = ({state}) => {
   const parentIndex = getAnimatedValues(state.parent || state).index;
   const animatedTextStyle = useMemo(
@@ -208,7 +213,7 @@ const LoginConfirmation = ({state}) => {
   );
 };
 
-/** @type {GouterScreen<'LoginDrawer'>} */
+/** @type {Screen<'LoginDrawer'>} */
 export const LoginDrawer = () => {
   return (
     <View style={{flexDirection: 'row', flex: 1}}>
@@ -230,7 +235,7 @@ export const LoginDrawer = () => {
   );
 };
 
-/** @type {GouterScreen<'Tabs'>} */
+/** @type {Screen<'Tabs'>} */
 const Tabs = ({state, children}) => {
   return (
     <View style={styles.container}>
@@ -266,7 +271,7 @@ const Tabs = ({state, children}) => {
   );
 };
 
-/** @type {GouterScreen<'Home'>} */
+/** @type {Screen<'Home'>} */
 const Home = ({}) => {
   const isFocused = useIsFocused();
   return (
@@ -279,7 +284,7 @@ const Home = ({}) => {
   );
 };
 
-/** @type {GouterScreen<'Post'>} */
+/** @type {Screen<'Post'>} */
 const Post = () => {
   const isStale = useIsStale();
   return (
@@ -297,7 +302,7 @@ const GouterStateName = () => {
   return <Text>state name: {state ? state.name : null}</Text>;
 };
 
-/** @type {GouterScreen<'Profile'>} */
+/** @type {Screen<'Profile'>} */
 const Profile = () => {
   return (
     <ScrollView style={styles.container}>
