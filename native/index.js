@@ -12,9 +12,9 @@ import {
 } from 'react';
 import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 
-/** @ignore @typedef {import('../state').GouterState} GouterState */
-/** @ignore @typedef {import('../state').GouterConfig} GouterConfig */
-/** @ignore @typedef {import('react-native').ViewStyle} ViewStyle */
+/** @typedef {import('../state').GouterState} GouterState */
+/** @typedef {import('../state').GouterConfig} GouterConfig */
+/** @typedef {import('react-native').ViewStyle} ViewStyle */
 
 /**
  * @template {GouterConfig} T
@@ -91,7 +91,6 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
  */
 
 /**
- * @ignore
  * @typedef AnimatableComponentProps
  * @prop {Animation | undefined} animation
  * @prop {Reanimation | undefined} reanimation

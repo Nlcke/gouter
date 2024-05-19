@@ -28,6 +28,7 @@
       "linking/index.js"
     ],
     "out": "docs",
-    "media": "media"
+    "media": "media",
+    "excludeReferences": true
   }
 }
