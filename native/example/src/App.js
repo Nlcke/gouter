@@ -3,8 +3,11 @@ import {
   GouterNative,
   useGouterState,
   getAnimatedValues,
+  getReanimatedValues,
   useIsFocused,
   useIsStale,
+  useIsRootFocused,
+  useIsRootStale,
 } from 'gouter/native';
 import {
   StyleSheet,
