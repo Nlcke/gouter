@@ -82,6 +82,9 @@ type Config = {
 };
 ```
 
+So new `state` for LoginConfirmation screen using above config will have `state.name` equal to
+`'LoginConfirmation'` and `state.params.phone` with `string` type.
+
 ### Router
 
 Now we have to define how we navigate between screens. We pass `Config` type from previous step to
