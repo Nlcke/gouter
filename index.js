@@ -19,11 +19,18 @@ export const bindMethods = (instance) => {
 };
 
 /**
- * `Navigator` defines how parent state stack is modified.
+ * Defines how parent state stack is modified.
  * @template {import('./state').GouterConfig} [T=import('./state').GouterConfig]
  * @template {keyof T} [N=keyof T]
  * @typedef {(parentState: GouterState<T, N>, toState: GouterState<T, N> | null, route: Route<T, N>)
  * => GouterState<T, N>[] | null} Navigator
+ */
+
+/**
+ * Defines when navigation from current state should be blocked.
+ * @template {import('./state').GouterConfig} [T=import('./state').GouterConfig]
+ * @template {keyof T} [N=keyof T]
+ * @typedef {(fromState: GouterState<T, N>, toState: GouterState<T> | null) => boolean} Blocker
  */
 
 /**
@@ -59,7 +66,7 @@ export const bindMethods = (instance) => {
  * @typedef {Object} RouteNavigation
  * @prop {Navigator<T, N> | Navigator<T> | Navigator} navigator
  * @prop {(keyof T)[]} allowed
- * @prop {(fromState: GouterState<T, N>, toState: GouterState<T> | null) => boolean} [blocker]
+ * @prop {Blocker<T, N>} [blocker]
  */
 
 /**
@@ -97,7 +104,7 @@ export const bindMethods = (instance) => {
 
 /**
  * Map of names to route configurations. Mainly controls how to navigate between states. Routes
- * should be described and passed to `getNavigation`.
+ * should be described and passed to `GouterNavigation`.
  * @template {import('./state').GouterConfig} T
  * @typedef {{[N in keyof T]: Route<T, N>}} Routes
  */
@@ -196,6 +203,22 @@ export class GouterNavigation {
       focusedState = focusedState.focusedChild;
     }
     return focusedState;
+  }
+
+  /**
+   * Replaces current innermost focused state by new one. If current state has no parent then
+   * nothing happens.
+   * @param {GouterState<T>} state
+   * @returns {void}
+   */
+  replaceFocusedState(state) {
+    const focusedState = this.getFocusedState();
+    const { parent } = focusedState;
+    if (parent) {
+      const nextStack = parent.stack.slice();
+      nextStack[parent.focusedIndex] = state.withFocus();
+      parent.setStack(nextStack);
+    }
   }
 
   /**
