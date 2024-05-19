@@ -518,10 +518,13 @@ export const useIsRootStale = (listener) =>
 const getBlocked = (state, screenOptions, routes) => {
   const route = routes[state.name] || {};
   const { parent } = state;
-  if (route.blocker && parent) {
-    const fromStateIndex = parent.stack.indexOf(state);
-    const prevState = parent.stack[fromStateIndex - 1];
-    const nextState = parent.stack[fromStateIndex + 1];
+  if (!parent) {
+    return { prev: true, next: true };
+  }
+  const fromStateIndex = parent.stack.indexOf(state);
+  const prevState = parent.stack[fromStateIndex - 1];
+  const nextState = parent.stack[fromStateIndex + 1];
+  if (route.blocker) {
     const { swipeDetection = 'none' } = screenOptions;
     const isUnidirectional = unidirectionalSwipes.indexOf(swipeDetection) >= 0;
     return {
@@ -529,7 +532,7 @@ const getBlocked = (state, screenOptions, routes) => {
       next: !nextState || route.blocker(state, isUnidirectional ? null : nextState),
     };
   }
-  return { prev: false, next: false };
+  return { prev: !prevState, next: !nextState };
 };
 
 /**
@@ -615,10 +618,14 @@ const usePanHandlers = (props) => {
     const delta = isHorizontal ? dx : dy;
     const side = getValue(isHorizontal ? aniValues.width : aniValues.height);
     const offset = delta / side || 0;
-    const value = valueRef.current + offset;
+    const rawValue = valueRef.current + offset;
+    const blocked = blockedRef.current;
+    const value = (rawValue > 0 && blocked.prev) || (rawValue < 0 && blocked.next) ? 0 : rawValue;
+
     const indexOffset = value > 0 ? 1 : value < 0 ? -1 : 0;
     const nextIndex = parent.focusedIndex - indexOffset;
     const nextState = parent.stack[nextIndex];
+
     if (nextState && nextState !== state && !prevScreenFixed) {
       const nextAnimatedValues = getAniValues(nextState);
       if (nextAnimatedValues) {
@@ -636,7 +643,6 @@ const usePanHandlers = (props) => {
     if (!parent) {
       return;
     }
-
     event.stopPropagation();
     const { swipeDetection = 'none', animationEasing, prevScreenFixed = false } = screenOptions;
     const isHorizontal = horizontalSwipes.indexOf(swipeDetection) >= 0;
