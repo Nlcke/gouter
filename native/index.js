@@ -175,9 +175,9 @@ const startTiming = (node, toValue, duration, easing, onFinish) => {
  * @template {GouterConfig} T
  * @template {keyof T} N
  * @typedef {{
- * component: React.ComponentType<ScreenProps<T, N>>
+ * screen: React.ComponentType<ScreenProps<T, N>>
  * screenOptions?: ScreenOptions | Computable<ScreenOptions, T, N>
- * stackOptions?: ScreenOptions | Computable<ScreenOptions, T, N>
+ * screenStackOptions?: ScreenOptions | Computable<ScreenOptions, T, N>
  * }} ScreenConfig
  */
 
@@ -290,7 +290,7 @@ const prevParamsMap = new WeakMap();
 const screenOptionsMap = new WeakMap();
 
 /** @type {WeakMap<GouterState, ScreenOptions>} */
-const stackOptionsMap = new WeakMap();
+const screenStackOptionsMap = new WeakMap();
 
 /** @type {WeakMap<GouterState, ScreenOptions>} */
 const defaultOptionsMap = new WeakMap();
@@ -301,8 +301,10 @@ const screenOptionsProxyMap = new WeakMap();
 const screenOptionsProxyHandler = {
   /** @type {<Key extends keyof ScreenOptions>(state: GouterState, key: Key) => ScreenOptions[Key] | undefined} */
   get(state, key) {
-    for (const map of [screenOptionsMap, stackOptionsMap, defaultOptionsMap]) {
-      const options = map.get(map === stackOptionsMap ? prevParentsMap.get(state) || state : state);
+    for (const map of [screenOptionsMap, screenStackOptionsMap, defaultOptionsMap]) {
+      const options = map.get(
+        map === screenStackOptionsMap ? prevParentsMap.get(state) || state : state,
+      );
       if (options && key in options) {
         return options[key];
       }
@@ -330,16 +332,16 @@ const getScreenOptions = (state, screenConfigs, defaultOptions) => {
   if (prevParams !== state.params) {
     const screenConfig = screenConfigs[state.name];
     if (screenConfig) {
-      const { screenOptions, stackOptions } = screenConfig;
+      const { screenOptions, screenStackOptions } = screenConfig;
       if (screenOptions) {
         const newScreenOptions =
           typeof screenOptions === 'function' ? screenOptions(state) : screenOptions;
         screenOptionsMap.set(state, newScreenOptions);
       }
-      if (stackOptions) {
+      if (screenStackOptions) {
         const newStackOptions =
-          typeof stackOptions === 'function' ? stackOptions(state) : stackOptions;
-        stackOptionsMap.set(state, newStackOptions);
+          typeof screenStackOptions === 'function' ? screenStackOptions(state) : screenStackOptions;
+        screenStackOptionsMap.set(state, newStackOptions);
       }
     }
     prevParamsMap.set(state, state.params);
@@ -697,11 +699,11 @@ const usePanHandlers = (props) => {
  * @prop {Reanimation | undefined} reanimation
  * @prop {GouterState} state
  * @prop {import('react-native').GestureResponderHandlers} panHandlers
- * @prop {React.FunctionComponentElement<any>} screenChildren
+ * @prop {React.FunctionComponentElement<any>} child
  */
 
 /** @type {React.FC<AnimatableComponentProps>} */
-const AnimatedComponent = ({ animation, state, panHandlers, screenChildren }) => {
+const AnimatedComponent = ({ animation, state, panHandlers, child }) => {
   const values = getAnimatedValues(state);
 
   const styles = useMemo(() => (animation ? animation(values) : null), [values, animation]);
@@ -728,17 +730,17 @@ const AnimatedComponent = ({ animation, state, panHandlers, screenChildren }) =>
         },
       }),
       createElement(Animated.View, {
-        key: 'screen',
+        key: 'wrapper',
         ...panHandlers,
         style: useMemo(() => [StyleSheet.absoluteFill, screenStyle], [screenStyle]),
-        children: screenChildren,
+        children: child,
       }),
     ],
   });
 };
 
 /** @type {React.FC<AnimatableComponentProps>} */
-const ReanimatedComponent = ({ reanimation, state, panHandlers, screenChildren }) => {
+const ReanimatedComponent = ({ reanimation, state, panHandlers, child }) => {
   const values = getReanimatedValues(state);
 
   const updaters = useMemo(() => (reanimation ? reanimation(values) : null), [values, reanimation]);
@@ -775,10 +777,10 @@ const ReanimatedComponent = ({ reanimation, state, panHandlers, screenChildren }
         },
       }),
       createElement(Reanimated.View, {
-        key: 'screen',
+        key: 'wrapper',
         ...panHandlers,
         style: useMemo(() => [StyleSheet.absoluteFill, screenStyle], [screenStyle]),
-        children: screenChildren,
+        children: child,
       }),
     ],
   });
@@ -787,10 +789,10 @@ const ReanimatedComponent = ({ reanimation, state, panHandlers, screenChildren }
 /**
  * @typedef {Object} GouterNativeProps
  * @prop {GouterState} state Root state to start render from.
- * @prop {import('..').Routes<any>} routes Navigation between screens.
+ * @prop {import('..').Routes<any>} routes Route configurations for each screen.
  * @prop {ScreenConfigs<any>} screenConfigs Animation and gestures for each screen.
  * @prop {ScreenOptions} defaultOptions Will be used for this state and it's inner states at any
- * depth when `screenOptions` and `stackOptions` of target state has no defined field.
+ * depth when `screenOptions` and `screenStackOptions` of target state has no defined field.
  * @prop {boolean | undefined} [reanimated] If true then `react-native-reanimated` module will be
  * used for every animation. In this case the `reanimation` field of screen options should be used
  * instead of `animation` and `getReanimatedValues` function should be used instead of
@@ -931,13 +933,13 @@ export const GouterNative = memo((props) => {
     [defaultOptions, joinedStack, reanimated, routes, screenConfigs],
   );
 
-  const { component } = screenConfigs[state.name] || { component: null };
+  const { screen } = screenConfigs[state.name] || { screen: null };
 
-  const screenChildren = createElement(gouterStateContext.Provider, {
+  const child = createElement(gouterStateContext.Provider, {
     key: 'provider',
     value: state,
-    children: createElement(component, {
-      key: 'component',
+    children: createElement(screen, {
+      key: 'screen',
       state,
       children: componentChildren,
     }),
@@ -948,6 +950,6 @@ export const GouterNative = memo((props) => {
     animation: screenOptions.animation,
     reanimation: screenOptions.reanimation,
     panHandlers,
-    screenChildren,
+    child,
   });
 });

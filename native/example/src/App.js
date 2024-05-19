@@ -509,13 +509,13 @@ const tabsOptions = {
 /** @type {import('gouter/native').ScreenConfigs<Config>} */
 const screenConfigs = {
   App: {
-    component: App,
+    screen: App,
   },
   LoginStack: {
-    component: LoginStack,
+    screen: LoginStack,
   },
   LoginModal: {
-    component: LoginModal,
+    screen: LoginModal,
     screenOptions: {
       animation: modalAnimation,
       reanimation: modalReanimation,
@@ -524,22 +524,22 @@ const screenConfigs = {
     },
   },
   Login: {
-    component: Login,
+    screen: Login,
   },
   Stats: {
-    component: Stats,
+    screen: Stats,
     screenOptions: ({params: {animation}}) => ({
       animation: animation === 'rotation' ? tabAnimation : iOSAnimation,
     }),
   },
   LoginConfirmationStack: {
-    component: LoginConfirmationStack,
+    screen: LoginConfirmationStack,
   },
   LoginConfirmation: {
-    component: LoginConfirmation,
+    screen: LoginConfirmation,
   },
   LoginDrawer: {
-    component: LoginDrawer,
+    screen: LoginDrawer,
     screenOptions: {
       reanimation: drawerReanimation,
       prevScreenFixed: true,
@@ -547,17 +547,17 @@ const screenConfigs = {
     },
   },
   Tabs: {
-    component: Tabs,
-    stackOptions: tabsOptions,
+    screen: Tabs,
+    screenStackOptions: tabsOptions,
   },
   Home: {
-    component: Home,
+    screen: Home,
   },
   Post: {
-    component: Post,
+    screen: Post,
   },
   Profile: {
-    component: Profile,
+    screen: Profile,
   },
 };
 

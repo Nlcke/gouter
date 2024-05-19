@@ -47,10 +47,13 @@ export const routes = {
   Profile: {},
 };
 
-export const {rootState, create, goBack, goTo} = new GouterNavigation(
-  routes,
-  'App',
-  {},
-);
+export const {
+  rootState,
+  create,
+  goBack,
+  goTo,
+  getFocusedState,
+  replaceFocusedState,
+} = new GouterNavigation(routes, 'App', {});
 
 export const {decodeUrl, encodeUrl} = new GouterLinking(routes, create);
