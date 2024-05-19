@@ -49,7 +49,7 @@ export const bindMethods = (instance) => {
  * state.
  * @template {import('./state').GouterConfig} T
  * @template {keyof T} N
- * @typedef {Object} GoToOptions
+ * @typedef GoToOptions
  * @prop {(keyof T[N])[]} [keys] Enables search for existing state using list of params keys. Empty
  * list always creates new state. Nonempty list will be used to compare existing state params with
  * passed ones. Params compared using strict equality.
@@ -63,7 +63,7 @@ export const bindMethods = (instance) => {
  * Set of rules, describing how to navigate.
  * @template {import('./state').GouterConfig} T
  * @template {keyof T} N
- * @typedef {Object} RouteNavigation
+ * @typedef RouteNavigation
  * @prop {Navigator<T, N> | Navigator<T> | Navigator} navigator
  * @prop {(keyof T)[]} allowed
  * @prop {Blocker<T, N>} [blocker]
@@ -73,7 +73,7 @@ export const bindMethods = (instance) => {
  * Set of rules, describing how to encode and decode urls.
  * @template {import('./state').GouterConfig} T
  * @template {keyof T} N
- * @typedef {Object} RouteLinking
+ * @typedef RouteLinking
  * @prop {{[K in keyof T[N] as undefined extends T[N][K] ? never : K]: ParamDef<T[N][K]>} & {[K in
  * `_${string}`]?: string}} [path]
  * @prop {{[K in keyof T[N] as undefined extends T[N][K] ? K : never]?: ParamDef<T[N][K]>}} [query]
@@ -83,7 +83,7 @@ export const bindMethods = (instance) => {
  * Set of helpful route options.
  * @template {import('./state').GouterConfig} T
  * @template {keyof T} N
- * @typedef {Object} RouteHelpers
+ * @typedef RouteHelpers
  * @prop {(state: GouterState<T, N>, create: GouterNavigation<T, any>['create']) =>
  * GouterState<T>[]} [builder]
  * @prop {(state: GouterState<T, N>, goTo: GouterNavigation<T, any>['goTo']) => void} [redirector]

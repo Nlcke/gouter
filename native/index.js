@@ -16,6 +16,104 @@ import { PanResponder, Animated, StyleSheet, Dimensions } from 'react-native';
 /** @ignore @typedef {import('../state').GouterConfig} GouterConfig */
 /** @ignore @typedef {import('react-native').ViewStyle} ViewStyle */
 
+/**
+ * @template {GouterConfig} T
+ * @template {keyof T} N
+ * @typedef ScreenProps
+ * @prop {import('../state').GouterState<T, N>} state
+ * @prop {React.ReactNode} children
+ */
+
+/** @typedef {Animated.WithAnimatedObject<ViewStyle>} AnimatedStyle */
+
+/** @typedef {(animatedValues: AnimatedValues) => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation */
+
+/** @typedef {() => ViewStyle} StyleUpdater */
+
+/** @typedef {(reanimatedValues: ReanimatedValues) => StyleUpdater | [StyleUpdater, StyleUpdater]} Reanimation */
+
+/**
+ * @typedef {'none' | 'top-edge' | 'right-edge' | 'bottom-edge' | 'left-edge' | 'horizontal-edge' |
+ * 'vertical-edge' | 'horizontal-full' | 'vertical-full'} SwipeDetection
+ */
+
+/**
+ * @typedef ScreenOptions
+ * @prop {Animation} [animation]
+ * @prop {Reanimation} [reanimation]
+ * @prop {number} [animationDuration]
+ * @prop {(value: number) => number} [animationEasing]
+ * @prop {boolean} [prevScreenFixed]
+ * @prop {SwipeDetection} [swipeDetection]
+ */
+
+/**
+ * @template S
+ * @template {GouterConfig} T
+ * @template {keyof T} N
+ * @typedef {(state: import('../state').GouterState<T, N>) => S} Computable
+ */
+
+/**
+ * @template {GouterConfig} T
+ * @template {keyof T} N
+ * @typedef ScreenConfig
+ * @prop {React.ComponentType<ScreenProps<T, N>>} screen
+ * @prop {ScreenOptions | Computable<ScreenOptions, T, N>} [screenOptions]
+ * @prop {ScreenOptions | Computable<ScreenOptions, T, N>} [screenStackOptions]
+ */
+
+/**
+ * @template {GouterConfig} T
+ * @typedef {{[N in keyof T]: ScreenConfig<T, N>}} ScreenConfigs
+ */
+
+/**
+ * @template {GouterConfig} T
+ * @template {keyof T} N
+ * @typedef {React.FC<ScreenProps<T, N>>} GouterScreen
+ */
+
+/**
+ * @typedef AnimatedValues
+ * @prop {Animated.Value} width
+ * @prop {Animated.Value} height
+ * @prop {Animated.Value} index
+ */
+
+/** @typedef {import('react-native-reanimated').SharedValue<number>} NumericSharedValue */
+
+/**
+ * @typedef ReanimatedValues
+ * @prop {NumericSharedValue} width
+ * @prop {NumericSharedValue} height
+ * @prop {NumericSharedValue} index
+ */
+
+/**
+ * @ignore
+ * @typedef AnimatableComponentProps
+ * @prop {Animation | undefined} animation
+ * @prop {Reanimation | undefined} reanimation
+ * @prop {GouterState} state
+ * @prop {import('react-native').GestureResponderHandlers} panHandlers
+ * @prop {React.FunctionComponentElement<any>} child
+ */
+
+/**
+ * @typedef GouterNativeProps
+ * @prop {GouterState} state Root state to start render from.
+ * @prop {import('..').Routes<any>} routes Route configurations for each screen.
+ * @prop {ScreenConfigs<any>} screenConfigs Animation and gestures for each screen.
+ * @prop {ScreenOptions} defaultOptions Will be used for this state and it's inner states at any
+ * depth when `screenOptions` and `screenStackOptions` of target state has no defined field.
+ * @prop {boolean | undefined} [reanimated] If true then `react-native-reanimated` module will be
+ * used for every animation. In this case the `reanimation` field of screen options should be used
+ * instead of `animation` and `getReanimatedValues` function should be used instead of
+ * `getAnimatedValues`. Every `reanimation` and `animationEasing` should have `worklet` directive:
+ * https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/glossary#worklet.
+ */
+
 let reanimatedLib;
 try {
   // eslint-disable-next-line global-require
@@ -131,84 +229,6 @@ const startTiming = (node, toValue, duration, easing, onFinish) => {
     finishTiming(node, toValue, onFinish);
   }
 };
-
-/**
- * @template {GouterConfig} T
- * @template {keyof T} N
- * @typedef {{
- * state: import('../state').GouterState<T, N>
- * children: React.ReactNode
- * }} ScreenProps
- */
-
-/** @typedef {Animated.WithAnimatedObject<ViewStyle>} AnimatedStyle */
-
-/** @typedef {(animatedValues: AnimatedValues) => AnimatedStyle | [AnimatedStyle, AnimatedStyle]} Animation */
-
-/** @typedef {() => ViewStyle} StyleUpdater */
-
-/** @typedef {(reanimatedValues: ReanimatedValues) => StyleUpdater | [StyleUpdater, StyleUpdater]} Reanimation */
-
-/**
- * @typedef {'none' | 'top-edge' | 'right-edge' | 'bottom-edge' | 'left-edge' | 'horizontal-edge' |
- * 'vertical-edge' | 'horizontal-full' | 'vertical-full'} SwipeDetection
- */
-
-/**
- * @typedef {Object} ScreenOptions
- * @prop {Animation} [animation]
- * @prop {Reanimation} [reanimation]
- * @prop {number} [animationDuration]
- * @prop {(value: number) => number} [animationEasing]
- * @prop {boolean} [prevScreenFixed]
- * @prop {SwipeDetection} [swipeDetection]
- */
-
-/**
- * @template S
- * @template {GouterConfig} T
- * @template {keyof T} N
- * @typedef {(state: import('../state').GouterState<T, N>) => S} Computable
- */
-
-/**
- * @template {GouterConfig} T
- * @template {keyof T} N
- * @typedef {{
- * screen: React.ComponentType<ScreenProps<T, N>>
- * screenOptions?: ScreenOptions | Computable<ScreenOptions, T, N>
- * screenStackOptions?: ScreenOptions | Computable<ScreenOptions, T, N>
- * }} ScreenConfig
- */
-
-/**
- * @template {GouterConfig} T
- * @typedef {{[N in keyof T]: ScreenConfig<T, N>}} ScreenConfigs
- */
-
-/**
- * @template {GouterConfig} T
- * @template {keyof T} N
- * @typedef {React.FC<ScreenProps<T, N>>} GouterScreen
- */
-
-/**
- * @typedef {Object} AnimatedValues
- * @prop {Animated.Value} width
- * @prop {Animated.Value} height
- * @prop {Animated.Value} index
- */
-
-/** @typedef {import('react-native-reanimated').SharedValue<number>} NumericSharedValue */
-
-/**
- * @typedef {Object} ReanimatedValues
- * @prop {NumericSharedValue} width
- * @prop {NumericSharedValue} height
- * @prop {NumericSharedValue} index
- */
-
-/** @typedef {WeakMap<GouterState, AnimatedValues>} animatedValues */
 
 /** @type {SwipeDetection[]} */
 const unidirectionalSwipes = ['left-edge', 'top-edge', 'right-edge', 'bottom-edge'];
@@ -692,16 +712,6 @@ const usePanHandlers = (props) => {
   return panHandlers;
 };
 
-/**
- * @ignore
- * @typedef {Object} AnimatableComponentProps
- * @prop {Animation | undefined} animation
- * @prop {Reanimation | undefined} reanimation
- * @prop {GouterState} state
- * @prop {import('react-native').GestureResponderHandlers} panHandlers
- * @prop {React.FunctionComponentElement<any>} child
- */
-
 /** @type {React.FC<AnimatableComponentProps>} */
 const AnimatedComponent = ({ animation, state, panHandlers, child }) => {
   const values = getAnimatedValues(state);
@@ -787,21 +797,7 @@ const ReanimatedComponent = ({ reanimation, state, panHandlers, child }) => {
 };
 
 /**
- * @typedef {Object} GouterNativeProps
- * @prop {GouterState} state Root state to start render from.
- * @prop {import('..').Routes<any>} routes Route configurations for each screen.
- * @prop {ScreenConfigs<any>} screenConfigs Animation and gestures for each screen.
- * @prop {ScreenOptions} defaultOptions Will be used for this state and it's inner states at any
- * depth when `screenOptions` and `screenStackOptions` of target state has no defined field.
- * @prop {boolean | undefined} [reanimated] If true then `react-native-reanimated` module will be
- * used for every animation. In this case the `reanimation` field of screen options should be used
- * instead of `animation` and `getReanimatedValues` function should be used instead of
- * `getAnimatedValues`. Every `reanimation` and `animationEasing` should have `worklet` directive:
- * https://docs.swmansion.com/react-native-reanimated/docs/fundamentals/glossary#worklet.
- */
-
-/**
- * Main component to render screens and handle gestures.
+ * Main component to render animated screens and handle gestures.
  * @type {React.FC<GouterNativeProps>}
  */
 export const GouterNative = memo((props) => {
