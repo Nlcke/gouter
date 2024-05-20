@@ -1,5 +1,5 @@
 type Config = {
-  App: {};
+  AppStack: {};
   LoginStack: {};
   Login: {
     name: string;

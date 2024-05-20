@@ -5,7 +5,7 @@ import {useGouterState} from 'gouter/native';
 
 /** @type {import('gouter').Routes<Config>} */
 export const routes = {
-  App: {
+  AppStack: {
     navigator: newStackNavigator(),
     allowed: [
       'LoginStack',
@@ -55,7 +55,7 @@ export const {
   goTo,
   getFocusedState,
   replaceFocusedState,
-} = new GouterNavigation(routes, 'App', {});
+} = new GouterNavigation(routes, 'AppStack', {});
 
 export const {decodeUrl, encodeUrl} = new GouterLinking(routes, create);
 
