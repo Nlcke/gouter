@@ -51,7 +51,7 @@ They provide everything you will need for App with multiple screens.
 
 ## Architecture
 
-Gouter completely separates state, navigation and view (like GouterNative).
+Gouter completely separates state, navigation and view (like GouterNative). It also has own linking.
 
 ### State
 
@@ -94,7 +94,9 @@ Full API is at https://nlcke.github.io/gouter/classes/state.GouterState.html.
 Although GouterState is enough for manual navigation via `setStack` method, it is more convenient to
 set navigation rules instead. Gouter has `GouterNavigation` class from `gouter` module for that
 purpose. It's constructor is simple: `new GouterNavigation(routes, name, params)`. The returned
-instance contains root state and navigation tools:
+instance contains root state and navigation tools in the form of methods. All methods are
+automatically bound when you create new instance of `GouterNavigation` so you may export root state
+and tools of destructured instance at once without manual bindings.
 
 - `rootState` is central state which is based on passed `name` and `params` to constructor
 - `create(name, params, [stack], [focusedIndex])` is like `new GouterState` but with `builder`
@@ -104,11 +106,103 @@ instance contains root state and navigation tools:
 - `getFocusedState()` returns current innermost focused state of root state
 - `replaceFocusedState(state)` replaces current innermost focused state of root state
 
-All the hard work happens when you define routes.
+All the hard work happens when you define routes. The route is set of optional rules for each state
+in the object form:
+
+- `navigator` defines how stack states manipulated on `goTo` and `goBack`
+- `allowed` is list of state names which are allowed to be in stack when `goTo` used
+- `blocker` may block any navigation via `goTo` or `goBack` from current state
+- `builder` describes how to initialize state when it's created
+- `redirector` is a chain of `goTo` calls to restore parent states for nested states
+- `path` is object describing how to convert states to url paths and back
+- `query` is object describing how to convert states' optional params to url queries and back
+
+You may use one of builtin Gouter navigators from `gouter/navigators` module or define own navigator
+with following template:
+
+```ts
+import { Navigator } from 'gouter';
+
+const navigator: Navigator<Config> = (parentState, toState, route) => {
+  // `goTo` is used and `toState` is already exists in parent stack
+  if (toState && toState.parent) {
+    // create next stack and modify it, `toState` will be focused automatically
+    const nextStack = parentState.stack.slice();
+    return nextStack;
+  }
+  // `goTo` is used and `toState` is not in parent stack
+  if (toState) {
+    // create next stack and insert `toState` into it, it will be auto focused
+    const nextStack = parentState.stack.slice();
+    return nextStack;
+  }
+  // `goBack` is used, you should manually focus on some state
+  if (stack.length > 1) {
+    // create next stack and call `withFocus` on stack state which should be focused
+    // without that call last state in stack will be focused
+    const nextStack = parentState.stack.slice();
+    return nextStack;
+  }
+  // return `null` whenever you want to pass navigation handling to outer navigator
+  return null;
+};
+```
+
+Please note, you should always define `allowed` state names if you use `navigator` field, otherwise
+`goTo` will not work for state stack.
+
+Full API is at https://nlcke.github.io/gouter/classes/index.GouterNavigation.html.
 
 ### View
 
 Currently Gouter supports React Native only to render screens.
+
+### Linking
+
+`GouterLinking` class is located at `gouter/linking`. It's only purpose is to encode Gouter states
+into urls and decode them back which is useful to create and/or open a link for some screen. To get
+it's methods you create new instance via `new GouterLinking(routes, create)` where routes is set of
+rules with `path`/`query` fields and `create` is usually a method from `GouterNavigation` instance
+to create new states using `builder` functions from routes. Every method of that instance is
+automatically bound, so you don't need to do this manually. Main methods are:
+
+- `decodeUrl(url)` creates state from url or returns null if no route matched
+- `encodeUrl(state)` creates url from state using it's name and params
+
+To make decoding/encoding work each route in passed `routes` should contain `path` and optionally
+`query` fields. They should be objects where `path` contains only special and required param keys
+while `query` is only for optional param keys. Special keys in `path` started with underscore (`_`)
+represent static parts of url path and should contain string. Param keys should contain objects with
+[`ParamDef` type](https://nlcke.github.io/gouter/types/index.ParamDef.html). The order of keys in
+object matters because url path/query will be constructed exactly in same order. Some examples of
+routes with linking:
+
+```ts
+const routes = {
+  Home: {
+    path: {
+      _: 'home',
+    },
+  },
+  // login/0123456789
+  LoginConfirmation: {
+    path: {
+      _: 'login',
+      phone: {},
+    },
+  },
+  // profile/123?tab=subscribers
+  Profile: {
+    path: {
+      _: 'profile',
+      id: {},
+    },
+    query: {
+      tab: {},
+    },
+  },
+};
+```
 
 ## Setup
 
