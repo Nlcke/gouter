@@ -221,7 +221,7 @@ export class GouterLinking {
   }
 
   /**
-   * Creates path parameters from route name and url query string or returns null if no route
+   * Creates path parameters from route name and url path string or returns null if no route
    * matched.
    * @template {keyof T} N
    * @param {N} name
