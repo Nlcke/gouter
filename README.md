@@ -155,7 +155,50 @@ Full API is at https://nlcke.github.io/gouter/classes/index.GouterNavigation.htm
 
 ### View
 
-Currently Gouter supports React Native only to render screens.
+Currently Gouter only supports React Native to render screens. The screen is React component which
+accepts two props: Gouter `state` and React `children`. Screens are rerendered when their `state`s
+are updated and as usual when some React hook triggers component update. Screens with own non-empty
+stacks also receive children which should be placed somewhere in screen component to be visible.
+
+To start render screens you should pass props to `GouterNative` component from `gouter/native` like
+this:
+
+```tsx
+<GouterNative
+  state={rootState}
+  routes={routes}
+  screenConfigs={screenConfigs}
+  defaultOptions={defaultOptions}
+  reanimated={reanimated}
+/>
+```
+
+- `rootState` is top state which contains any other state
+- `routes` is set of rules for navigation, state initialization, linking etc
+- `screenConfigs` describe how to animate screens and handle gestures
+- `defaultOptions` are defaults used when you don't want to customize each screen
+- `reanimated` should be true if you want to use
+  [reanimated](https://docs.swmansion.com/react-native-reanimated/) module for animations
+
+Full API is at https://nlcke.github.io/gouter/functions/native.GouterNative.html.
+
+This module also has useful hooks:
+
+- `useGouterState(routes)` returns current gouter state from nearest provider if it's name is in
+  routes or null otherwise
+- `useIsFocused()` returns true if gouter state from nearest provider is focused in parent stack.
+- `useIsRootFocused()` returns true if gouter state from nearest provider and it's parents are
+  focused till root state
+- `useIsRootStale()` returns true if gouter state from nearest provider or it's parents were removed
+  from root state
+- `useIsStale()` returns true if gouter state from nearest provider was removed from parent stack
+
+And some functions to animate screen elements together with screen itself:
+
+- `getAnimatedValues(state)` returns animated values like index, width, height
+- `getReanimatedValues(state)` returns reanimated values like index, width, height
+
+Full API is at https://nlcke.github.io/gouter/modules/native.html
 
 ### Linking
 
@@ -294,6 +337,30 @@ export type Screen<N extends keyof Config> = GouterScreen<Config, N>;
 
 `State` type maybe helpful if you pass Gouter state to functions and `Screen` type is used to type
 screen components.
+
+### Screens
+
+Add that custom Screen type from your router file to each screen component to make it fully typed:
+
+```tsx
+import { Screen } from 'router';
+
+const App: Screen<'App'> = ({ children }) => {
+  return <View style={{ flex: 1 }}>{children}</View>;
+};
+```
+
+```tsx
+import { Screen } from 'router';
+
+const Profile: Screen<'Profile'> = ({ state }) => {
+  return <Text>{state.name}</Text>;
+};
+```
+
+### Animations
+
+### App
 
 ## Alternatives
 
