@@ -31,7 +31,7 @@ Gouter example for React Native is at `native/example`.
 Gouter package consists of multiple tiny modules:
 
 ```js
-import { GouterNavigation } from 'gouter'; // navigation
+import { GouterNavigation } from 'gouter'; // navigation tools
 import { GouterLinking } from 'gouter/linking'; // url encoding and decoding
 import { GouterState } from 'gouter/state'; // state
 import { newStackNavigator, newTabNavigator, newSwitchNavigator } from 'gouter/navigators'; // navigators
@@ -47,7 +47,68 @@ import {
 } from 'gouter/native'; // React Native component
 ```
 
-This modules provide everything you will need for App with multiple screens.
+They provide everything you will need for App with multiple screens.
+
+## Architecture
+
+Gouter completely separates state, navigation and view (like GouterNative).
+
+### State
+
+The core of gouter is `GouterState` class from `gouter/state` module. This is where current
+information about params, nested stacks and focused indexes is stored. It has many methods to update
+that info, like `setParams`, `setStack`, `setFocusedIndex` etc. And of course to interact with views
+and/or to launch effects it has `listen` method which subscribes listeners to state changes.
+
+The `GouterState` is tree-like structure and it may be created manually using
+`new GouterState(name, params, stack, focusedIndex)` constructor. The `name` is more like unique tag
+which is linked to `params` and screens in views. The `stack`, which is simple Javascript array, is
+used to nest other states as deep as you need which is necessary for stack and tab navigation. Since
+Gouter supports tab navigation it has `focusedIndex` field which points to the index of focused
+state in state stack.
+
+Please note, every state is unique object which is never recreated on update and it's methods mutate
+`params`, `stack` and `focusedIndex` fields. However `params` and `stack` objects are readonly by
+design and you shouldn't mutate them and `focusedIndex` directly, otherwise Gouter will not know
+about changes and state listeners wouldn't be notified.
+
+Every time you update state fields via methods, GouterState collects that updated states in special
+`modifiedStates` set and schedules listeners notification on next Javascript engine tick. Therefore
+you may safely modify any number of states and make chained updates on same state without
+performance penalties. In case when you need synchronous updates you may use `GouterState.notify`
+static method to force listeners notification.
+
+`GouterState` has unique focus system. Usually every time you call `setStack` method current
+`focusedIndex` resets to last stack index. But that doesn't work well for tab navigation. So instead
+of following `setFocusedIndex` call, you may mark stack state as focused BEFORE `setStack`: just use
+`withFocus` method on that state. This method adds states to special set which is checked on
+`setStack` call.
+
+Note: since every state is unique and may have only one parent when in a stack, whenever you put
+same state into different stack it will be cloned i.e. replaced by new instance with same fields.
+
+Full API is at https://nlcke.github.io/gouter/classes/state.GouterState.html.
+
+### Navigation
+
+Although GouterState is enough for manual navigation via `setStack` method, it is more convenient to
+set navigation rules instead. Gouter has `GouterNavigation` class from `gouter` module for that
+purpose. It's constructor is simple: `new GouterNavigation(routes, name, params)`. The returned
+instance contains root state and navigation tools:
+
+- `rootState` is central state which is based on passed `name` and `params` to constructor
+- `create(name, params, [stack], [focusedIndex])` is like `new GouterState` but with `builder`
+  support
+- `goTo(name, params, [options])` navigates to nearest state with same `name`
+- `goBack()` navigates one step back using current navigator
+- `getFocusedState()` returns current innermost focused state of root state
+- `replaceFocusedState(state)` replaces current innermost focused state of root state
+
+All the hard work happens when you define routes.
+
+### View
+
+Currently Gouter supports React Native only to render screens.
 
 ## Setup
 
@@ -62,28 +123,17 @@ configuration in some `config.ts` or `config.d.ts` file:
 ```ts
 type Config = {
   App: {};
-  LoginStack: {};
-  Login: {
-    name: string;
-  };
-  LoginModal: {};
-  Stats: {
-    animation?: 'slide' | 'rotation';
-  };
-  LoginConfirmationStack: {};
+  Login: {};
   LoginConfirmation: {
     phone: string;
   };
-  LoginDrawer: {};
-  Tabs: {};
   Home: {};
-  Post: {};
-  Profile: {};
 };
 ```
 
-So new `state` for LoginConfirmation screen using above config will have `state.name` equal to
-`'LoginConfirmation'` and `state.params.phone` with `string` type.
+Gouter doesn't make a difference between screens and screen navigators. So new `state` for
+LoginConfirmation screen using above config will have `state.name` equal to `'LoginConfirmation'`
+and `state.params.phone` with `string` type.
 
 ### Router
 
