@@ -515,7 +515,8 @@ app performance if you will create new animations on the fly instead of using pr
 ```ts
 import { ScreenConfigs, ScreenOptions } from 'gouter/native';
 import { Config } from 'router/config';
-// ... and each screen imports
+// ...screen imports
+// ...animation imports
 
 export const defaultOptions: ScreenOptions = {
   animation: iOSAnimation,
