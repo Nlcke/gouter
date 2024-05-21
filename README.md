@@ -249,6 +249,14 @@ const routes = {
 
 ## Setup
 
+The following setup is recommended and describes how to organize configuration files to make
+`GouterNative` work. Let's create `router` folder in `src` with following files:
+
+- `animations` for Animated or Reanimated animations which are passed to `view`
+- `config` for type with state names and their parameters
+- `index` for routes, navigation methods and utils
+- `view` for default options and screen configurations
+
 ### Config
 
 Since Gouter is strongly typed first you should describe Gouter configuration in separate file. The
@@ -258,13 +266,25 @@ as unique identifier and update only existing screen parameters. For example, le
 configuration in some `config.ts` or `config.d.ts` file:
 
 ```ts
-type Config = {
-  App: {};
-  Login: {};
+export type Config = {
+  AppStack: {};
+  LoginStack: {};
+  Login: {
+    name: string;
+  };
+  LoginModal: {};
+  Stats: {
+    animation?: 'slide' | 'rotation';
+  };
+  LoginConfirmationStack: {};
   LoginConfirmation: {
     phone: string;
   };
+  LoginDrawer: {};
+  Tabs: {};
   Home: {};
+  Post: {};
+  Profile: {};
 };
 ```
 
@@ -272,14 +292,23 @@ Gouter doesn't make a difference between screens and screen navigators. So new `
 LoginConfirmation screen using above config will have `state.name` equal to `'LoginConfirmation'`
 and `state.params.phone` with `string` type.
 
-### Router
+### Router (index)
+
+Import following classes, functions and types to create own navigation:
+
+```ts
+import { GouterNavigation, Routes } from 'gouter';
+import { newStackNavigator, newTabNavigator } from 'gouter/navigators';
+import { GouterLinking } from 'gouter/linking';
+import { useGouterState, GouterScreen } from 'gouter/native';
+import { Config } from 'router/config';
+import { GouterState } from 'gouter/state';
+```
 
 Now we have to define how we navigate between screens. We pass `Config` type from previous step to
 imported `Routes` to have strongly typed routes:
 
 ```ts
-import { Routes } from 'gouter';
-
 export const routes: Routes<Config> = {
   App: {
     navigator: newStackNavigator(),
@@ -315,28 +344,36 @@ export const routes: Routes<Config> = {
 };
 ```
 
+Then let's pass that routes to `GouterNavigation` along with root state name and params. We also
+export everything from destructured instance for convenience:
+
+```ts
+export const { rootState, create, goBack, goTo, getFocusedState, replaceFocusedState } =
+  new GouterNavigation(routes, 'AppStack', {});
+```
+
+Add this line if you need to encode/decode urls and don't forget to describe `path`/`query` fields
+in routes to make it work:
+
+```ts
+export const { decodeUrl, encodeUrl } = new GouterLinking(routes, create);
+```
+
 If you ever need to access Gouter state from screen component and you don't want to import both
 `useGouterState` and `routes` you may create more convenient hook:
 
 ```ts
-import { useGouterState } from 'gouter/native';
-
 export const useScreenState = () => useGouterState(routes);
 ```
 
-Let's also add two useful types here to narrow builtin Gouter ones:
+Let's also add two useful types here to narrow builtin Gouter ones. The `State` type maybe helpful
+if you pass Gouter state to functions and the `Screen` type is used to type screen components.
 
 ```ts
-import { GouterState } from 'gouter/state';
-import { GouterScreen } from 'gouter/native';
-
 export type State<N extends keyof Config = keyof Config> = GouterState<Config, N>;
 
 export type Screen<N extends keyof Config> = GouterScreen<Config, N>;
 ```
-
-`State` type maybe helpful if you pass Gouter state to functions and `Screen` type is used to type
-screen components.
 
 ### Screens
 
@@ -358,9 +395,245 @@ const Profile: Screen<'Profile'> = ({ state }) => {
 };
 ```
 
+Each screen receives two props: typed `state` and React `children`. You may use hooks from
+`gouter/native` module in screens and components to get current state and detect if it's focused or
+stale.
+
 ### Animations
 
+Gouter supports animations based on Animated and Reanimated. It's up to you which one to use for
+App, but if you want to use Reanimated then you should install and configure it first. Both
+`Animation` and `Reanimation` are functions which accept set of Animated and Shared values
+accordingly. Those values are:
+
+- `index` is value usually in range between -1 and 1 where 0 means screen is fully focused
+- `width` - width of current screen container in pixels
+- `height` - height of current screen container in pixels
+
+The main difference between them is how to work with values and what should be returned. Animated
+accepts own styles while Reanimated accepts style updaters which are functions with type
+`() => ViewStyle`. GouterNative supports animated backdrops so instead of single style or style
+updater you may return a tuple with two styles or style updaters. In that tuple first element will
+be used for backdrop style and animation while second one will be used for screen style and
+animation. In case of single style or style updater only screen will be styled and animated while
+backdrop will be fully transparent.
+
+This is iOS-like Animated animation:
+
+```ts
+import { Animation } from 'gouter/native';
+
+export const iOSAnimation: Animation = ({ index, width }) => [
+  {
+    backgroundColor: 'black',
+    opacity: index.interpolate({
+      inputRange: [-1, 0, 1],
+      outputRange: [0, 0.2, 0],
+    }),
+  },
+  {
+    transform: [
+      {
+        translateX: Animated.multiply(
+          width,
+          index.interpolate({
+            inputRange: [-1, 0, 1],
+            outputRange: [-0.25, 0, 1],
+          }),
+        ),
+      },
+    ],
+  },
+];
+```
+
+And this is iOS-like Reanimated animation. Please note, each style updater should contain
+`'worklet'` directive in order to work on UI thread which is required for reanimated module.
+
+```ts
+import { Reanimation } from 'gouter/native';
+import { interpolate } from 'react-native-reanimated';
+
+export const iOSReanimation: Reanimation = ({ index, width }) => [
+  () => {
+    'worklet';
+    return {
+      backgroundColor: 'black',
+      opacity: interpolate(index.value, [-1, 0, 1], [0, 0.2, 0]),
+    };
+  },
+  () => {
+    'worklet';
+    return {
+      transform: [
+        {
+          translateX: interpolate(index.value, [-1, 0, 1], [-0.25 * width.value, 0, width.value]),
+        },
+      ],
+    };
+  },
+];
+```
+
+In that animations we change opacity for black backdrop when it's not focused and move screen
+horizontally.
+
+You may customize screen animations even further by using component animations. In order to
+synchronize them with screen animations `gouter/native` module provides two functions:
+`getAnimatedValues(state)` and `getReanimatedValues(state)`. Which one to use depends on
+`reanimated` boolean prop which you may pass to GouterNative component. This way you may get current
+Gouter state in any screen component via `useGouterState(routes)` hook and pass it to that functions
+to receive same values as in animations.
+
+### View
+
+Contains screen imports, default options and screen configs which should be exported and passed as
+props to GouterNative component in App. This is where each screen should be imported and animations
+with gestures should be configured. Each screen config contains required `screen` component with
+fully optional `screenOptions` and `screenStackOptions`.
+
+Each screen option is one of the following:
+
+- `animation` is Animated animation
+- `reanimation` is Reanimated animation
+- `animationDuration` is animation duration in milliseconds
+- `prevScreenFixed` turns off previous screen animation if enabled, useful for modals and drawers
+- `swipeDetection` is one of predefined values to customize swipes for stacks, modals, tabs etc
+- `animationEasing` accepts easing function to make animation nonlinear
+
+GouterNative uses special system to calculate current screen options. That system first checks
+screen option at `screenOptions`, then if the option is undefined it checks `screenStackOptions` of
+parent screen and, if the option is still undefined it checks `defaultOptions`. This way you may
+start with default options, then add some stack options to overwrite default options and then
+finally overwrite stack options by some screen options if needed.
+
+Sometimes you need to modify screen or stack options. In this case you may use computable options
+which is a function which accepts state and returns screen options. Whenever it's state is updated
+the new options are calculated and used. Be careful with `animations`/`reanimations`, it may hurt
+app performance if you will create new animations on the fly instead of using predefined ones.
+
+```ts
+import { ScreenConfigs, ScreenOptions } from 'gouter/native';
+import { Config } from 'router/config';
+// ... and each screen imports
+
+export const defaultOptions: ScreenOptions = {
+  animation: iOSAnimation,
+  reanimation: iOSReanimation,
+  animationDuration: 350,
+  swipeDetection: 'left-edge',
+  animationEasing: Easing.elastic(0.25),
+};
+
+export const screenConfigs: ScreenConfigs<Config> = {
+  AppStack: {
+    screen: AppStack,
+  },
+  LoginStack: {
+    screen: LoginStack,
+  },
+  LoginModal: {
+    screen: LoginModal,
+    screenOptions: {
+      animation: modalAnimation,
+      reanimation: modalReanimation,
+      swipeDetection: 'vertical-full',
+      prevScreenFixed: true,
+    },
+  },
+  Login: {
+    screen: Login,
+  },
+  Stats: {
+    screen: Stats,
+    screenOptions: ({ params: { animation } }) => ({
+      animation: animation === 'rotation' ? tabAnimation : iOSAnimation,
+    }),
+  },
+  LoginConfirmationStack: {
+    screen: LoginConfirmationStack,
+  },
+  LoginConfirmation: {
+    screen: LoginConfirmation,
+  },
+  LoginDrawer: {
+    screen: LoginDrawer,
+    screenOptions: {
+      reanimation: drawerReanimation,
+      prevScreenFixed: true,
+      swipeDetection: 'horizontal-full',
+    },
+  },
+  Tabs: {
+    screen: Tabs,
+    screenStackOptions: {
+      animation: tabAnimation,
+      reanimation: tabReanimation,
+      swipeDetection: 'horizontal-full',
+    },
+  },
+  Home: {
+    screen: Home,
+  },
+  Post: {
+    screen: Post,
+  },
+  Profile: {
+    screen: Profile,
+  },
+};
+```
+
 ### App
+
+Using above configurations let's edit App file:
+
+```ts
+import React, { useEffect, useState } from 'react';
+import { GouterNative } from 'gouter/native';
+import { StyleSheet, View, BackHandler, Keyboard } from 'react-native';
+import { goBack, rootState, routes } from 'router';
+import { defaultOptions, screenConfigs } from 'router/view';
+
+const App = () => {
+  useEffect(() => rootState.listen(Keyboard.dismiss), []);
+
+  useEffect(() => {
+    const onHardwareBackPress = () => {
+      goBack();
+      return true;
+    };
+    BackHandler.addEventListener('hardwareBackPress', onHardwareBackPress);
+    return () => {
+      BackHandler.removeEventListener('hardwareBackPress', onHardwareBackPress);
+    };
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      <GouterNative
+        state={rootState}
+        routes={routes}
+        screenConfigs={screenConfigs}
+        defaultOptions={defaultOptions}
+        reanimated={true} // only if you need reanimated instead of Animated
+      />
+    </View>
+  );
+};
+
+export default App;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+```
+
+There are several things going on here. First we wrap our GouterNative element in View with flex 1
+to fill whole screen. Then we add two `useEffect` calls. First one is to automatically hide keyboard
+when root state updated. And second one is to handle hardware back press for Android.
 
 ## Alternatives
 
