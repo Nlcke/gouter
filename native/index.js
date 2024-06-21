@@ -245,6 +245,19 @@ const emptyStack = [];
 
 let panRespondersBlocked = false;
 
+let shouldReverseNextReplaceAnimation = false;
+
+/** @type {WeakMap<GouterState, GouterState>} */
+const focusedStateByRemovedState = new WeakMap();
+
+/**
+ * Waits till next replace animation and reverses it for both removed and focused states. Usually
+ * this called just before `replaceFocusedState` or similar function.
+ */
+export const reverseNextReplaceAnimation = () => {
+  shouldReverseNextReplaceAnimation = true;
+};
+
 const initialIndex = 1;
 
 /** @type {WeakMap<GouterState, AnimatedValues>} */
@@ -835,6 +848,7 @@ export const GouterNative = memo((props) => {
     if (!stackState.parent) {
       const { index } = getAniValues(stackState);
       if (Math.abs(getNextValue(index)) === 1 && !activeValues.has(index)) {
+        focusedStateByRemovedState.delete(stackState);
         prevStackRef.current = getListWithoutItem(prevStackRef.current, stackState);
       } else {
         hasScheduledUpdate = true;
@@ -844,6 +858,18 @@ export const GouterNative = memo((props) => {
 
   const prevStack = prevStackRef.current;
 
+  const { focusedChild } = state;
+  const blurredChildRef = useRef(/** @type {GouterState | undefined} */ (undefined));
+  const blurredChild = blurredChildRef.current;
+  blurredChildRef.current = focusedChild;
+
+  if (shouldReverseNextReplaceAnimation) {
+    if (focusedChild && blurredChild && !blurredChild.parent) {
+      shouldReverseNextReplaceAnimation = false;
+      focusedStateByRemovedState.set(blurredChild, focusedChild);
+    }
+  }
+
   const joinedStack = useMemo(() => {
     if (prevStack === nextStack || !prevStack.length) {
       return nextStack;
@@ -851,17 +877,33 @@ export const GouterNative = memo((props) => {
     if (!nextStack.length) {
       return prevStack;
     }
-    const filteredPrevStack = prevStack.filter((stackState) => !nextStack.includes(stackState));
-    return filteredPrevStack.length ? [...nextStack, ...filteredPrevStack] : nextStack;
+    /** @type {GouterState[]} */
+    const removedStatesForNextStack = [];
+    const filteredPrevStack = prevStack.filter((stackState) => {
+      if (focusedStateByRemovedState.has(stackState)) {
+        removedStatesForNextStack.push(stackState);
+        return false;
+      }
+      return !nextStack.includes(stackState);
+    });
+    if (!filteredPrevStack.length && !removedStatesForNextStack.length) {
+      return nextStack;
+    }
+    if (!removedStatesForNextStack.length) {
+      return [...nextStack, ...filteredPrevStack];
+    }
+    const joinedStackWithRemovedStates = [...nextStack, ...filteredPrevStack];
+    for (const removedState of removedStatesForNextStack) {
+      const focusedState = /** @type {GouterState} */ (
+        focusedStateByRemovedState.get(removedState)
+      );
+      const index = joinedStackWithRemovedStates.indexOf(focusedState);
+      joinedStackWithRemovedStates.splice(index, 0, removedState);
+    }
+    return joinedStackWithRemovedStates;
   }, [nextStack, prevStack]);
 
   prevStackRef.current = joinedStack;
-
-  const { focusedChild } = state;
-
-  const blurredChildRef = useRef(/** @type {GouterState | undefined} */ (undefined));
-  const blurredChild = blurredChildRef.current;
-  blurredChildRef.current = focusedChild;
 
   const blurredIndex = blurredChild ? joinedStack.indexOf(blurredChild) : -1;
   const focusedIndex = focusedChild ? joinedStack.indexOf(focusedChild) : -1;

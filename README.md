@@ -485,6 +485,10 @@ synchronize them with screen animations `gouter/native` module provides two func
 Gouter state in any screen component via `useGouterState(routes)` hook and pass it to that functions
 to receive same values as in animations.
 
+There is also special function `reverseNextReplaceAnimation()` which is helpful when replace
+animation should be reversed next time. Usually it is called right before `replaceFocusedState` or
+similar function.
+
 ### View
 
 Contains screen imports, default options and screen configs which should be exported and passed as
