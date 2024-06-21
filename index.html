@@ -209,6 +209,9 @@ synchronize them with screen animations <code>gouter/native</code> module provid
 <code>reanimated</code> boolean prop which you may pass to GouterNative component. This way you may get current
 Gouter state in any screen component via <code>useGouterState(routes)</code> hook and pass it to that functions
 to receive same values as in animations.</p>
+<p>There is also special function <code>reverseNextReplaceAnimation()</code> which is helpful when replace
+animation should be reversed next time. Usually it is called right before <code>replaceFocusedState</code> or
+similar function.</p>
 <a id="md:view-1" class="tsd-anchor"></a><h3><a href="#md:view-1">View</a></h3><p>Contains screen imports, default options and screen configs which should be exported and passed as
 props to GouterNative component in App. This is where each screen should be imported and animations
 with gestures should be configured. Each screen config contains required <code>screen</code> component with
