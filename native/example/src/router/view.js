@@ -9,6 +9,7 @@ import {
   tabReanimation,
 } from 'router/animations';
 import {AppStack} from 'screens/AppStack';
+import {Charts} from 'screens/Charts';
 import {Home} from 'screens/Home';
 import {Login} from 'screens/Login';
 import {LoginConfirmation} from 'screens/LoginConfirmation';
@@ -52,6 +53,12 @@ export const screenConfigs = {
   },
   Stats: {
     screen: Stats,
+    screenOptions: ({params: {animation}}) => ({
+      animation: animation === 'rotation' ? tabAnimation : iOSAnimation,
+    }),
+  },
+  Charts: {
+    screen: Charts,
     screenOptions: ({params: {animation}}) => ({
       animation: animation === 'rotation' ? tabAnimation : iOSAnimation,
     }),

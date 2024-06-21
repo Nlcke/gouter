@@ -8,6 +8,9 @@ type Config = {
   Stats: {
     animation?: 'slide' | 'rotation';
   };
+  Charts: {
+    animation?: 'slide' | 'rotation';
+  };
   LoginConfirmationStack: {};
   LoginConfirmation: {
     phone: string;

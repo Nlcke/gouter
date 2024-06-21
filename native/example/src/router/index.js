@@ -12,6 +12,7 @@ export const routes = {
       'LoginConfirmationStack',
       'Tabs',
       'Stats',
+      'Charts',
       'LoginModal',
     ],
     builder: (_, create) => [create('LoginStack', {})],
@@ -26,6 +27,7 @@ export const routes = {
   },
   LoginModal: {},
   Stats: {},
+  Charts: {},
   LoginConfirmationStack: {
     navigator: newStackNavigator(),
     allowed: ['LoginConfirmation', 'LoginDrawer'],
@@ -68,5 +70,5 @@ export const useScreenState = () => useGouterState(routes);
 
 /**
  * @template {keyof Config} N
- * @typedef {import('gouter/native').GouterScreen< Config, N>} Screen
+ * @typedef {import('gouter/native').GouterScreen<Config, N>} Screen
  */
