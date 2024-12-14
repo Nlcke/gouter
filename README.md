@@ -75,8 +75,9 @@ about changes and state listeners wouldn't be notified.
 Every time you update state fields via methods, GouterState collects that updated states in special
 `modifiedStates` set and schedules listeners notification on next Javascript engine tick. Therefore
 you may safely modify any number of states and make chained updates on same state without
-performance penalties. In case when you need synchronous updates you may use `GouterState.notify`
-static method to force listeners notification.
+performance penalties. In case when you need synchronous spot updates you may use `sync` method of
+state to call it's listeners and listeners of it's parents. There is also `GouterState.notify`
+static method to call listeners of each existing modified state.
 
 `GouterState` has unique focus system. Usually every time you call `setStack` method current
 `focusedIndex` resets to last stack index. But that doesn't work well for tab navigation. So instead

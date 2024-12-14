@@ -17,6 +17,11 @@
  */
 
 /**
+ * @template {GouterConfig} T
+ * @typedef {{[N in keyof T]: GouterState<T, N>}[keyof T]} GouterStackState
+ */
+
+/**
  * Tree-like structure with name, params and stack to build complex navigation. Has useful methods
  * to access and control each part.
  * @template {GouterConfig} [T=GouterConfig]
@@ -24,10 +29,10 @@
  */
 export class GouterState {
   /**
-   * Creates GouterState using required `name`, `params` and optional `stack`.
+   * Creates GouterState using required `name`, `params` and optional `stack` with `focusedIndex`.
    * @param {N} name string to distinguish states
    * @param {T[N]} params collection of parameters to customize states
-   * @param {GouterState<T>[]} [stack] optional list of inner states
+   * @param {GouterStackState<T>[]} [stack] optional list of inner states
    * @param {number} [focusedIndex] optional index of focused state in stack
    */
   constructor(name, params, stack, focusedIndex) {
@@ -40,7 +45,7 @@ export class GouterState {
     /** @readonly @type {number} index of focused child state */
     this.focusedIndex = -1;
 
-    /** @readonly @type {GouterState<T>[]} list of inner states */
+    /** @readonly @type {GouterStackState<T>[]} list of inner states */
     this.stack = GouterState.emptyStack;
 
     if (focusedIndex !== undefined) {
@@ -53,14 +58,14 @@ export class GouterState {
     if (stack && stack.length) {
       this.setStack(stack);
     } else {
-      this.stack = /** @type {GouterState<T>[]} */ ([]);
+      this.stack = /** @type {GouterStackState<T>[]} */ ([]);
     }
   }
 
   /**
    * Parent state when this state in a stack, `undefined` otherwise.
    * @readonly
-   * @type {GouterState<T> | undefined}
+   * @type {GouterStackState<T> | undefined}
    */
   get parent() {
     return GouterState.parentByState.get(this);
@@ -81,7 +86,7 @@ export class GouterState {
   /**
    * Focused state from this state stack when the stack is not empty, `undefined` otherwise.
    * @readonly
-   * @type {GouterState<T> | undefined}
+   * @type {GouterStackState<T> | undefined}
    */
   get focusedChild() {
     return this.stack[this.focusedIndex];
@@ -140,7 +145,7 @@ export class GouterState {
    * Replaces current `stack`. It also resets current `focusedIndex` to last stack state index so if
    * you need to preserve or modify that index you should call {@link focus} on some stack state
    * before this operation. If some state in new stack already has parent then it will be cloned using {@link clone}.
-   * @param {GouterState<T>[]} stack
+   * @param {GouterStackState<T>[]} stack
    * @returns {this}
    */
   setStack(stack) {
@@ -275,6 +280,26 @@ export class GouterState {
       const nextStack = [...parent.stack];
       nextStack.splice(index, 1);
       parent.setStack(nextStack);
+    }
+    return this;
+  }
+
+  /**
+   * Synchronously calls listeners of this state and it's parents if it was modified.
+   * @returns {this}
+   */
+  sync() {
+    if (!GouterState.modifiedStates.has(this)) {
+      return this;
+    }
+    GouterState.modifiedStates.delete(this);
+    for (const listener of this.listeners) {
+      listener(this);
+    }
+    const { parent } = this;
+    if (parent) {
+      GouterState.modifiedStates.add(parent);
+      parent.sync();
     }
     return this;
   }
